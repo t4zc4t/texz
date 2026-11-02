@@ -119,7 +119,7 @@ const config: Command = {
     .addSubcommand((s) => s.setName('gif').setDescription('Pick a gif for a moment, like help or levelup')
       .addStringOption((o) => o.setName('moment').setDescription('Which moment').setRequired(true)
         .addChoices(...gifMoments.map((m) => ({ name: m, value: m }))))
-      .addStringOption((o) => o.setName('url').setDescription('Tenor share link or .gif link, "default" or "off"').setRequired(true)))
+      .addStringOption((o) => o.setName('url').setDescription('Giphy or Tenor link, .gif link, "default" or "off"').setRequired(true)))
     .addSubcommand((s) => s.setName('prefix').setDescription('Change the short text prefix')
       .addStringOption((o) => o.setName('prefix').setDescription('Like tz').setRequired(true).setMaxLength(5)))
     .toJSON(),
@@ -167,9 +167,9 @@ const config: Command = {
       if (url === 'clear' || url === 'default') delete g.gifs[moment];
       else if (url === 'off') g.gifs[moment] = 'off';
       else if (isGifLink(url)) {
-        if (!(await resolve(url))) return ctx.reply('I couldn\'t open that gif. Use a Tenor share link or a direct link ending in `.gif`.');
+        if (!(await resolve(url))) return ctx.reply('I couldn\'t open that gif. Use a Giphy link, a Tenor share link, or a direct link ending in `.gif`.');
         g.gifs[moment] = url;
-      } else return ctx.reply('Send a Tenor share link (tenor.com/view/...) or a direct `.gif` link. `default` puts mine back, `off` hides it.');
+      } else return ctx.reply('Send a Giphy link (giphy.com/gifs/...), a Tenor share link, or a direct `.gif` link. `default` puts mine back, `off` hides it.');
     }
     if (mod && rules) g.modules[mod.name] = rules;
     if (sub !== 'view') store.saveGuild(ctx.guildId, g);

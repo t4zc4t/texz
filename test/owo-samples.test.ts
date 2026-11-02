@@ -82,3 +82,13 @@ test('armoury pages, filters and buttons', async () => {
   assert.match(JSON.stringify(top.embeds[0].toJSON()), /Mythic and up · 2/);
   assert.deepEqual(parseArmId('arm|1|2|held|type|next'), { userId: '1', page: 2, filter: 'held', sort: 'type', what: 'next' });
 });
+
+test('giphy links turn into gif files without any api', async () => {
+  const { giphyFile, cached, isGifLink } = await import('../src/gifs.ts');
+  assert.equal(giphyFile('https://giphy.com/gifs/bsd-bungo-stray-dogs-chuuya-Waq81Yz6Vw3GuCxGPZ'), 'https://media.giphy.com/media/Waq81Yz6Vw3GuCxGPZ/giphy.gif');
+  assert.equal(giphyFile('https://giphy.com/gifs/UzGnrtOUKXmdrtja0V'), 'https://media.giphy.com/media/UzGnrtOUKXmdrtja0V/giphy.gif');
+  assert.equal(giphyFile('https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjEx/Waq81Yz6Vw3GuCxGPZ/giphy.gif'), 'https://media.giphy.com/media/Waq81Yz6Vw3GuCxGPZ/giphy.gif');
+  assert.equal(cached('https://giphy.com/gifs/UzGnrtOUKXmdrtja0V'), 'https://media.giphy.com/media/UzGnrtOUKXmdrtja0V/giphy.gif');
+  assert.ok(isGifLink('https://giphy.com/gifs/dazai-bungo-stray-dogs-osamu-vayuMKG6qqHlRUwRaG'));
+  assert.ok(!isGifLink('https://example.com/page'));
+});

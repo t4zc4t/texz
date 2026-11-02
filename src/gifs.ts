@@ -1,18 +1,33 @@
-// Tenor share links point at a page, embeds need the actual .gif file behind it.
-// Texz looks the file up once and remembers it.
+// Share links point at a page, embeds need the actual .gif file behind it.
+// Giphy keeps the id in the link so the file address is built straight from it, no api needed.
+// Tenor's api is gone, so its links are read from the public page as a fallback.
 
 const direct = /^https:\/\/\S+\.(gif|png|jpe?g|webp)(\?\S*)?$/i;
 const tenorPage = /^https:\/\/tenor\.com\/(?:[a-z-]+\/)?view\/\S+$/i;
+const giphyPage = /^https:\/\/(?:www\.)?giphy\.com\/(?:gifs|stickers|clips)\/(?:[\w-]*-)?([A-Za-z0-9]{8,})\/?(?:\?\S*)?$/i;
+const giphyMedia = /^https:\/\/(?:media\d*|i)\.giphy\.com\/\S*?([A-Za-z0-9]{8,})(?:\/giphy)?\.(?:gif|webp|mp4)/i;
+
+export function giphyFile(url: string): string | null {
+  const id = url.match(giphyPage)?.[1] ?? url.match(giphyMedia)?.[1];
+  return id ? `https://media.giphy.com/media/${id}/giphy.gif` : null;
+}
+
+const giphy = (id: string) => `https://giphy.com/gifs/${id}`;
 
 const cache = new Map<string, string>();
 
 // defaults per moment, servers can swap any of them with tz config gif
+const pool = ['Waq81Yz6Vw3GuCxGPZ', 'vayuMKG6qqHlRUwRaG', 'NlqHgtqm81qCLddNuP', 'H8qFRCudgzZxYDG7iD', 'BXg1C1BgOi1Znvtone',
+  '6Z23HNepLbpwJlvbE1', 'EfNYxWJm1xTCSzlA9z', '5ondf28Ao8IhXnoPDL', '99WDYnKHEhfizOW5N3', 'bILqpu1iGcUYlKogLX', 'UiS0RFzuN3rHzaZomu'].map(giphy);
+const dance = giphy('UzGnrtOUKXmdrtja0V');
+
 export const defaults: Record<string, string[]> = {
-  help: ['https://tenor.com/view/dazai-osamu-dazai-dazai-osamu-bsd-bungo-stray-dogs-gif-13950935552741604206'],
-  status: ['https://tenor.com/view/osamu-dazai-dazai-osamu-dazai-bsd-bungou-stray-dogs-gif-8005754592498114340'],
-  ping: ['https://tenor.com/view/dazai-dazai-osamu-osamu-dazai-bungo-stray-dogs-bsd-gif-27476630'],
-  error: ['https://tenor.com/view/dazai-osamu-dazai-osamu-dazai-bsd-bungo-stray-dogs-gif-5687204305493565288'],
-  welcome: ['https://tenor.com/view/dazai-dazai-osamu-dazai-chibi-osamu-bungou-gif-9846613305180712149'],
+  help: pool,
+  status: pool,
+  ping: [dance, ...pool.slice(0, 3)],
+  error: pool,
+  welcome: [dance],
+  levelup: [dance],
 };
 
 // which card kinds show which moment's gif
@@ -21,9 +36,11 @@ export const momentOf: Record<string, string> = {
   huntbot: 'huntbot', ask: 'ask',
 };
 
-export const isGifLink = (url: string) => direct.test(url) || tenorPage.test(url);
+export const isGifLink = (url: string) => direct.test(url) || tenorPage.test(url) || giphyPage.test(url);
 
 export async function resolve(url: string): Promise<string | null> {
+  const g = giphyFile(url);
+  if (g) return g;
   if (direct.test(url)) return url;
   if (!tenorPage.test(url)) return null;
   const hit = cache.get(url);
@@ -41,7 +58,7 @@ export async function resolve(url: string): Promise<string | null> {
 }
 
 // sync lookup for building cards, only what's already resolved
-export const cached = (url: string | null | undefined) => (!url ? null : direct.test(url) ? url : cache.get(url) ?? null);
+export const cached = (url: string | null | undefined) => (!url ? null : giphyFile(url) ?? (direct.test(url) ? url : cache.get(url) ?? null));
 
 export const pickDefault = (moment: string) => {
   const list = defaults[moment];

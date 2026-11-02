@@ -33,7 +33,7 @@ tz config prefix d
 tz config gif help https://media.tenor.com/.../dance.gif
 ```
 
-Texz comes with default Dazai gifs for some moments, and the gif slots let a server swap them for moments like help, ping, level-ups, welcomes and bans. A Tenor share link works, Texz finds the gif file behind it. `default` puts the built-in one back and `off` hides it.
+Texz comes with default Dazai gifs for some moments, and the gif slots let a server swap them for moments like help, ping, level-ups, welcomes and bans. A Giphy link works straight away since the gif file can be worked out from the link itself, and Tenor share links still work by reading the public page (Tenor shut its API down in June 2026). `default` puts the built-in one back and `off` hides it.
 
 Channel and role limits stack, and admins can always use everything so nobody locks themselves out.
 
