@@ -7,7 +7,7 @@ import { advise } from '../features/huntbot.js';
 import { teamCheck, weaponReport } from '../features/weapons.js';
 import { armouryReport } from '../features/armoury.js';
 import { planZoo } from '../features/zoo.js';
-import type { Huntbot, ListedWeapon, Pet, Weapon, ZooRank } from '../owo/parse.js';
+import { refresh, type Huntbot, type ListedWeapon, type Pet, type Weapon, type ZooRank } from '../owo/parse.js';
 import { scheduleDailies } from '../reminders.js';
 import { agency, embed, say } from '../theme.js';
 import { fmtLeft, nextReset, owoDay, unix } from '../time.js';
@@ -79,7 +79,7 @@ const commands: Command[] = [
       const list = store.snapshot<[string, ListedWeapon][]>(ctx.userId, 'armoury');
       if (!list) return ctx.reply('I haven\'t seen your weapon list yet. Run `owo weapon` and flip through every page once.');
       const team = store.snapshot<Pet[]>(ctx.userId, 'team')?.data ?? null;
-      const seen = new Map(store.snapshot<[string, Weapon][]>(ctx.userId, 'weapons')?.data ?? []);
+      const seen = new Map((store.snapshot<[string, Weapon][]>(ctx.userId, 'weapons')?.data ?? []).map(([id, w]) => [id, refresh(w)]));
       const shards = store.snapshot<number>(ctx.userId, 'shards')?.data ?? null;
       const report = armouryReport(list.data.map(([, w]) => w), team, seen, shards).join('\n');
       return ctx.reply(agency('Armoury', 'armoury', `${report}\n\n-# Flip through every page of owo weapon so I see them all`).setTimestamp(list.at));
@@ -186,7 +186,7 @@ const commands: Command[] = [
     run: (ctx, store) => {
       const team = store.snapshot<Pet[]>(ctx.userId, 'team');
       if (!team) return ctx.reply(missing('owo team'));
-      const all = new Map(store.snapshot<[string, Weapon][]>(ctx.userId, 'weapons')?.data ?? []);
+      const all = new Map((store.snapshot<[string, Weapon][]>(ctx.userId, 'weapons')?.data ?? []).map(([id, w]) => [id, refresh(w)]));
       const id = ctx.str('id')?.toUpperCase() ?? store.snapshot<string>(ctx.userId, 'lastweapon')?.data;
       const w = id ? all.get(id) : undefined;
       if (!w) return ctx.reply(`I haven't seen that weapon yet. Run \`owo weapon ${id ?? '<id>'}\` first so I can read it.`);
@@ -200,7 +200,7 @@ const commands: Command[] = [
     run: (ctx, store) => {
       const team = store.snapshot<Pet[]>(ctx.userId, 'team');
       if (!team) return ctx.reply(missing('owo team'));
-      const weapons = new Map(store.snapshot<[string, Weapon][]>(ctx.userId, 'weapons')?.data ?? []);
+      const weapons = new Map((store.snapshot<[string, Weapon][]>(ctx.userId, 'weapons')?.data ?? []).map(([id, w]) => [id, refresh(w)]));
       const lines = team.data.map((p) => {
         const w = p.weaponId ? weapons.get(p.weaponId) : undefined;
         return `**[${p.slot}] ${p.name}** lvl ${p.level ?? '?'}: HP ${p.hp} · WP ${p.wp} · STR ${p.str} · MAG ${p.mag} · PR ${p.pr}% · MR ${p.mr}%` +

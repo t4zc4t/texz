@@ -186,6 +186,9 @@ export function parseWeapon(raw: string): Weapon | null {
   };
 }
 
+// saved weapons get read again with the current reader, so fixes apply to old data too
+export const refresh = (w: Weapon): Weapon => parseWeapon(w.text) ?? w;
+
 // ---------- captcha ----------
 
 export function isCaptcha(raw: string): boolean {
