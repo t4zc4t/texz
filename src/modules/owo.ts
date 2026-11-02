@@ -3,6 +3,7 @@ import type { Settings, Store } from '../db.js';
 import type { Ctx } from '../core/ctx.js';
 import type { Command, Module } from '../core/module.js';
 import { armouryReport } from '../features/armoury.js';
+import { armouryPage, filters, type Filter } from '../features/armoury-pages.js';
 import { dayStatus } from '../features/daily.js';
 import { durability, planGems } from '../features/gems.js';
 import { advise, maxLevel } from '../features/huntbot.js';
@@ -40,9 +41,6 @@ function sections(lines: string[]) {
   return { body, fields };
 }
 
-const rarityIcon: Record<string, string> = {
-  common: '⚪', uncommon: '🟢', rare: '🔵', epic: '🟣', mythic: '🟡', legendary: '🟠', fabled: '🔴',
-};
 
 // ---------- commands ----------
 
@@ -148,28 +146,29 @@ const armoury: Command = {
   name: 'armoury',
   data: new SlashCommandBuilder().setName('armoury').setDescription('Your whole weapon collection, best picks and what to dismantle')
     .addStringOption((o) => o.setName('view').setDescription('Picks and clean-up, or every weapon')
-      .addChoices({ name: 'picks', value: 'picks' }, { name: 'all', value: 'all' })).toJSON(),
-  text: { aliases: ['armory', 'arm', 'a'], args: ['view'] },
+      .addChoices({ name: 'picks', value: 'picks' }, { name: 'all', value: 'all' }))
+    .addStringOption((o) => o.setName('filter').setDescription('Start the full list on a filter')
+      .addChoices(...Object.entries(filters).map(([value, f]) => ({ name: f.label, value })))).toJSON(),
+  text: { aliases: ['armory', 'arm', 'a'], args: ['view', 'filter'] },
   run: (ctx, store) => {
     const snap = store.snapshot<[string, ListedWeapon][]>(ctx.userId, 'armoury');
     if (!snap) return missing(ctx, store, 'owo weapon', 'Armoury');
     const list = snap.data.map(([, w]) => w);
-    if ((ctx.str('view') ?? '').toLowerCase() === 'all') {
-      const order = ['fabled', 'legendary', 'mythic', 'epic', 'rare', 'uncommon', 'common'];
-      const fields = order.map((r) => {
-        const ws = list.filter((w) => w.rarity === r).sort((a, b) => b.quality - a.quality);
-        if (!ws.length) return null;
-        const rows = ws.map((w) => `\`${w.id}\` ${w.name} · ${w.quality}%${w.equippedOn ? ` · 🤝 ${w.equippedOn}` : ''}`);
-        return { name: `${rarityIcon[r] ?? '•'} ${r} · ${ws.length}`, value: rows.join('\n'), inline: false };
-      }).filter((f): f is { name: string; value: string; inline: boolean } => !!f);
-      return show(ctx, store, { kind: 'armouryAll', title: `Armoury · all ${list.length}`, emoji: '⚔️', fields, at: snap.at });
+    // "tz a all", "tz a all mythic" or straight "tz a held" open the paged list
+    const view = (ctx.str('view') ?? '').toLowerCase();
+    const nick: Record<string, string> = { mythic: 'top', mythical: 'top', legendary: 'top', fabled: 'top', equipped: 'held', unequipped: 'free', emp: 'empowered', physical: 'str', magic: 'mag', tank: 'support' };
+    const raw = (view === 'all' ? ctx.str('filter') ?? 'all' : view).toLowerCase();
+    const filterArg = nick[raw] ?? raw;
+    if (view === 'all' || filterArg in filters) {
+      const f = (filterArg in filters ? filterArg : 'all') as Filter;
+      return ctx.reply({ ...armouryPage(store, ctx.userId, 0, f, 'rarity') });
     }
     const team = store.snapshot<Pet[]>(ctx.userId, 'team')?.data ?? null;
     const shards = store.snapshot<number>(ctx.userId, 'shards')?.data ?? null;
     const { body, fields } = sections(armouryReport(list, team, weaponsOf(store, ctx.userId), shards));
     return show(ctx, store, {
       kind: 'armoury', title: 'Armoury', emoji: '⚔️', at: snap.at, body,
-      fields: [...fields, { name: '📜 Full list', value: `\`${ctx.viaText ? 'tz a all' : '/armoury view:all'}\` shows every weapon you own`, inline: false }],
+      fields: [...fields, { name: '📜 Full list', value: `\`${ctx.viaText ? 'tz a all' : '/armoury view:all'}\` pages through every weapon, with filters like \`tz a held\` or \`tz a mythic\``, inline: false }],
     });
   },
 };

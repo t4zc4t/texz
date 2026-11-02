@@ -1,4 +1,5 @@
-import type { ChatInputCommandInteraction, Message } from 'discord.js';
+import { MessageFlags, type ChatInputCommandInteraction, type Interaction, type Message } from 'discord.js';
+import { armouryPage, parseArmId, filters, sorts, type Filter, type Sort } from '../features/armoury-pages.js';
 import type { Store } from '../db.js';
 import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
@@ -71,4 +72,21 @@ export function onText(store: Store, m: Message): boolean {
   const args = t.sub ? (t.subArgs?.[sub ?? ''] ?? []) : (t.args ?? []);
   void run(store, fromText(m, tokens, args, !!t.sub), hit.mod, hit.cmd);
   return true;
+}
+
+// buttons and menus on Texz's own messages
+export async function onComponent(store: Store, i: Interaction) {
+  if (!i.isButton() && !i.isStringSelectMenu()) return;
+  const arm = parseArmId(i.customId);
+  if (!arm) return;
+  if (i.user.id !== arm.userId) {
+    return i.reply({ content: 'That\'s someone else\'s case file. Open your own with `tz a all`.', flags: MessageFlags.Ephemeral });
+  }
+  let { page, filter, sort } = arm;
+  if (i.isStringSelectMenu()) {
+    const v = i.values[0];
+    if (arm.what === 'filter' && v in filters) { filter = v as Filter; page = 0; }
+    if (arm.what === 'sort' && v in sorts) { sort = v as Sort; page = 0; }
+  }
+  await i.update(armouryPage(store, arm.userId, page, filter, sort)).catch((e) => console.error('armoury page', e));
 }

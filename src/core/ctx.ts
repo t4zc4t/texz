@@ -1,9 +1,10 @@
 import {
-  EmbedBuilder, MessageFlags, PermissionFlagsBits,
+  EmbedBuilder, MessageFlags, PermissionFlagsBits, type ActionRowBuilder, type MessageActionRowComponentBuilder,
   type ChatInputCommandInteraction, type Guild, type GuildMember, type Message,
 } from 'discord.js';
 
-export type Reply = string | EmbedBuilder | { content?: string; embeds?: EmbedBuilder[]; private?: boolean; ping?: string[] };
+export type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
+export type Reply = string | EmbedBuilder | { content?: string; embeds?: EmbedBuilder[]; private?: boolean; ping?: string[]; components?: Row[] };
 
 // one shape for both slash commands and "tz" text commands, so each command is written once
 export interface Ctx {
@@ -26,9 +27,9 @@ export interface Ctx {
 }
 
 function normalise(r: Reply) {
-  if (typeof r === 'string') return { content: r, embeds: [] as EmbedBuilder[], private: true, ping: [] as string[] };
-  if (r instanceof EmbedBuilder) return { content: undefined, embeds: [r], private: true, ping: [] as string[] };
-  return { content: r.content, embeds: r.embeds ?? [], private: r.private ?? true, ping: r.ping ?? [] };
+  if (typeof r === 'string') return { content: r, embeds: [] as EmbedBuilder[], private: true, ping: [] as string[], components: [] as Row[] };
+  if (r instanceof EmbedBuilder) return { content: undefined, embeds: [r], private: true, ping: [] as string[], components: [] as Row[] };
+  return { content: r.content, embeds: r.embeds ?? [], private: r.private ?? true, ping: r.ping ?? [], components: r.components ?? [] };
 }
 
 export function fromSlash(i: ChatInputCommandInteraction): Ctx {
@@ -52,8 +53,8 @@ export function fromSlash(i: ChatInputCommandInteraction): Ctx {
     reply: (r) => {
       const n = normalise(r);
       const payload = n.private
-        ? { content: n.content, embeds: n.embeds, flags: MessageFlags.Ephemeral as const, allowedMentions: { parse: [] } }
-        : { content: n.content, embeds: n.embeds, allowedMentions: { parse: [], users: n.ping } };
+        ? { content: n.content, embeds: n.embeds, components: n.components, flags: MessageFlags.Ephemeral as const, allowedMentions: { parse: [] } }
+        : { content: n.content, embeds: n.embeds, components: n.components, allowedMentions: { parse: [], users: n.ping } };
       return i.replied || i.deferred ? i.followUp(payload) : i.reply(payload);
     },
   };
@@ -94,7 +95,7 @@ export function fromText(m: Message, tokens: string[], argNames: string[], hasSu
     role: (n) => id(n, /^<@&(\d+)>$/) ?? values.get(n)?.match(/^(\d{15,})$/)?.[1] ?? null,
     reply: (r) => {
       const n = normalise(r);
-      return m.reply({ content: n.content, embeds: n.embeds, allowedMentions: { repliedUser: false, parse: [], users: n.ping } });
+      return m.reply({ content: n.content, embeds: n.embeds, components: n.components, allowedMentions: { repliedUser: false, parse: [], users: n.ping } });
     },
   };
 }

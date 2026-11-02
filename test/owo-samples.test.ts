@@ -64,3 +64,21 @@ test('quest log', () => {
   const q = parseQuestLog("### 📜 <@1>'s Quest Log\n-# Balance: **78**\nReceive 2 cookies from friends (0/2)\nSay owo 10 times (3/10)\nDaily\nClaim")!;
   assert.deepEqual(q.lines, ['Receive 2 cookies from friends (0/2)', 'Say owo 10 times (3/10)']);
 });
+
+test('armoury pages, filters and buttons', async () => {
+  const { Store } = await import('../src/db.ts');
+  const { armouryPage, parseArmId } = await import('../src/features/armoury-pages.ts');
+  const store = new Store(':memory:');
+  const rows = parseWeaponList(list);
+  // pad to three pages
+  const many = [...rows, ...Array.from({ length: 20 }, (_, i) => ({ ...rows[1], id: `X${String(i).padStart(5, '0')}`, quality: 40 + i }))];
+  store.saveSnapshot('123456789012345678', 'armoury', many.map((w) => [w.id, w]));
+  const first = armouryPage(store, '123456789012345678', 0, 'all', 'rarity');
+  const ids = first.components.flatMap((r) => r.toJSON().components.map((c) => ('custom_id' in c ? c.custom_id : '')));
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(ids.every((id) => id.length <= 100));
+  assert.match(JSON.stringify(first.embeds[0].toJSON()), /1 \/ 3/);
+  const top = armouryPage(store, '123456789012345678', 0, 'top', 'quality');
+  assert.match(JSON.stringify(top.embeds[0].toJSON()), /2 of 26/);
+  assert.deepEqual(parseArmId('arm|1|2|held|type|next'), { userId: '1', page: 2, filter: 'held', sort: 'type', what: 'next' });
+});

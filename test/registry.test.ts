@@ -102,3 +102,16 @@ test('custom prefix', async () => {
   assert.equal(onText(store, fake('tz status').m), false);
   assert.equal(onText(store, fake('d status').m), true);
 });
+
+test('help for one command', async () => {
+  const store = new Store(':memory:');
+  const a = fake('tz help config');
+  onText(store, a.m);
+  await tick();
+  assert.match(said(a.replies[0]), /tz config/);
+  assert.doesNotMatch(said(a.replies[0]), /At your service/);
+  const b = fake('tz help hb');
+  onText(store, b.m);
+  await tick();
+  assert.match(said(b.replies[0]), /tz huntbot/);
+});

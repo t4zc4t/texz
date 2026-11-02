@@ -38,6 +38,38 @@ const help: Command = {
     const want = ctx.str('feature')?.toLowerCase();
     const mods = allModules.filter((m) => m.locked || store.rules(ctx.guildId, m.name).enabled);
     const pickMod = want ? mods.find((m) => m.name === want || m.label.toLowerCase().includes(want)) : undefined;
+    // a command name or alias wins over a feature name, "tz help status" means the status command
+    const pickCmd = want ? (() => {
+      for (const m of mods) for (const c of m.commands) {
+        if (c.name === want || c.text?.aliases?.includes(want)) return { m, c };
+      }
+      return null;
+    })() : null;
+    if (pickCmd) {
+      const { m, c } = pickCmd;
+      const t = c.text ?? {};
+      const subs = (c.data.options ?? []).filter((o) => o.type === 1) as { name: string; description: string }[];
+      const usage = subs.length
+        ? subs.map((sc) => {
+            const args = (t.subArgs?.[sc.name] ?? []).map((a) => `<${a}>`).join(' ');
+            return `\`${prefix} ${c.name} ${sc.name}${args ? ` ${args}` : ''}\`\n-# ${sc.description}`;
+          }).join('\n')
+        : `\`${prefix} ${c.name}${(t.args ?? []).map((a) => ` [${a}]`).join('')}\``;
+      return ctx.reply(card({
+        kind: 'help', title: `${prefix} ${c.name}`, emoji: icons[m.name] ?? '📁', gif,
+        body: c.data.description,
+        fields: [
+          { name: '⌨️ How to use it', value: usage, inline: false },
+          { name: '⚡ Slash', value: `\`/${c.name}\``, inline: true },
+          { name: '🏷️ Short names', value: t.aliases?.length ? t.aliases.map((a) => `\`${prefix} ${a}\``).join(' ') : 'none', inline: true },
+          { name: '📁 Part of', value: m.label, inline: true },
+          ...(c.admin ? [{ name: '🔐 Who', value: 'Admins with Manage Server', inline: false }] : []),
+        ],
+      }));
+    }
+    if (want && !pickMod) {
+      return ctx.reply(card({ kind: 'missing', title: `No "${want}" here`, emoji: '🔍', body: `Try \`${prefix} help\` for the full list.` }));
+    }
     if (want && pickMod) {
       return ctx.reply(card({
         kind: 'help', title: pickMod.label, emoji: icons[pickMod.name] ?? '📁', body: pickMod.about, gif,

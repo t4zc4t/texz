@@ -2,7 +2,7 @@ import { ActivityType, Client, Events, GatewayIntentBits, Partials } from 'disco
 import { Store } from './db.js';
 import { look } from './theme.js';
 import { startScheduler } from './reminders.js';
-import { onSlash, onText } from './core/registry.js';
+import { onComponent, onSlash, onText } from './core/registry.js';
 import { watch } from './watch.js';
 
 const token = process.env.DISCORD_TOKEN;
@@ -40,6 +40,7 @@ client.once(Events.ClientReady, (c) => {
 
 client.on(Events.InteractionCreate, (i) => {
   if (i.isChatInputCommand()) void onSlash(store, i);
+  else void onComponent(store, i);
 });
 
 client.on(Events.MessageCreate, (m) => {
