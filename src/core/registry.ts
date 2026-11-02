@@ -9,12 +9,14 @@ import { onAvatarButton, onPollButton, utility } from '../modules/utility.js';
 import { moderation } from '../modules/moderation.js';
 import { onRoleButton, welcomeModule } from '../modules/welcome.js';
 import { levelsModule } from '../modules/levels.js';
+import { onSetup, useModules } from '../features/setup.js';
 import { RED, card, type Kind } from '../theme.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import type { Command, Module } from './module.js';
 
 export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule];
 allModules.push(...modules);
+useModules(modules);
 
 const bySlash = new Map<string, { mod: Module; cmd: Command }>();
 const byText = new Map<string, { mod: Module; cmd: Command }>();
@@ -83,6 +85,7 @@ export function onText(store: Store, m: Message): boolean {
 // buttons and menus on Texz's own messages
 export async function onComponent(store: Store, i: Interaction) {
   try {
+    if (await onSetup(store, i)) return;
     if (await onAnimeComponent(store, i)) return;
     if (await onPollButton(store, i)) return;
     if (await onAvatarButton(i)) return;

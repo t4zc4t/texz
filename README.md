@@ -30,30 +30,21 @@ AniList's api is free with no key, but it only allows 30 requests a minute right
 
 ## Moderation
 
-`tz warn @someone reason`, `tz warns @someone` (or `/warnings` with a number to remove one), `tz timeout @someone 10m reason` (Texz calls it No Longer Human), `tz unmute`, `tz kick`, `tz ban`, `/unban <id>`, `tz purge 20` or `tz purge 20 @someone`, `tz lock` / `tz lock off`, and `tz slow 10s`. Each one checks that whoever runs it has the permission and sits above the person, and the person gets a DM saying what happened. `/modsetup` picks a log channel (joins, leaves, deleted and edited messages, bans and every action above) and switches on the automod rules, each off by default: invite links, spam (six messages in five seconds gets a five minute timeout) and mass mentions. Mods are never caught by automod.
+`tz warn @someone reason`, `tz warns @someone` (or `/warnings` with a number to remove one), `tz timeout @someone 10m reason` (Texz calls it No Longer Human), `tz unmute`, `tz kick`, `tz ban`, `/unban <id>`, `tz purge 20` or `tz purge 20 @someone`, `tz lock` / `tz lock off`, and `tz slow 10s`. Each one checks that whoever runs it has the permission and sits above the person, and the person gets a DM saying what happened. A log channel (joins, leaves, deleted and edited messages, bans and every action above) and the automod rules, each off by default (invite links, spam where six messages in five seconds gets a five minute timeout, and mass mentions), are set in `/setup`. Mods are never caught by automod. When a mod doesn't give a reason, Texz makes one up.
 
 ## Welcome and roles
 
-`/welcome` sets a channel for greetings and one for goodbyes, an autorole for newcomers, and optionally your own text with `{user}`, `{name}`, `{server}` and `{count}`. Without your own text Texz uses its own lines, a different one each time. `/welcome test:true` shows a preview. `/rolepicker` posts up to five buttons that give or take a role when pressed.
+Greetings, goodbyes and the autorole are set in `/setup`: pick the channels and the role from menus, write your own text with `{user}`, `{name}`, `{server}` and `{count}` or let Texz use its own lines, and press Preview to see it. `/rolepicker` posts up to five buttons that give or take a role when pressed.
 
 ## Levels
 
-One message a minute earns 15 to 25 xp, so chatting counts and spam doesn't. Levels come with Agency ranks, from Stray and Agency Visitor up through Junior Detective, Ability User and Strategist to Living Legend of Yokohama. `tz rank` shows your card, `tz levels` the server's top ten, and `/levelsetup` picks where level-ups get posted (or turns them off), adds reward roles for certain levels and can set someone's level by hand.
+One message a minute earns 15 to 25 xp, so chatting counts and spam doesn't. Levels come with Agency ranks, from Stray and Agency Visitor up through Junior Detective, Ability User and Strategist to Living Legend of Yokohama. `tz rank` shows your card, `tz levels` the server's top ten, and `/setup` picks where level-ups get posted (or turns them off) and adds reward roles: pick a role and it asks which level.
 
 ## Using it
 
 Every command works as a slash command and with the short prefix, so `/status` and `tz status` do the same thing, and most have a shorter alias too (`tz hb`, `tz s`, `tz w <id>`). `tz help` lists everything switched on in the server.
 
-Server admins (Manage Server) can switch each feature on or off and limit where it works with `/config`:
-
-```
-tz config view
-tz config feature levels off
-tz config channel owo add #bots
-tz config role owo add @OwO players
-tz config prefix d
-tz config gif help https://media.tenor.com/.../dance.gif
-```
+Server admins (Manage Server) run `/setup` (or `tz setup`) to get the front desk, a panel where everything is done with menus and buttons: each feature on or off and limited to certain channels or roles, welcome and goodbye, the autorole, logs and automod, levels and reward roles, gifs and the prefix.
 
 Texz comes with default Dazai gifs for some moments, and the gif slots let a server swap them for moments like help, ping, level-ups, welcomes and bans. A Giphy link works straight away since the gif file can be worked out from the link itself, and Tenor share links still work by reading the public page (Tenor shut its API down in June 2026). `default` puts the built-in one back and `off` hides it.
 

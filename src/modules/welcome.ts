@@ -47,58 +47,9 @@ export async function onLeave(store: Store, m: GuildMember | PartialGuildMember)
   const name = `**${m.displayName ?? m.user?.username ?? 'someone'}**`;
   const text = w.goodbyeMessage ? fill(w.goodbyeMessage, m).replaceAll(`<@${m.id}>`, name) : undefined;
   if (ch?.isSendable()) {
-    await ch.send({ embeds: [card({ kind: 'goodbye', title: 'Gone', emoji: '🍂', gif: store.guild(m.guild.id).gifs.goodbye ?? 'off', vars: { user: name, server: m.guild.name }, body: text })] }).catch(() => {});
+    await ch.send({ embeds: [card({ kind: 'goodbye', title: 'Gone', emoji: '🍂', gif: store.guild(m.guild.id).gifs.goodbye ?? null, vars: { user: name, server: m.guild.name }, body: text })] }).catch(() => {});
   }
 }
-
-const welcome: Command = {
-  name: 'welcome',
-  admin: true,
-  data: new SlashCommandBuilder().setName('welcome').setDescription('Welcome and goodbye messages, and a role for newcomers')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false)
-    .addChannelOption((x) => x.setName('channel').setDescription('Where to greet people').addChannelTypes(ChannelType.GuildText))
-    .addStringOption((x) => x.setName('message').setDescription('Your own text, {user} {name} {server} {count}, or "default"').setMaxLength(500))
-    .addChannelOption((x) => x.setName('goodbye').setDescription('Where to say goodbye').addChannelTypes(ChannelType.GuildText))
-    .addStringOption((x) => x.setName('goodbye_message').setDescription('Your own goodbye text, or "default"').setMaxLength(500))
-    .addRoleOption((x) => x.setName('autorole').setDescription('Role every newcomer gets'))
-    .addStringOption((x) => x.setName('off').setDescription('Turn something off').addChoices(
-      { name: 'welcome', value: 'welcome' }, { name: 'goodbye', value: 'goodbye' }, { name: 'autorole', value: 'autorole' }))
-    .addBooleanOption((x) => x.setName('test').setDescription('Show me what a welcome looks like')).toJSON(),
-  text: { aliases: ['greet'], args: ['channel'] },
-  run: async (ctx, store) => {
-    if (!ctx.guildId || !ctx.member) return ctx.reply('Server only.');
-    const g = store.guild(ctx.guildId);
-    const w = g.welcome;
-    const ch = ctx.channel('channel'); if (ch) w.channel = ch;
-    const msg = ctx.str('message'); if (msg) w.message = msg === 'default' ? null : msg;
-    const bye = ctx.channel('goodbye'); if (bye) w.goodbyeChannel = bye;
-    const byeMsg = ctx.str('goodbye_message'); if (byeMsg) w.goodbyeMessage = byeMsg === 'default' ? null : byeMsg;
-    const role = ctx.role('autorole');
-    if (role) {
-      const me = await ctx.guild!.members.fetchMe();
-      const r = await ctx.guild!.roles.fetch(role).catch(() => null);
-      if (!r || r.position >= me.roles.highest.position || r.managed) return ctx.reply('I can\'t hand out that role, it sits above mine or belongs to a bot.');
-      w.autorole = role;
-    }
-    const off = ctx.str('off');
-    if (off === 'welcome') w.channel = null;
-    if (off === 'goodbye') w.goodbyeChannel = null;
-    if (off === 'autorole') w.autorole = null;
-    store.saveGuild(ctx.guildId, g);
-    if (ctx.bool('test')) return ctx.reply({ embeds: [welcomeCard(store, ctx.member)], private: false });
-    return ctx.reply(card({
-      kind: 'welcomeSetup', title: 'Welcome desk', emoji: '🌸', gif: 'off',
-      fields: [
-        { name: '👋 Welcome', value: w.channel ? `<#${w.channel}>` : 'off', inline: true },
-        { name: '🍂 Goodbye', value: w.goodbyeChannel ? `<#${w.goodbyeChannel}>` : 'off', inline: true },
-        { name: '🎭 Autorole', value: w.autorole ? `<@&${w.autorole}>` : 'off', inline: true },
-        { name: '💬 Welcome text', value: w.message ?? '*my own lines, a different one each time*', inline: false },
-        { name: '💬 Goodbye text', value: w.goodbyeMessage ?? '*my own lines, a different one each time*', inline: false },
-        { name: '🧪 Try it', value: '`/welcome test:true`', inline: false },
-      ],
-    }));
-  },
-};
 
 const rolepicker: Command = {
   name: 'rolepicker',
@@ -147,6 +98,6 @@ export async function onRoleButton(i: Interaction) {
 export const welcomeModule: Module = {
   name: 'welcome',
   label: 'Welcome and roles',
-  about: 'Greets newcomers, waves goodbye, gives an autorole, and role picker buttons',
-  commands: [welcome, rolepicker],
+  about: 'Greets newcomers, waves goodbye, autorole (all in /setup) and role picker buttons',
+  commands: [rolepicker],
 };

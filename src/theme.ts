@@ -261,6 +261,16 @@ const bank = {
     'Congratulations, {user}, you\'re officially a **{rank}**. The paperwork is Kunikida-kun\'s problem.',
   ],
   levelSetup: ['Promotion rules updated. Fair, transparent, and mostly my idea.'],
+  noReason: [
+    'Kunikida-kun said so, and his notebook is never wrong.',
+    'The vibes were off. A detective trusts his instincts.',
+    'Insufficient crab offerings to the Agency.',
+    'Being louder than Chuuya, which I didn\'t think was possible.',
+    'Disturbing my nap. Unforgivable.',
+    'Ranpo-san deduced it. Don\'t ask me how, he won\'t share.',
+    'Crimes against good taste.',
+    'They know what they did~',
+  ],
   huntbotBack: [
     'Your huntbot is home, carrying gifts like a loyal little hound.',
     'Ding! The robot returns. Collect its haul before it develops a personality.',

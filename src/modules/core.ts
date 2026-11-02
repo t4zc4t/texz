@@ -3,6 +3,7 @@ import { defaultRules, type Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { card, say } from '../theme.js';
 import { isGifLink, resolve } from '../gifs.js';
+import { setupPanel } from '../features/setup.js';
 
 // filled in by the registry so help and config can list every module
 export const allModules: Module[] = [];
@@ -115,9 +116,23 @@ const help: Command = {
   },
 };
 
+const setup: Command = {
+  name: 'setup',
+  admin: true,
+  data: new SlashCommandBuilder().setName('setup').setDescription('Set up everything with buttons: features, welcome, autorole, logs, levels, gifs')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false).toJSON(),
+  text: { aliases: ['panel', 'frontdesk'] },
+  run: (ctx, store) => {
+    if (!ctx.guild) return ctx.reply('Setup lives inside a server.');
+    return ctx.reply({ ...setupPanel(store, ctx.guild, ctx.userId, 'home'), private: true });
+  },
+};
+
+// the typed version of setup, kept for people who like typing, it has no slash command
 const config: Command = {
   name: 'config',
   admin: true,
+  hidden: true,
   data: new SlashCommandBuilder().setName('config').setDescription('Turn features on or off and limit where they work')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false)
     .addSubcommand((s) => s.setName('view').setDescription('Show every feature and its limits'))
@@ -233,6 +248,6 @@ export const core: Module = {
   label: 'Core',
   about: 'Help, server settings and the basics',
   locked: true,
-  commands: [help, config, ping],
+  commands: [help, setup, ping, config],
 };
 

@@ -1,10 +1,10 @@
 import {
-  ChannelType, PermissionFlagsBits, SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder, type Client, type EmbedBuilder, type GuildMember, type PermissionResolvable,
+  ChannelType, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder, type Client, type GuildMember, type PermissionResolvable,
 } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Ctx } from '../core/ctx.js';
 import type { Command, Module } from '../core/module.js';
-import { RED, card, type Kind } from '../theme.js';
+import { RED, card, say, type Kind } from '../theme.js';
 
 const unix = (ms: number) => Math.floor(ms / 1000);
 
@@ -30,7 +30,9 @@ export async function log(client: Client, store: Store, guildId: string, e: Embe
   const id = store.guild(guildId).mod.logChannel;
   if (!id) return;
   const ch = await client.channels.fetch(id).catch(() => null);
-  if (ch?.isSendable()) await ch.send({ embeds: [e], allowedMentions: { parse: [] } }).catch(() => {});
+  // the log keeps it plain, no gif filling the channel
+  const plain = new EmbedBuilder(e.toJSON()).setImage(null);
+  if (ch?.isSendable()) await ch.send({ embeds: [plain], allowedMentions: { parse: [] } }).catch(() => {});
 }
 
 // the person running the command needs the permission, and both they and Texz must sit above the target
@@ -78,7 +80,7 @@ const warn: Command = {
   run: async (ctx, store) => {
     const t = await target(ctx, PermissionFlagsBits.ModerateMembers);
     if (typeof t === 'string') return ctx.reply(t);
-    const why = ctx.str('reason') ?? 'no reason given';
+    const why = ctx.str('reason') ?? say('noReason');
     const id = store.warn(ctx.guildId!, t.them!.id, ctx.userId, why);
     const count = store.warnings(ctx.guildId!, t.them!.id).length;
     await tellThem(t.them!, `⚠️ You were warned in **${ctx.guild!.name}**: ${why}`);
@@ -120,7 +122,7 @@ const timeout: Command = {
     if (typeof t === 'string') return ctx.reply(t);
     const ms = parseLength(ctx.str('length'));
     if (!ms || ms > 28 * 86_400_000) return ctx.reply('Give me a length like `10m`, `2h` or `1d`, up to 28 days.');
-    const why = ctx.str('reason') ?? 'no reason given';
+    const why = ctx.str('reason') ?? say('noReason');
     await t.them!.timeout(ms, why);
     await tellThem(t.them!, `🔇 You were timed out in **${ctx.guild!.name}** for ${human(ms)}: ${why}`);
     const e = actionCard('timeout', 'No Longer Human', '🩹', `<@${t.them!.id}>`, ctx.userId, why, [{ name: '⏳ Until', value: `<t:${unix(Date.now() + ms)}:R>`, inline: true }]);
@@ -152,7 +154,7 @@ const kick: Command = {
   run: async (ctx, store) => {
     const t = await target(ctx, PermissionFlagsBits.KickMembers);
     if (typeof t === 'string') return ctx.reply(t);
-    const why = ctx.str('reason') ?? 'no reason given';
+    const why = ctx.str('reason') ?? say('noReason');
     await tellThem(t.them!, `👢 You were kicked from **${ctx.guild!.name}**: ${why}`);
     await t.them!.kick(why);
     const e = actionCard('kick', 'Shown the door', '👢', `${t.them!.user.username} (\`${t.them!.id}\`)`, ctx.userId, why);
@@ -170,7 +172,7 @@ const ban: Command = {
   run: async (ctx, store) => {
     const t = await target(ctx, PermissionFlagsBits.BanMembers);
     if (typeof t === 'string') return ctx.reply(t);
-    const why = ctx.str('reason') ?? 'no reason given';
+    const why = ctx.str('reason') ?? say('noReason');
     await tellThem(t.them!, `🔨 You were banned from **${ctx.guild!.name}**: ${why}`);
     await t.them!.ban({ reason: why, deleteMessageSeconds: (ctx.int('clear') ?? 0) * 86_400 });
     const e = actionCard('ban', 'Banished', '🔨', `${t.them!.user.username} (\`${t.them!.id}\`)`, ctx.userId, why);
@@ -260,42 +262,9 @@ const slowmode: Command = {
   },
 };
 
-const setup: Command = {
-  name: 'modsetup',
-  admin: true,
-  data: new SlashCommandBuilder().setName('modsetup').setDescription('Log channel and automod rules')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false)
-    .addChannelOption((x) => x.setName('logs').setDescription('Where I write everything down').addChannelTypes(ChannelType.GuildText))
-    .addBooleanOption((x) => x.setName('invites').setDescription('Delete invite links from non-mods'))
-    .addBooleanOption((x) => x.setName('spam').setDescription('Mute people sending 6 messages in 5 seconds'))
-    .addBooleanOption((x) => x.setName('mentions').setDescription('Delete messages pinging 6 or more people')).toJSON(),
-  text: { aliases: ['automod'], args: ['logs'] },
-  run: (ctx, store) => {
-    if (!ctx.guildId) return ctx.reply('Server only.');
-    const g = store.guild(ctx.guildId);
-    const logs = ctx.channel('logs');
-    if (logs) g.mod.logChannel = logs;
-    for (const k of ['invites', 'spam', 'mentions'] as const) {
-      const v = ctx.bool(k);
-      if (v !== null) g.mod[k] = v;
-    }
-    store.saveGuild(ctx.guildId, g);
-    const on = (b: boolean) => (b ? '🟢 on' : '⚫ off');
-    return ctx.reply(card({
-      kind: 'logs', title: 'Moderation setup', emoji: '🛡️', gif: 'off',
-      fields: [
-        { name: '📜 Log channel', value: g.mod.logChannel ? `<#${g.mod.logChannel}>` : 'not set', inline: false },
-        { name: '🔗 Invite links', value: on(g.mod.invites), inline: true },
-        { name: '🌊 Spam', value: on(g.mod.spam), inline: true },
-        { name: '📣 Mass mentions', value: on(g.mod.mentions), inline: true },
-      ],
-    }));
-  },
-};
-
 export const moderation: Module = {
   name: 'moderation',
   label: 'Moderation',
-  about: 'Warn, timeout, kick, ban, purge, lock, slowmode, a log channel and a light automod',
-  commands: [warn, warnings, timeout, untimeout, kick, ban, unban, purge, lock, slowmode, setup],
+  about: 'Warn, timeout, kick, ban, purge, lock and slowmode. Logs and automod are in /setup',
+  commands: [warn, warnings, timeout, untimeout, kick, ban, unban, purge, lock, slowmode],
 };

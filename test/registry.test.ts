@@ -105,10 +105,10 @@ test('custom prefix', async () => {
 
 test('help for one command', async () => {
   const store = new Store(':memory:');
-  const a = fake('tz help config');
+  const a = fake('tz help setup');
   onText(store, a.m);
   await tick();
-  assert.match(said(a.replies[0]), /tz config/);
+  assert.match(said(a.replies[0]), /tz setup/);
   assert.doesNotMatch(said(a.replies[0]), /At your service/);
   const b = fake('tz help hb');
   onText(store, b.m);

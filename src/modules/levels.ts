@@ -110,53 +110,10 @@ const levels: Command = {
   },
 };
 
-const levelsetup: Command = {
-  name: 'levelsetup',
-  admin: true,
-  data: new SlashCommandBuilder().setName('levelsetup').setDescription('Level-up channel, announcements and reward roles')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false)
-    .addChannelOption((o) => o.setName('channel').setDescription('Where level-ups go, empty means where they chat').addChannelTypes(ChannelType.GuildText))
-    .addBooleanOption((o) => o.setName('announce').setDescription('Post level-ups at all'))
-    .addIntegerOption((o) => o.setName('reward_level').setDescription('Give a role at this level').setMinValue(1).setMaxValue(200))
-    .addRoleOption((o) => o.setName('reward_role').setDescription('The role for that level'))
-    .addIntegerOption((o) => o.setName('remove_reward').setDescription('Stop giving the role at this level'))
-    .addBooleanOption((o) => o.setName('here').setDescription('Post level-ups wherever people chat again'))
-    .addUserOption((o) => o.setName('set_user').setDescription('Set someone\'s level by hand'))
-    .addIntegerOption((o) => o.setName('set_level').setDescription('The level for that person').setMinValue(0).setMaxValue(200)).toJSON(),
-  run: async (ctx, store) => {
-    if (!ctx.guild) return ctx.reply('Server only.');
-    const g = store.guild(ctx.guild.id);
-    const ch = ctx.channel('channel'); if (ch) g.levels.channel = ch;
-    if (ctx.bool('here')) g.levels.channel = null;
-    const ann = ctx.bool('announce'); if (ann !== null) g.levels.announce = ann;
-    const lvl = ctx.int('reward_level'); const role = ctx.role('reward_role');
-    if (lvl && role) {
-      const me = await ctx.guild.members.fetchMe();
-      const r = await ctx.guild.roles.fetch(role).catch(() => null);
-      if (!r || r.position >= me.roles.highest.position || r.managed) return ctx.reply('I can\'t hand out that role, move my role above it first.');
-      g.levels.rewards[String(lvl)] = role;
-    }
-    const rm = ctx.int('remove_reward'); if (rm) delete g.levels.rewards[String(rm)];
-    const who = ctx.user('set_user'); const to = ctx.int('set_level');
-    if (who && to !== null) store.setXp(ctx.guild.id, who, totalFor(to));
-    store.saveGuild(ctx.guild.id, g);
-    const rewards = Object.entries(g.levels.rewards).sort((a, b) => Number(a[0]) - Number(b[0]));
-    return ctx.reply(card({
-      kind: 'levelSetup', title: 'Promotion rules', emoji: '🎖️', gif: 'off',
-      fields: [
-        { name: '📣 Level-ups', value: g.levels.announce ? (g.levels.channel ? `in <#${g.levels.channel}>` : 'where people chat') : 'silent', inline: true },
-        { name: '🎁 Reward roles', value: rewards.length ? rewards.map(([l, r]) => `lvl ${l} → <@&${r}>`).join('\n') : 'none yet', inline: true },
-        { name: '🏛️ Agency ranks', value: ranks.map((r) => `${r.emoji} ${r.name} · lvl ${r.at}`).join('\n'), inline: false },
-        ...(who && to !== null ? [{ name: '✏️ Changed', value: `<@${who}> is now level ${to}`, inline: false }] : []),
-      ],
-    }));
-  },
-};
-
 export const levelsModule: Module = {
   name: 'levels',
   label: 'Levels and ranks',
-  about: 'Chat xp, Agency ranks from Stray to Living Legend, level-up posts and reward roles',
-  commands: [rank, levels, levelsetup],
+  about: 'Chat xp and Agency ranks from Stray to Living Legend. Reward roles and the level-up channel are in /setup',
+  commands: [rank, levels],
 };
 
