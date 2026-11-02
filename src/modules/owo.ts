@@ -2,7 +2,6 @@ import { SlashCommandBuilder } from 'discord.js';
 import type { Settings, Store } from '../db.js';
 import type { Ctx } from '../core/ctx.js';
 import type { Command, Module } from '../core/module.js';
-import { armouryReport } from '../features/armoury.js';
 import { armouryPage, filters, type Filter } from '../features/armoury-pages.js';
 import { dayStatus } from '../features/daily.js';
 import { durability, planGems } from '../features/gems.js';
@@ -11,6 +10,7 @@ import { damageOn, teamCheck } from '../features/weapons.js';
 import { planZoo, values } from '../features/zoo.js';
 import { refresh, traits, weaponType, type Huntbot, type ListedWeapon, type Pet, type Weapon, type ZooRank } from '../owo/parse.js';
 import { scheduleDailies } from '../reminders.js';
+import { panel } from '../features/panel.js';
 import { RED, bar, card, say, type CardOptions } from '../theme.js';
 import { fmtLeft, nextReset, owoDay, unix } from '../time.js';
 
@@ -28,19 +28,6 @@ const missing = (ctx: Ctx, store: Store, cmd: string, title: string) => show(ctx
 
 const weaponsOf = (store: Store, userId: string) =>
   new Map((store.snapshot<[string, Weapon][]>(userId, 'weapons')?.data ?? []).map(([id, w]) => [id, refresh(w)]));
-
-// splits "**Heading**\nlines" blocks into embed fields
-function sections(lines: string[]) {
-  const blocks = lines.join('\n').split(/\n\s*\n/);
-  const body = blocks.shift() ?? '';
-  const fields = blocks.map((b) => {
-    const [first, ...rest] = b.split('\n');
-    const head = first.match(/^\*\*(.+?)\*\*(.*)$/);
-    return head ? { name: head[1] + head[2], value: rest.join('\n') || '​' } : { name: '​', value: b };
-  });
-  return { body, fields };
-}
-
 
 // ---------- commands ----------
 
@@ -144,32 +131,20 @@ const zoo: Command = {
 
 const armoury: Command = {
   name: 'armoury',
-  data: new SlashCommandBuilder().setName('armoury').setDescription('Your whole weapon collection, best picks and what to dismantle')
-    .addStringOption((o) => o.setName('view').setDescription('Picks and clean-up, or every weapon')
-      .addChoices({ name: 'picks', value: 'picks' }, { name: 'all', value: 'all' }))
-    .addStringOption((o) => o.setName('filter').setDescription('Start the full list on a filter')
+  data: new SlashCommandBuilder().setName('armoury').setDescription('Your whole weapon collection with best picks, clean-up, filters and pages')
+    .addStringOption((o) => o.setName('filter').setDescription('Start on a filter')
       .addChoices(...Object.entries(filters).map(([value, f]) => ({ name: f.label, value })))).toJSON(),
-  text: { aliases: ['armory', 'arm', 'a'], args: ['view', 'filter'] },
+  text: { aliases: ['armory', 'arm', 'a'], args: ['filter'] },
   run: (ctx, store) => {
-    const snap = store.snapshot<[string, ListedWeapon][]>(ctx.userId, 'armoury');
-    if (!snap) return missing(ctx, store, 'owo weapon', 'Armoury');
-    const list = snap.data.map(([, w]) => w);
-    // "tz a all", "tz a all mythic" or straight "tz a held" open the paged list
-    const view = (ctx.str('view') ?? '').toLowerCase();
-    const nick: Record<string, string> = { mythic: 'top', mythical: 'top', legendary: 'top', fabled: 'top', equipped: 'held', unequipped: 'free', emp: 'empowered', physical: 'str', magic: 'mag', tank: 'support' };
-    const raw = (view === 'all' ? ctx.str('filter') ?? 'all' : view).toLowerCase();
-    const filterArg = nick[raw] ?? raw;
-    if (view === 'all' || filterArg in filters) {
-      const f = (filterArg in filters ? filterArg : 'all') as Filter;
-      return ctx.reply({ ...armouryPage(store, ctx.userId, 0, f, 'rarity') });
-    }
-    const team = store.snapshot<Pet[]>(ctx.userId, 'team')?.data ?? null;
-    const shards = store.snapshot<number>(ctx.userId, 'shards')?.data ?? null;
-    const { body, fields } = sections(armouryReport(list, team, weaponsOf(store, ctx.userId), shards));
-    return show(ctx, store, {
-      kind: 'armoury', title: 'Armoury', emoji: '⚔️', at: snap.at, body,
-      fields: [...fields, { name: '📜 Full list', value: `\`${ctx.viaText ? 'tz a all' : '/armoury view:all'}\` pages through every weapon, with filters like \`tz a held\` or \`tz a mythic\``, inline: false }],
-    });
+    if (!store.snapshot(ctx.userId, 'armoury')) return missing(ctx, store, 'owo weapon', 'Armoury');
+    // "tz a", "tz a mythic", "tz a held", "tz a junk" all open the same screen
+    const nick: Record<string, string> = {
+      all: 'all', mythic: 'top', mythical: 'top', legendary: 'top', fabled: 'top', equipped: 'held', unequipped: 'free',
+      emp: 'empowered', physical: 'str', magic: 'mag', tank: 'support', dismantle: 'junk', trash: 'junk', scrap: 'junk',
+    };
+    const raw = (ctx.str('filter') ?? 'all').toLowerCase();
+    const f = (nick[raw] ?? raw) in filters ? (nick[raw] ?? raw) as Filter : 'all';
+    return ctx.reply(armouryPage(store, ctx.userId, 0, f, 'rarity'));
   },
 };
 
@@ -311,12 +286,7 @@ const remind: Command = {
         ? show(ctx, store, { kind: 'remindCancel', title: 'Promise broken, as requested', emoji: '🗑️' })
         : ctx.reply('No reminder with that ID.');
     }
-    const list = store.userReminders(ctx.userId);
-    const label: Record<string, string> = { huntbot: '🤖 huntbot back', pray: '🙏 pray ready', vote: '🗳️ vote ready', hunt: '🏹 hunt ready', reset: '🌅 new OwO day', lastcall: '⏳ last call', custom: '📝' };
-    const body = list.length
-      ? list.map((r) => `\`#${r.id}\` ${label[r.kind] ?? r.kind}${r.note ? ` ${r.note}` : ''} · <t:${Math.floor(r.due_at / 1000)}:R>`).join('\n')
-      : 'Nothing queued.';
-    return show(ctx, store, { kind: 'remindAdd', title: 'Promises I made', emoji: '📝', body });
+    return ctx.reply(panel(store, ctx.userId, 'list'));
   },
 };
 
@@ -349,6 +319,7 @@ const settings: Command = {
   run: (ctx, store) => {
     const s = store.settings(ctx.userId);
     const sub = ctx.sub() ?? 'view';
+    if (sub === 'view') return ctx.reply(panel(store, ctx.userId, 'settings'));
     if (sub === 'delivery') {
       const to = ctx.str('to');
       if (to !== 'dm' && to !== 'channel') return ctx.reply('Pick `dm` or `channel`.');

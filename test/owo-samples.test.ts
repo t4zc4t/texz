@@ -79,6 +79,6 @@ test('armoury pages, filters and buttons', async () => {
   assert.ok(ids.every((id) => id.length <= 100));
   assert.match(JSON.stringify(first.embeds[0].toJSON()), /1 \/ 3/);
   const top = armouryPage(store, '123456789012345678', 0, 'top', 'quality');
-  assert.match(JSON.stringify(top.embeds[0].toJSON()), /2 of 26/);
+  assert.match(JSON.stringify(top.embeds[0].toJSON()), /Mythic and up · 2/);
   assert.deepEqual(parseArmId('arm|1|2|held|type|next'), { userId: '1', page: 2, filter: 'held', sort: 'type', what: 'next' });
 });

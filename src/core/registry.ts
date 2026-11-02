@@ -1,5 +1,6 @@
 import { MessageFlags, type ChatInputCommandInteraction, type Interaction, type Message } from 'discord.js';
 import { armouryPage, parseArmId, filters, sorts, type Filter, type Sort } from '../features/armoury-pages.js';
+import { apply, modalFor, panel, parseRp } from '../features/panel.js';
 import type { Store } from '../db.js';
 import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
@@ -76,6 +77,10 @@ export function onText(store: Store, m: Message): boolean {
 
 // buttons and menus on Texz's own messages
 export async function onComponent(store: Store, i: Interaction) {
+  if (i.isModalSubmit() || i.isButton() || i.isStringSelectMenu()) {
+    const rp = parseRp(i.customId);
+    if (rp) return onPanel(store, i, rp).catch((e) => console.error('panel', e));
+  }
   if (!i.isButton() && !i.isStringSelectMenu()) return;
   const arm = parseArmId(i.customId);
   if (!arm) return;
@@ -89,4 +94,33 @@ export async function onComponent(store: Store, i: Interaction) {
     if (arm.what === 'sort' && v in sorts) { sort = v as Sort; page = 0; }
   }
   await i.update(armouryPage(store, arm.userId, page, filter, sort)).catch((e) => console.error('armoury page', e));
+}
+
+const notYours = 'That\'s someone else\'s control room. Open your own with `tz remind`.';
+
+async function onPanel(store: Store, i: Interaction, rp: NonNullable<ReturnType<typeof parseRp>>) {
+  if (!i.isModalSubmit() && !i.isButton() && !i.isStringSelectMenu()) return;
+  if (i.user.id !== rp.userId) return i.reply({ content: notYours, flags: MessageFlags.Ephemeral });
+
+  // buttons that need typing open a small form first
+  if (i.isButton() && ['quiet', 'tz', 'add'].includes(rp.action)) {
+    const modal = modalFor(rp.userId, rp.action, store.settings(rp.userId));
+    if (modal) return i.showModal(modal);
+  }
+  if (i.isButton() && rp.action === 'view') return i.update(panel(store, rp.userId, rp.arg === 'list' ? 'list' : 'settings'));
+
+  const fields: Record<string, string> = {};
+  if (i.isModalSubmit()) for (const id of ['hours', 'zone', 'minutes', 'note']) {
+    try { fields[id] = i.fields.getTextInputValue(id); } catch { /* not in this form */ }
+  }
+  const arg = i.isStringSelectMenu() ? i.values[0] : rp.arg;
+  const err = apply(store, rp.userId, rp.action, arg, fields, i.channelId ?? '');
+  if (err) return i.reply({ content: err, flags: MessageFlags.Ephemeral });
+
+  const view = ['add', 'cancel'].includes(rp.action) ? 'list' : 'settings';
+  if (i.isModalSubmit()) {
+    if (i.isFromMessage()) return i.update(panel(store, rp.userId, view));
+    return i.reply({ ...panel(store, rp.userId, view), flags: MessageFlags.Ephemeral });
+  }
+  return i.update(panel(store, rp.userId, view));
 }

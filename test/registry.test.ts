@@ -115,3 +115,25 @@ test('help for one command', async () => {
   await tick();
   assert.match(said(b.replies[0]), /tz huntbot/);
 });
+
+test('reminder panel buttons', async () => {
+  const { panel, apply, parseRp } = await import('../src/features/panel.ts');
+  const store = new Store(':memory:');
+  const view = panel(store, '123456789012345678', 'settings');
+  const ids = view.components.flatMap((r) => r.toJSON().components.map((c) => ('custom_id' in c ? c.custom_id : '')));
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(ids.every((id) => id.length <= 100));
+  assert.equal(store.settings('123456789012345678').pray, true);
+  apply(store, '123456789012345678', 'toggle', 'pray', {}, 'c');
+  assert.equal(store.settings('123456789012345678').pray, false);
+  apply(store, '123456789012345678', 'delivery', '', {}, 'c');
+  assert.equal(store.settings('123456789012345678').delivery, 'channel');
+  assert.match(apply(store, '123456789012345678', 'quiet', '', { hours: 'nope' }, 'c') ?? '', /format/);
+  assert.equal(apply(store, '123456789012345678', 'quiet', '', { hours: '00:30-07:30' }, 'c'), null);
+  assert.equal(apply(store, '123456789012345678', 'add', '', { minutes: '30', note: 'restart huntbot' }, 'c'), null);
+  const list = store.userReminders('123456789012345678').filter((r) => r.kind === 'custom');
+  assert.equal(list.length, 1);
+  apply(store, '123456789012345678', 'cancel', String(list[0].id), {}, 'c');
+  assert.equal(store.userReminders('123456789012345678').filter((r) => r.kind === 'custom').length, 0);
+  assert.deepEqual(parseRp('rp|1|toggle|vote'), { modal: false, userId: '1', action: 'toggle', arg: 'vote' });
+});

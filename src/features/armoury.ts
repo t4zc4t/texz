@@ -27,17 +27,21 @@ export const roles: Record<string, { stat?: 'STR' | 'MAG'; role: 'damage' | 'hea
 const rarityRank: Record<string, number> = { common: 0, uncommon: 1, rare: 2, epic: 3, mythic: 4, legendary: 5, fabled: 6 };
 const shards: Record<string, number> = { common: 1, uncommon: 3, rare: 5, epic: 25, mythic: 300, legendary: 1000, fabled: 5000 };
 
-export function armouryReport(list: ListedWeapon[], team: Pet[] | null, seen: Map<string, Weapon>, shardBalance: number | null): string[] {
-  const lines: string[] = [];
+export interface ArmouryAnalysis {
+  summary: string;
+  picks: string[];
+  junk: ListedWeapon[];
+  junkShards: number;
+}
+
+export function analyseArmoury(list: ListedWeapon[], team: Pet[] | null, seen: Map<string, Weapon>): ArmouryAnalysis {
   const counts = new Map<string, number>();
   for (const w of list) counts.set(w.rarity, (counts.get(w.rarity) ?? 0) + 1);
-  lines.push(`**${list.length} weapons** · ${[...counts].sort((a, b) => (rarityRank[b[0]] ?? 0) - (rarityRank[a[0]] ?? 0)).map(([r, n]) => `${n} ${r}`).join(', ')}`);
-  if (shardBalance !== null) lines.push(`Shards: **${shardBalance.toLocaleString()}**`);
+  const summary = `**${list.length} weapons** · ${[...counts].sort((a, b) => (rarityRank[b[0]] ?? 0) - (rarityRank[a[0]] ?? 0)).map(([r, n]) => `${n} ${r}`).join(', ')}`;
 
-  // best damage weapon for each pet, using its stronger stat
+  // best damage weapon for each pet by its stronger stat, strongest pets pick first, one weapon per pet
+  const picks: string[] = [];
   if (team?.length) {
-    lines.push('', '**Best damage pick per pet**');
-    // strongest pets pick first and a weapon only goes to one pet
     const used = new Set<string>();
     const order = [...team].sort((a, b) => Math.max(b.str, b.mag) - Math.max(a.str, a.mag));
     for (const p of order) {
@@ -47,19 +51,18 @@ export function armouryReport(list: ListedWeapon[], team: Pet[] | null, seen: Ma
         .filter((w) => !used.has(w.id) && (!w.equippedOn || w.equippedOn === p.name || !team.some((t) => t.name === w.equippedOn)))
         .map((w) => {
           const full = seen.get(w.id);
-          const est = full ? damageOn(full, p).total : null;
-          return { w, est };
+          return { w, est: full ? damageOn(full, p).total : null };
         })
         .sort((a, b) => (b.est ?? -1) - (a.est ?? -1) || (rarityRank[b.w.rarity] ?? 0) - (rarityRank[a.w.rarity] ?? 0) || b.w.quality - a.w.quality)
         .slice(0, 2);
-      if (!fits.length) { lines.push(`${p.name} (${stat}): nothing that fits yet`); continue; }
+      if (!fits.length) { picks.push(`${p.name} (${stat}): nothing that fits yet`); continue; }
       used.add(fits[0].w.id);
       const est = (f: (typeof fits)[number]) => {
         if (f.est) return ` ~${f.est} dmg`;
         const full = seen.get(f.w.id);
         return full && !full.hits.length ? ' (scales with the fight)' : '';
       };
-      lines.push(`${p.name} (${stat}): ${fits.map((f) => `\`${f.w.id}\` ${f.w.name} ${f.w.quality}%${est(f)}`).join(', then ')}`);
+      picks.push(`${p.name} (${stat}): ${fits.map((f) => `\`${f.w.id}\` ${f.w.name} ${f.w.quality}%${est(f)}`).join(', then ')}`);
     }
   }
 
@@ -72,11 +75,19 @@ export function armouryReport(list: ListedWeapon[], team: Pet[] | null, seen: Ma
   }
   const junk = list.filter((w) =>
     (rarityRank[w.rarity] ?? 9) <= rarityRank.rare && !w.equippedOn && !w.empowered && keep.get(weaponType(w.name))?.id !== w.id);
-  if (junk.length) {
-    const gain = junk.reduce((a, w) => a + (shards[w.rarity] ?? 0), 0);
-    lines.push('', `**Safe to dismantle** (${junk.length}, about ${gain} shards): weaker duplicates nobody is holding`);
-    lines.push(junk.map((w) => `\`${w.id}\` ${w.name} ${w.quality}%`).join('\n'));
-    lines.push(`One at a time: \`owo dismantle ${junk[0].id}\``);
+  const junkShards = junk.reduce((a, w) => a + (shards[w.rarity] ?? 0), 0);
+  return { summary, picks, junk, junkShards };
+}
+
+export function armouryReport(list: ListedWeapon[], team: Pet[] | null, seen: Map<string, Weapon>, shardBalance: number | null): string[] {
+  const a = analyseArmoury(list, team, seen);
+  const lines = [a.summary];
+  if (shardBalance !== null) lines.push(`Shards: **${shardBalance.toLocaleString()}**`);
+  if (a.picks.length) lines.push('', '**Best damage pick per pet**', ...a.picks);
+  if (a.junk.length) {
+    lines.push('', `**Safe to dismantle** (${a.junk.length}, about ${a.junkShards} shards): weaker duplicates nobody is holding`);
+    lines.push(a.junk.map((w) => `\`${w.id}\` ${w.name} ${w.quality}%`).join('\n'));
+    lines.push(`One at a time: \`owo dismantle ${a.junk[0].id}\``);
   }
   lines.push('', 'I keep anything equipped, empowered, epic or better, and the best copy of each type.');
   return lines;
