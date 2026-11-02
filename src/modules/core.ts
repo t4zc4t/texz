@@ -30,37 +30,59 @@ const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation
 
 const help: Command = {
   name: 'help',
-  data: new SlashCommandBuilder().setName('help').setDescription('What Texz can do here')
-    .addStringOption((o) => o.setName('feature').setDescription('One feature in detail')).toJSON(),
+  data: new SlashCommandBuilder().setName('help').setDescription('Everything Texz can do, by feature')
+    .addStringOption((o) => o.setName('feature').setDescription('A feature or command to open')).toJSON(),
   text: { aliases: ['h', 'commands'], args: ['feature'] },
   run: (ctx, store) => {
     const prefix = ctx.guildId ? store.guild(ctx.guildId).prefix : 'tz';
     const gif = ctx.guildId ? store.guild(ctx.guildId).gifs.help ?? null : null;
-    const want = ctx.str('feature')?.toLowerCase();
+    const raw = ctx.str('feature')?.toLowerCase();
+    const want = raw === 'home' ? undefined : raw;
     const mods = allModules.filter((m) => m.locked || store.rules(ctx.guildId, m.name).enabled);
     const pickMod = want ? mods.find((m) => m.name === want || m.label.toLowerCase().includes(want)) : undefined;
     // a command name or alias wins over a feature name, "tz help status" means the status command
     const pickCmd = want ? (() => {
       for (const m of mods) for (const c of m.commands) {
-        if (c.name === want || c.text?.aliases?.includes(want)) return { m, c };
+        if (!c.hidden && (c.name === want || c.text?.aliases?.includes(want))) return { m, c };
       }
       return null;
     })() : null;
+
+    // every page carries the same menus, picking from them flips this very message
+    const id = `nav|help|as=feature,owner=${ctx.userId}`;
+    const featureMenu = new StringSelectMenuBuilder().setCustomId(`${id},m=1`).setPlaceholder('📂 Open a feature')
+      .addOptions([
+        { label: 'Front page', value: 'home', emoji: '🕵️', description: 'Back to the start' },
+        ...mods.map((m) => ({ label: m.label, value: m.name, emoji: icons[m.name] ?? '📁', description: m.about.slice(0, 100), default: (pickCmd?.m ?? pickMod)?.name === m.name })),
+      ]);
+    const rows = [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(featureMenu)];
+    const inMod = pickCmd?.m ?? pickMod;
+    if (inMod) {
+      const cmds = inMod.commands.filter((c) => !c.hidden).slice(0, 25);
+      rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+        new StringSelectMenuBuilder().setCustomId(`${id},m=2`).setPlaceholder('🔎 How does a command work?')
+          .addOptions(cmds.map((c) => ({ label: `${prefix} ${c.name}`, value: c.name, description: c.data.description.slice(0, 100), default: pickCmd?.c.name === c.name }))),
+      ));
+    }
+    const page = (e: ReturnType<typeof card>) => ctx.reply({ embeds: [e], components: rows });
+
     if (pickCmd) {
       const { m, c } = pickCmd;
       const t = c.text ?? {};
-      const subs = (c.data.options ?? []).filter((o) => o.type === 1) as { name: string; description: string }[];
+      const opts = (c.data.options ?? []) as { name: string; description: string; type: number }[];
+      const subs = opts.filter((o) => o.type === 1);
       const usage = subs.length
         ? subs.map((sc) => {
             const args = (t.subArgs?.[sc.name] ?? []).map((a) => `<${a}>`).join(' ');
             return `\`${prefix} ${c.name} ${sc.name}${args ? ` ${args}` : ''}\`\n-# ${sc.description}`;
           }).join('\n')
         : `\`${prefix} ${c.name}${(t.args ?? []).map((a) => ` [${a}]`).join('')}\``;
-      return ctx.reply(card({
-        kind: 'help', title: `${prefix} ${c.name}`, emoji: icons[m.name] ?? '📁', gif: gif ?? 'off',
+      return page(card({
+        kind: 'help', title: `${prefix} ${c.name}`, emoji: icons[m.name] ?? '📁', gif,
         body: c.data.description,
         fields: [
           { name: '⌨️ How to use it', value: usage, inline: false },
+          ...(subs.length ? [] : opts.length ? [{ name: '🧩 Options', value: opts.map((o) => `\`${o.name}\` ${o.description}`).join('\n'), inline: false }] : []),
           { name: '⚡ Slash', value: `\`/${c.name}\``, inline: true },
           { name: '🏷️ Short names', value: t.aliases?.length ? t.aliases.map((a) => `\`${prefix} ${a}\``).join(' ') : 'none', inline: true },
           { name: '📁 Part of', value: m.label, inline: true },
@@ -69,31 +91,27 @@ const help: Command = {
       }));
     }
     if (want && !pickMod) {
-      return ctx.reply(card({ kind: 'missing', title: `No "${want}" here`, emoji: '🔍', body: `Try \`${prefix} help\` for the full list.` }));
+      return page(card({ kind: 'missing', title: `No "${want}" in my files`, emoji: '🔍', gif: 'off', body: `Try \`${prefix} help\` for the whole list.` }));
     }
-    if (want && pickMod) {
-      return ctx.reply(card({
-        kind: 'help', title: pickMod.label, emoji: icons[pickMod.name] ?? '📁', body: pickMod.about, gif: gif ?? 'off',
+    if (pickMod) {
+      return page(card({
+        kind: 'help', title: pickMod.label, emoji: icons[pickMod.name] ?? '📁', body: pickMod.about, gif,
         fields: pickMod.commands.filter((c) => !c.hidden).map((c) => ({
-          name: `/${c.name}`,
-          value: `${c.data.description}\n\`${prefix} ${c.name}\`${c.text?.aliases?.length ? ` · \`${prefix} ${c.text.aliases[0]}\`` : ''}`,
+          name: `${prefix} ${c.name}`,
+          value: `${c.data.description}${c.text?.aliases?.length ? `\n-# also \`${prefix} ${c.text.aliases[0]}\`` : ''}`,
           inline: true,
         })),
       }));
     }
-    const menu = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      new StringSelectMenuBuilder().setCustomId('nav|help|as=feature').setPlaceholder('📂 Open a feature')
-        .addOptions(mods.map((m) => ({ label: m.label, value: m.name, emoji: icons[m.name] ?? '📁', description: m.about.slice(0, 100) }))),
-    );
-    return ctx.reply({ components: [menu], embeds: [card({
+    return page(card({
       kind: 'help', title: 'At your service', emoji: '🕵️', gif,
-      body: `Slash commands work, and so does the lazy way: \`${prefix} <command>\`.\nAsk \`${prefix} help <feature>\` and I'll walk you through one.`,
+      body: `Slash works, and so does the lazy way: \`${prefix} <command>\`.\nPick a feature below, I'll walk you through it.`,
       fields: mods.map((m) => ({
         name: `${icons[m.name] ?? '📁'} ${m.label}`,
-        value: `${m.about}\n${m.commands.filter((c) => !c.hidden).map((c) => `\`${c.name}\``).join(' ')}`,
+        value: m.commands.filter((c) => !c.hidden).map((c) => `\`${c.name}\``).join(' '),
         inline: false,
       })),
-    })] });
+    }));
   },
 };
 
@@ -177,10 +195,37 @@ const config: Command = {
   },
 };
 
+const started = Date.now();
+
+// how Texz feels about the connection, slow pings get the sulky lines
+function pingMood(ms: number) {
+  if (ms < 0) return 'Still waking up, the heartbeat hasn\'t settled. Ask again in a bit~';
+  if (ms < 80) return 'Faster than Kunikida-kun can open his notebook. Impressive, even for me.';
+  if (ms < 160) return 'A perfectly respectable speed. Not that I was rushing.';
+  if (ms < 300) return 'A little sluggish. I blame the crab I had for lunch.';
+  return 'Slow. Ranpo-san on a Monday slow. Someone check the wires, I\'m not getting up.';
+}
+
 const ping: Command = {
   name: 'ping',
-  data: new SlashCommandBuilder().setName('ping').setDescription('Check that Texz is awake').toJSON(),
-  run: (ctx, store) => ctx.reply(card({ kind: 'ping', title: 'Pong', emoji: '🏓', gif: ctx.guildId ? store.guild(ctx.guildId).gifs.ping ?? null : null, body: `💓 heartbeat · **${Math.round(ctx.latency())} ms**` })),
+  data: new SlashCommandBuilder().setName('ping').setDescription('Poke Texz and see how quickly he answers').toJSON(),
+  text: { aliases: ['pong'] },
+  run: (ctx, store) => {
+    const ms = Math.round(ctx.latency());
+    const up = Date.now() - started;
+    const h = Math.floor(up / 3_600_000);
+    const m = Math.floor((up % 3_600_000) / 60_000);
+    return ctx.reply(card({
+      kind: 'ping', title: 'You rang?', emoji: '😪',
+      gif: ctx.guildId ? store.guild(ctx.guildId).gifs.ping ?? null : null,
+      body: `*${pingMood(ms)}*`,
+      fields: [
+        { name: '💓 Heartbeat', value: ms < 0 ? 'warming up' : `**${ms}** ms`, inline: true },
+        { name: '😴 Awake for', value: h ? `${h}h ${m}m` : `${m}m`, inline: true },
+        { name: '🦀 Crab eaten today', value: String(1 + (new Date().getDate() % 4)), inline: true },
+      ],
+    }));
+  },
 };
 
 export const core: Module = {

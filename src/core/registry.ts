@@ -5,7 +5,7 @@ import type { Store } from '../db.js';
 import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
 import { anime, onAnimeComponent } from '../modules/anime.js';
-import { onPollButton, utility } from '../modules/utility.js';
+import { onAvatarButton, onPollButton, utility } from '../modules/utility.js';
 import { RED, card, type Kind } from '../theme.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import type { Command, Module } from './module.js';
@@ -82,6 +82,7 @@ export async function onComponent(store: Store, i: Interaction) {
   try {
     if (await onAnimeComponent(store, i)) return;
     if (await onPollButton(store, i)) return;
+    if (await onAvatarButton(i)) return;
   } catch (e) {
     console.error('component', e);
   }
@@ -97,8 +98,10 @@ export async function onComponent(store: Store, i: Interaction) {
     if (extra) for (const pair of extra.split(',')) { const [k, v] = pair.split('='); opts[k] = v; }
     if (i.isStringSelectMenu()) opts[opts.as ?? 'value'] = i.values[0];
     const hit = bySlash.get(name);
-    if (hit) return run(store, fromComponent(i, opts), hit.mod, hit.cmd);
-    return;
+    if (!hit) return;
+    // pages that belong to whoever opened them change in place, anyone else gets their own copy
+    const edit = !!opts.owner && opts.owner === i.user.id;
+    return run(store, fromComponent(i, opts, edit), hit.mod, hit.cmd);
   }
   const arm = parseArmId(i.customId);
   if (!arm) return;

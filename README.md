@@ -26,7 +26,7 @@ AniList's api is free with no key, but it only allows 30 requests a minute right
 
 ## Utility
 
-`tz av`, `tz user` and `tz server` for avatars and info, `tz poll question? | a | b` for a button vote, `tz choose`, `tz roll 2d6`, `tz coin`, `tz 8ball` and `tz afk`, which answers for you when someone pings you while you're away.
+`tz av` shows someone's picture with buttons for their server picture, main picture and banner (animated ones stay animated), `tz user` opens a dossier with a few deductions from what Texz has seen (account age, join order, last seen, activity), `tz server` for the server, `tz poll question? | a | b` for a button vote, `tz choose`, `tz roll 2d6`, `tz coin`, `tz 8ball` and `tz afk`, which answers for you when someone pings you while you're away (with a made-up excuse if you don't give one).
 
 ## Using it
 

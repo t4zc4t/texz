@@ -128,6 +128,14 @@ export class Store {
         reason TEXT NOT NULL,
         at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS activity (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        last_at INTEGER NOT NULL,
+        last_channel TEXT,
+        messages INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (guild_id, user_id)
+      );
       CREATE TABLE IF NOT EXISTS guilds (
         id TEXT PRIMARY KEY,
         settings TEXT NOT NULL
@@ -230,6 +238,18 @@ export class Store {
 
   afk(userId: string): { reason: string; at: number } | null {
     return (this.db.prepare('SELECT reason, at FROM afk WHERE user_id = ?').get(userId) as { reason: string; at: number } | undefined) ?? null;
+  }
+
+  // last time someone spoke in a server and how much, for the dossier
+  heard(guildId: string, userId: string, channelId: string) {
+    this.db.prepare(`INSERT INTO activity (guild_id, user_id, last_at, last_channel, messages) VALUES (?, ?, ?, ?, 1)
+      ON CONFLICT(guild_id, user_id) DO UPDATE SET last_at = excluded.last_at, last_channel = excluded.last_channel, messages = messages + 1`)
+      .run(guildId, userId, Date.now(), channelId);
+  }
+
+  activity(guildId: string, userId: string): { last_at: number; last_channel: string | null; messages: number } | null {
+    return (this.db.prepare('SELECT last_at, last_channel, messages FROM activity WHERE guild_id = ? AND user_id = ?').get(guildId, userId) as
+      { last_at: number; last_channel: string | null; messages: number } | undefined) ?? null;
   }
 
   touch(userId: string, channelId: string) {

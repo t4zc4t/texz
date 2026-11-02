@@ -17,6 +17,8 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildPresences,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.DirectMessages,
   ],
@@ -52,6 +54,7 @@ client.on(Events.InteractionCreate, (i) => {
 
 client.on(Events.MessageCreate, (m) => {
   if (m.author.bot) return;
+  if (m.guildId) store.heard(m.guildId, m.author.id, m.channelId);
   onText(store, m);
   void afkWatch(store, m);
 });

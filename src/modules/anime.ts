@@ -16,6 +16,17 @@ const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<M
 const nice = (s: string | null) => (s ? s.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()) : '?');
 const hex = (c: string | null) => (c ? Number.parseInt(c.replace('#', ''), 16) : undefined);
 
+// a one-line opinion from the score, in his voice
+function verdict(score: number | null, type: string) {
+  const what = type === 'ANIME' ? 'watch' : 'read';
+  if (score === null) return `Too new to judge. I'll ${what} it first and report back, probably during work hours.`;
+  if (score >= 85) return `A masterpiece. Even Kunikida-kun would skip his schedule to ${what} this.`;
+  if (score >= 75) return `Very good. Worth trading a nap for, and I don't say that lightly.`;
+  if (score >= 65) return `Decent. Perfect for a lazy afternoon by the window.`;
+  if (score >= 55) return `Hmm. ${what === 'watch' ? 'Watch' : 'Read'} it only if you've run out of crab.`;
+  return `Even Chuuya has better taste than this. Skip it~`;
+}
+
 export function mediaCard(m: Media) {
   const isAnime = m.type === 'ANIME';
   const fields = [
@@ -30,6 +41,7 @@ export function mediaCard(m: Media) {
   ];
   if (m.studios.nodes.length) fields.push({ name: '🏢 Studio', value: m.studios.nodes.map((s) => s.name).join(', '), inline: true });
   if (m.genres.length) fields.push({ name: '🏷️ Genres', value: m.genres.slice(0, 6).join(' · '), inline: false });
+  fields.push({ name: '🕵️ Texz\'s verdict', value: verdict(m.averageScore, m.type), inline: false });
   if (m.nextAiringEpisode) {
     fields.push({ name: '⏰ Next episode', value: `Episode **${m.nextAiringEpisode.episode}** <t:${m.nextAiringEpisode.airingAt}:R> (<t:${m.nextAiringEpisode.airingAt}:f>)`, inline: false });
   }

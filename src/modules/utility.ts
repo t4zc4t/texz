@@ -1,5 +1,6 @@
 import {
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, type Interaction, type Message, type MessageActionRowComponentBuilder,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder,
+  type Client, type Guild, type Interaction, type Message, type MessageActionRowComponentBuilder,
 } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
@@ -7,43 +8,124 @@ import { bar, card, pick, say } from '../theme.js';
 
 const unix = (ms: number) => Math.floor(ms / 1000);
 
+type Look = 'server' | 'main' | 'banner';
+
+// one mugshot card that can flip between the server picture, the main one and the banner
+export async function mugshot(guild: Guild | null, client: Client, targetId: string, look: Look) {
+  const member = guild ? await guild.members.fetch(targetId).catch(() => null) : null;
+  const user = await client.users.fetch(targetId, { force: true }).catch(() => null);
+  if (!user) return null;
+  const hasServer = !!member?.avatar;
+  const hasBanner = !!user.banner;
+  const pickLook: Look = look === 'server' && !hasServer ? 'main' : look === 'banner' && !hasBanner ? 'main' : look;
+  const hash = pickLook === 'server' ? member!.avatar! : pickLook === 'banner' ? user.banner! : user.avatar ?? '';
+  const animated = hash.startsWith('a_');
+  // animated pictures keep moving as long as the gif version is asked for
+  const opts = { size: 1024, extension: animated ? 'gif' : 'png', forceStatic: false } as const;
+  const url = pickLook === 'server' ? member!.avatarURL(opts)! : pickLook === 'banner' ? user.bannerURL(opts)! : user.displayAvatarURL(opts);
+  const labels: Record<Look, string> = { server: 'server picture', main: 'main picture', banner: 'banner' };
+  const e = card({
+    kind: 'avatar', title: `Mugshot · ${member?.displayName ?? user.globalName ?? user.username}`, emoji: '🖼️', gif: 'off',
+    body: `${labels[pickLook]}${animated ? ' · ✨ animated' : ''} · [open full size](${url})`,
+  }).setImage(url);
+  const btn = (l: Look, label: string, emoji: string, ok: boolean) => new ButtonBuilder().setCustomId(`av|${targetId}|${l}`)
+    .setLabel(label).setEmoji(emoji).setStyle(l === pickLook ? ButtonStyle.Primary : ButtonStyle.Secondary).setDisabled(!ok || l === pickLook);
+  const row = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+    btn('server', 'Server', '🏠', hasServer),
+    btn('main', 'Main', '👤', true),
+    btn('banner', 'Banner', '🎏', hasBanner),
+  );
+  return { embeds: [e], components: [row] };
+}
+
 const avatar: Command = {
   name: 'avatar',
-  data: new SlashCommandBuilder().setName('avatar').setDescription('Someone\'s profile picture, full size')
+  data: new SlashCommandBuilder().setName('avatar').setDescription('Someone\'s picture, server or main, animated ones included')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
-  text: { aliases: ['av', 'pfp'], args: ['user'] },
+  text: { aliases: ['av', 'pfp', 'mugshot'], args: ['user'] },
   run: async (ctx) => {
     const id = ctx.user('user') ?? ctx.userId;
-    const member = await ctx.guild?.members.fetch(id).catch(() => null);
-    const user = member?.user ?? (await (ctx.guild?.client ?? null)?.users.fetch(id).catch(() => null));
-    if (!user) return ctx.reply('I can\'t find that person.');
-    const url = (member ?? user).displayAvatarURL({ size: 1024 });
-    const e = card({ kind: 'avatar', title: member?.displayName ?? user.username, emoji: '🖼️', gif: 'off', body: `[Open full size](${url})` }).setImage(url);
-    return ctx.reply({ embeds: [e], private: false });
+    const client = ctx.guild?.client;
+    if (!client) return ctx.reply('That works inside a server.');
+    const view = await mugshot(ctx.guild, client, id, 'server');
+    if (!view) return ctx.reply('I can\'t find that person. Even I have limits.');
+    return ctx.reply({ ...view, private: false });
   },
 };
 
+export async function onAvatarButton(i: Interaction) {
+  if (!i.isButton() || !i.customId.startsWith('av|')) return false;
+  const [, id, look] = i.customId.split('|');
+  const view = await mugshot(i.guild, i.client, id, look as Look);
+  if (view) await i.update(view);
+  return true;
+}
+
+// little conclusions Texz draws from what he can see, the detective part of the dossier
+function deduce(facts: {
+  ageDays: number; joinedDays: number | null; position: number | null; messages: number; lastAt: number | null;
+  admin: boolean; animated: boolean; bot: boolean; activity: string | null; boosting: boolean; roles: number;
+}): string[] {
+  const out: string[] = [];
+  if (facts.bot) out.push('A bot. One of my kind, sort of. Less charming, obviously.');
+  if (facts.ageDays < 30) out.push('A very fresh account. Barely a month old. Suspicious~');
+  else if (facts.ageDays > 365 * 5) out.push('A Discord veteran. Probably remembers when it was only for gamers.');
+  if (facts.position !== null && facts.position <= 10) out.push(`Joined #${facts.position}. Practically part of the furniture here.`);
+  else if (facts.joinedDays !== null && facts.joinedDays < 7) out.push('Arrived this week. Still learning where the crab is kept.');
+  if (facts.admin) out.push('Holds the keys to this place. Be nice to them.');
+  if (facts.boosting) out.push('Pays to boost the server. Generous, or trying to buy loyalty. Both work.');
+  if (facts.activity) out.push(`Currently ${facts.activity}. Clearly avoiding their duties. A kindred spirit.`);
+  if (facts.lastAt && Date.now() - facts.lastAt < 10 * 60_000) out.push('Spoke here minutes ago. The trail is still warm.');
+  if (facts.messages > 1000) out.push('Talks a lot. I like them already.');
+  else if (facts.messages === 0) out.push('Hasn\'t said a word where I could hear. The quiet ones always know the most.');
+  if (facts.animated) out.push('Animated avatar. Taste, or vanity? I\'d say both.');
+  if (facts.roles > 10) out.push('Collects roles like I collect excuses.');
+  if (!out.length) out.push('Perfectly ordinary. Which is exactly what someone with secrets would want me to think~');
+  return out.slice(0, 3);
+}
+
 const user: Command = {
   name: 'user',
-  data: new SlashCommandBuilder().setName('user').setDescription('A quick file on someone in this server')
+  data: new SlashCommandBuilder().setName('user').setDescription('Texz opens a dossier on someone, deductions included')
     .addUserOption((o) => o.setName('user').setDescription('Who, you if empty')).toJSON(),
-  text: { aliases: ['whois', 'ui'], args: ['user'] },
-  run: async (ctx) => {
+  text: { aliases: ['whois', 'ui', 'dossier'], args: ['user'] },
+  run: async (ctx, store) => {
     if (!ctx.guild) return ctx.reply('That works inside a server.');
     const m = await ctx.guild.members.fetch(ctx.user('user') ?? ctx.userId).catch(() => null);
-    if (!m) return ctx.reply('Nobody by that name here.');
+    if (!m) return ctx.reply('Nobody by that name here. Either they left, or they\'re very good at hiding.');
+    const u = await m.user.fetch(true).catch(() => m.user);
+    const all = await ctx.guild.members.fetch().catch(() => null);
+    const position = all && m.joinedTimestamp ? [...all.values()].filter((x) => (x.joinedTimestamp ?? 0) < m.joinedTimestamp!).length + 1 : null;
     const roles = m.roles.cache.filter((r) => r.id !== ctx.guild!.id).sort((a, b) => b.position - a.position);
+    const act = store.activity(ctx.guild.id, m.id);
+    const presence = m.presence;
+    const doing = presence?.activities.find((x) => x.type !== 4);
+    const activityText = doing ? `${['playing', 'streaming', 'listening to', 'watching', '', 'competing in'][doing.type] ?? 'doing'} ${doing.name}`.trim() : null;
+    const statusIcon: Record<string, string> = { online: '🟢 online', idle: '🌙 idle', dnd: '⛔ do not disturb', offline: '⚫ offline' };
+    const badges = u.flags?.toArray().map((f) => f.replace(/([a-z])([A-Z])/g, '$1 $2')) ?? [];
+    const ageDays = Math.floor((Date.now() - u.createdTimestamp) / 86_400_000);
+    const joinedDays = m.joinedTimestamp ? Math.floor((Date.now() - m.joinedTimestamp) / 86_400_000) : null;
+    const lines = deduce({
+      ageDays, joinedDays, position, messages: act?.messages ?? 0, lastAt: act?.last_at ?? null,
+      admin: m.permissions.has('Administrator'), animated: !!(m.avatar ?? u.avatar)?.startsWith('a_'), bot: u.bot,
+      activity: activityText, boosting: !!m.premiumSince, roles: roles.size,
+    });
     const e = card({
-      kind: 'user', title: m.displayName, emoji: '🗃️', gif: 'off', color: m.displayColor || undefined,
+      kind: 'user', title: `Dossier · ${m.displayName}`, emoji: '🗃️', gif: 'off', color: m.displayColor || undefined,
+      body: `🔎 **Deductions**\n${lines.map((l) => `> ${l}`).join('\n')}`,
       fields: [
-        { name: '🪪 Username', value: m.user.username, inline: true },
-        { name: '🤖 Bot', value: m.user.bot ? 'yes' : 'no', inline: true },
-        { name: '🆔 ID', value: `\`${m.id}\``, inline: true },
-        { name: '🎂 Account made', value: `<t:${unix(m.user.createdTimestamp)}:D>\n<t:${unix(m.user.createdTimestamp)}:R>`, inline: true },
-        { name: '🚪 Joined here', value: m.joinedTimestamp ? `<t:${unix(m.joinedTimestamp)}:D>\n<t:${unix(m.joinedTimestamp)}:R>` : '?', inline: true },
-        { name: `🎭 Roles · ${roles.size}`, value: roles.size ? roles.first(12).map((r) => `<@&${r.id}>`).join(' ') : 'none', inline: false },
+        { name: '🪪 Identity', value: `${u.username}${u.globalName && u.globalName !== m.displayName ? ` · ${u.globalName}` : ''}\n\`${u.id}\``, inline: true },
+        { name: '📡 Right now', value: `${statusIcon[presence?.status ?? 'offline'] ?? '⚫ offline'}${activityText ? `\n${activityText}` : ''}`, inline: true },
+        { name: '👣 Last seen', value: act ? `<t:${unix(act.last_at)}:R>${act.last_channel ? ` in <#${act.last_channel}>` : ''}\n${act.messages.toLocaleString()} messages heard` : 'not by me', inline: true },
+        { name: '🎂 Account', value: `<t:${unix(u.createdTimestamp)}:D>\n${ageDays.toLocaleString()} days old`, inline: true },
+        { name: '🚪 Joined here', value: m.joinedTimestamp ? `<t:${unix(m.joinedTimestamp)}:D>${position ? `\n#${position} to join` : ''}` : '?', inline: true },
+        { name: '💎 Boosting', value: m.premiumSince ? `since <t:${unix(m.premiumSince.getTime())}:D>` : 'no', inline: true },
+        { name: `🎭 Roles · ${roles.size}`, value: roles.size ? roles.first(10).map((r) => `<@&${r.id}>`).join(' ') : 'none', inline: false },
+        ...(badges.length ? [{ name: '🏅 Badges', value: badges.join(' · '), inline: false }] : []),
       ],
-    }).setThumbnail(m.displayAvatarURL({ size: 256 }));
+    }).setThumbnail(m.displayAvatarURL({ size: 256, forceStatic: false }));
+    const banner = u.bannerURL({ size: 1024, forceStatic: false });
+    if (banner) e.setImage(banner);
     return ctx.reply({ embeds: [e], private: false });
   },
 };
@@ -58,7 +140,7 @@ const server: Command = {
     const owner = await g.fetchOwner().catch(() => null);
     const channels = g.channels.cache;
     const e = card({
-      kind: 'server', title: g.name, emoji: '🏛️', gif: 'off',
+      kind: 'server', title: `Establishment report · ${g.name}`, emoji: '🏛️', gif: 'off',
       fields: [
         { name: '👑 Owner', value: owner ? `<@${owner.id}>` : '?', inline: true },
         { name: '👥 Members', value: g.memberCount.toLocaleString(), inline: true },
@@ -157,7 +239,7 @@ const choose: Command = {
   run: (ctx) => {
     const options = (ctx.str('options') ?? '').split(/\||,| or /).map((x) => x.trim()).filter(Boolean);
     if (options.length < 2) return ctx.reply('Give me at least two: `tz choose nap | work`');
-    return ctx.reply({ embeds: [card({ kind: 'choose', title: pick(options), emoji: '🎯', gif: 'off', body: `-# out of ${options.join(', ')}` })], private: false });
+    return ctx.reply({ embeds: [card({ kind: 'choose', title: `The verdict: ${pick(options)}`, emoji: '🎯', gif: 'off', body: `-# considered: ${options.join(', ')}` })], private: false });
   },
 };
 
@@ -174,7 +256,7 @@ const roll: Command = {
     const sides = Math.max(Number(m[2]), 2);
     const rolls = Array.from({ length: n }, () => 1 + Math.floor(Math.random() * sides));
     const total = rolls.reduce((a, b) => a + b, 0);
-    return ctx.reply({ embeds: [card({ kind: 'roll', title: `${total}`, emoji: '🎲', gif: 'off', body: n > 1 ? `${rolls.join(' + ')}\n-# ${n}d${sides}` : `-# d${sides}` })], private: false });
+    return ctx.reply({ embeds: [card({ kind: 'roll', title: `Fate says ${total}`, emoji: '🎲', gif: 'off', body: n > 1 ? `${rolls.join(' + ')}\n-# ${n}d${sides}` : `-# d${sides}` })], private: false });
   },
 };
 
@@ -182,7 +264,7 @@ const coin: Command = {
   name: 'coin',
   data: new SlashCommandBuilder().setName('coin').setDescription('Flip a coin').toJSON(),
   text: { aliases: ['flip', 'cf'] },
-  run: (ctx) => ctx.reply({ embeds: [card({ kind: 'coin', title: Math.random() < 0.5 ? 'Heads' : 'Tails', emoji: '🪙', gif: 'off' })], private: false }),
+  run: (ctx) => ctx.reply({ embeds: [card({ kind: 'coin', title: Math.random() < 0.5 ? 'Heads, it seems' : 'Tails, it seems', emoji: '🪙', gif: 'off' })], private: false }),
 };
 
 const eightball: Command = {
@@ -193,7 +275,7 @@ const eightball: Command = {
   run: (ctx) => {
     const q = ctx.str('question');
     if (!q) return ctx.reply('Ask me something: `tz 8ball will I pull a fabled today?`');
-    return ctx.reply({ embeds: [card({ kind: 'eightball', title: q.slice(0, 200), emoji: '🎱', gif: 'off', body: '' })], private: false });
+    return ctx.reply({ embeds: [card({ kind: 'eightball', title: 'The bandaged oracle answers', emoji: '🎱', gif: 'off', body: `❓ ${q.slice(0, 200)}` })], private: false });
   },
 };
 
@@ -203,9 +285,10 @@ const afk: Command = {
     .addStringOption((o) => o.setName('reason').setDescription('Why, optional').setMaxLength(120)).toJSON(),
   text: { args: ['reason'] },
   run: (ctx, store) => {
-    const reason = ctx.str('reason') ?? 'away';
+    // no reason given, Texz makes one up for you
+    const reason = ctx.str('reason') ?? say('afkReason');
     store.setAfk(ctx.userId, reason);
-    return ctx.reply({ embeds: [card({ kind: 'afkSet', title: 'Marked as away', emoji: '💤', gif: 'off', body: `**${reason}**\n-# I'll clear it when you next talk.` })], private: false });
+    return ctx.reply({ embeds: [card({ kind: 'afkSet', title: 'Gone, for now', emoji: '💤', gif: 'off', body: `**${reason}**\n-# I'll clear it the moment you speak again.` })], private: false });
   },
 };
 
@@ -219,7 +302,7 @@ export async function afkWatch(store: Store, m: Message) {
   }
   const away = m.mentions.users.filter((u) => u.id !== m.author.id).map((u) => ({ u, a: store.afk(u.id) })).filter((x) => x.a);
   if (away.length) {
-    const lines = away.map(({ u, a }) => `💤 **${u.displayName}** ${say('afkMention')}: ${a!.reason} · <t:${unix(a!.at)}:R>`);
+    const lines = away.map(({ u, a }) => `💤 **${u.displayName}** ${say('afkMention')} · *${a!.reason}* · since <t:${unix(a!.at)}:R>`);
     await m.reply({ content: lines.join('\n'), allowedMentions: { repliedUser: false, parse: [] } }).catch(() => {});
   }
 }

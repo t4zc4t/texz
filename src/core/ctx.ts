@@ -61,7 +61,7 @@ export function fromSlash(i: ChatInputCommandInteraction): Ctx {
 }
 
 // a button or menu press that runs a command, with optional fixed option values
-export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction, opts: Record<string, string> = {}): Ctx {
+export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction, opts: Record<string, string> = {}, edit = false): Ctx {
   const member = (i.member && 'permissions' in i.member && typeof i.member.permissions !== 'string') ? (i.member as GuildMember) : null;
   return {
     userId: i.user.id,
@@ -81,6 +81,8 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
     role: () => null,
     reply: (r) => {
       const n = normalise(r);
+      // edit mode swaps the page in place, like flipping through a book
+      if (edit) return i.update({ content: n.content ?? null, embeds: n.embeds, components: n.components });
       return i.reply({ content: n.content, embeds: n.embeds, components: n.components, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     },
   };
