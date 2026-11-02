@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs';
 import type { Client, Message, PartialMessage } from 'discord.js';
 import type { Store } from './db.js';
 import { minigames, parseCommand } from './owo/commands.js';
@@ -31,6 +32,33 @@ function embedsOf(m: Message | PartialMessage): Embedish[] {
   }));
 }
 
+// newer OwO screens use message components instead of embeds, pull any text out of those
+function componentText(m: Message | PartialMessage): string {
+  const out: string[] = [];
+  const walk = (node: unknown) => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== 'object') return;
+    for (const [k, v] of Object.entries(node)) {
+      if ((k === 'content' || k === 'label') && typeof v === 'string') out.push(v);
+      else if (typeof v === 'object') walk(v);
+    }
+  };
+  walk(m.components.map((c) => c.toJSON()));
+  return out.join('\n');
+}
+
+const debugFile = process.env.OWO_DEBUG ? 'owo-debug.log' : null;
+
+function debug(m: Message | PartialMessage, cmd: string) {
+  if (!debugFile) return;
+  const line = JSON.stringify({
+    at: new Date().toISOString(), cmd, content: m.content,
+    embeds: m.embeds.map((e) => e.toJSON()),
+    components: m.components.map((c) => c.toJSON()),
+  });
+  appendFileSync(debugFile, line + '\n');
+}
+
 function remember(id: string, p: Pending) {
   owners.set(id, p);
   if (owners.size > 500) owners.delete(owners.keys().next().value!);
@@ -50,7 +78,7 @@ function onCommand(store: Store, m: Message) {
 
 function onReply(store: Store, m: Message | PartialMessage, p: Pending) {
   const embeds = embedsOf(m);
-  const text = flatten(m.content ?? '', embeds);
+  const text = flatten([m.content ?? '', componentText(m)].join('\n'), embeds);
   const s = store.settings(p.userId);
   const now = Date.now();
   const day = owoDay();
@@ -125,7 +153,7 @@ export function watch(client: Client, store: Store) {
     if (!m.author.bot && !edited) return onCommand(store, m as Message);
     if (m.author.id !== OWO_BOT_ID) return;
 
-    const text = flatten(m.content ?? '', embedsOf(m));
+    const text = flatten([m.content ?? '', componentText(m)].join('\n'), embedsOf(m));
     if (!edited && isCaptcha(text)) {
       const ids = new Set([...m.mentions.users.keys()]);
       for (const id of ids) {
@@ -151,6 +179,7 @@ export function watch(client: Client, store: Store) {
     }
     if (!p) return;
     remember(m.id, p);
+    debug(m, p.cmd);
     onReply(store, m, p);
   };
 

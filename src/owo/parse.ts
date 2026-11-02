@@ -113,7 +113,8 @@ export interface Pet {
 }
 
 export function parsePetField(f: Field): Pet | null {
-  const head = stripEmoji(f.name).match(/\[(\d)\]\s*(?::\w+:\s*)?(\S+)/);
+  // OwO wraps names in its own bold/code marks, drop them before reading the name
+  const head = stripEmoji(f.name).replace(/[*_`~]/g, '').match(/\[(\d)\]\s*(?::\w+:\s*)?(\S+)/);
   if (!head) return null;
   const body = stripEmoji(f.value);
   const level = body.match(/Lvl\s*(\d+)/i);

@@ -72,6 +72,12 @@ test('team pet field', () => {
   assert.equal(pet.weaponId, 'G13ZGK');
 });
 
+test('pet name with owo formatting', () => {
+  const pet = parsePetField({ name: '**[1]** <:gowl:1> **gowl**', value: 'Lvl 28\n`[1/2]`\n`1060` `0695`\n`0128` `0156`\n`53%` `53%`\n`FZ3Z0Z`' })!;
+  assert.equal(pet.name, 'gowl');
+  assert.equal(pet.weaponId, 'FZ3Z0Z');
+});
+
 test('weapon damage on a pet', () => {
   const w = parseWeapon(flatten('', [{
     title: "Nyxaroth's Great Sword",
