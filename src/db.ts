@@ -55,6 +55,9 @@ export interface GuildSettings {
   modules: Record<string, ModuleRules>;
   // gif links admins picked for moments like help, levelup or welcome
   gifs: Record<string, string>;
+  mod: { logChannel: string | null; invites: boolean; spam: boolean; mentions: boolean };
+  welcome: { channel: string | null; message: string | null; goodbyeChannel: string | null; goodbyeMessage: string | null; autorole: string | null };
+  levels: { channel: string | null; announce: boolean; rewards: Record<string, string> };
 }
 
 export const defaultRules = (): ModuleRules => ({ enabled: true, channels: [], roles: [] });
@@ -136,6 +139,21 @@ export class Store {
         messages INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (guild_id, user_id)
       );
+      CREATE TABLE IF NOT EXISTS warnings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        mod_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS xp (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        xp INTEGER NOT NULL DEFAULT 0,
+        last_at INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (guild_id, user_id)
+      );
       CREATE TABLE IF NOT EXISTS guilds (
         id TEXT PRIMARY KEY,
         settings TEXT NOT NULL
@@ -167,7 +185,14 @@ export class Store {
   guild(guildId: string): GuildSettings {
     const row = this.db.prepare('SELECT settings FROM guilds WHERE id = ?').get(guildId) as { settings: string } | undefined;
     const saved = row ? (JSON.parse(row.settings) as Partial<GuildSettings>) : {};
-    return { prefix: saved.prefix ?? 'tz', modules: saved.modules ?? {}, gifs: saved.gifs ?? {} };
+    return {
+      prefix: saved.prefix ?? 'tz',
+      modules: saved.modules ?? {},
+      gifs: saved.gifs ?? {},
+      mod: { logChannel: null, invites: false, spam: false, mentions: false, ...saved.mod },
+      welcome: { channel: null, message: null, goodbyeChannel: null, goodbyeMessage: null, autorole: null, ...saved.welcome },
+      levels: { channel: null, announce: true, rewards: {}, ...saved.levels },
+    };
   }
 
   rules(guildId: string | null, module: string): ModuleRules {
@@ -250,6 +275,42 @@ export class Store {
   activity(guildId: string, userId: string): { last_at: number; last_channel: string | null; messages: number } | null {
     return (this.db.prepare('SELECT last_at, last_channel, messages FROM activity WHERE guild_id = ? AND user_id = ?').get(guildId, userId) as
       { last_at: number; last_channel: string | null; messages: number } | undefined) ?? null;
+  }
+
+  warn(guildId: string, userId: string, modId: string, reason: string): number {
+    const r = this.db.prepare('INSERT INTO warnings (guild_id, user_id, mod_id, reason, at) VALUES (?, ?, ?, ?, ?)').run(guildId, userId, modId, reason, Date.now());
+    return Number(r.lastInsertRowid);
+  }
+
+  warnings(guildId: string, userId: string): { id: number; mod_id: string; reason: string; at: number }[] {
+    return this.db.prepare('SELECT id, mod_id, reason, at FROM warnings WHERE guild_id = ? AND user_id = ? ORDER BY at DESC').all(guildId, userId) as
+      { id: number; mod_id: string; reason: string; at: number }[];
+  }
+
+  unwarn(guildId: string, id: number): boolean {
+    return Number(this.db.prepare('DELETE FROM warnings WHERE guild_id = ? AND id = ?').run(guildId, id).changes) > 0;
+  }
+
+  xpOf(guildId: string, userId: string): { xp: number; last_at: number } {
+    return (this.db.prepare('SELECT xp, last_at FROM xp WHERE guild_id = ? AND user_id = ?').get(guildId, userId) as { xp: number; last_at: number } | undefined) ?? { xp: 0, last_at: 0 };
+  }
+
+  addXp(guildId: string, userId: string, amount: number) {
+    this.db.prepare(`INSERT INTO xp (guild_id, user_id, xp, last_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT(guild_id, user_id) DO UPDATE SET xp = xp + excluded.xp, last_at = excluded.last_at`).run(guildId, userId, amount, Date.now());
+  }
+
+  setXp(guildId: string, userId: string, xp: number) {
+    this.db.prepare(`INSERT INTO xp (guild_id, user_id, xp, last_at) VALUES (?, ?, ?, 0)
+      ON CONFLICT(guild_id, user_id) DO UPDATE SET xp = excluded.xp`).run(guildId, userId, Math.max(0, xp));
+  }
+
+  xpBoard(guildId: string, limit = 10): { user_id: string; xp: number }[] {
+    return this.db.prepare('SELECT user_id, xp FROM xp WHERE guild_id = ? ORDER BY xp DESC LIMIT ?').all(guildId, limit) as { user_id: string; xp: number }[];
+  }
+
+  xpPosition(guildId: string, xp: number): number {
+    return 1 + (this.db.prepare('SELECT COUNT(*) AS n FROM xp WHERE guild_id = ? AND xp > ?').get(guildId, xp) as { n: number }).n;
   }
 
   touch(userId: string, channelId: string) {

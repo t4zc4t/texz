@@ -30,7 +30,7 @@ export const defaults: Record<string, string[]> = {
 
 // which card kinds show which moment's gif
 export const momentOf: Record<string, string> = {
-  help: 'help', ping: 'ping', status: 'status', leaderboard: 'leaderboard', ask: 'ask', welcome: 'welcome', levelup: 'levelup',
+  help: 'help', ping: 'ping', status: 'status', leaderboard: 'leaderboard', ask: 'ask', welcome: 'welcome', levelup: 'levelup', rankUp: 'levelup',
 };
 
 export const isGifLink = (url: string) => direct.test(url) || tenorPage.test(url) || giphyPage.test(url);

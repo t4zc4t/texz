@@ -111,3 +111,25 @@ test('poll view counts votes', async () => {
   assert.equal(closed.components.length, 0);
   assert.match(JSON.stringify(closed.embeds[0].toJSON()), /👑/);
 });
+
+test('levels, ranks and lengths', async () => {
+  const { levelOf, totalFor, rankFor, stepXp } = await import('../src/modules/levels.ts');
+  const { parseLength, human } = await import('../src/modules/moderation.ts');
+  assert.equal(stepXp(0), 100);
+  assert.deepEqual(levelOf(0), { level: 0, into: 0, need: 100 });
+  assert.equal(levelOf(totalFor(10)).level, 10);
+  assert.equal(levelOf(totalFor(10) - 1).level, 9);
+  assert.equal(rankFor(0).name, 'Stray');
+  assert.equal(rankFor(12).name, 'Junior Detective');
+  assert.equal(rankFor(80).name, 'Living Legend of Yokohama');
+  assert.equal(parseLength('10m'), 600_000);
+  assert.equal(parseLength('1d 2h'), 93_600_000);
+  assert.equal(parseLength('nope'), null);
+  assert.equal(human(93_600_000), '1d 2h');
+});
+
+test('welcome text placeholders', async () => {
+  const { fill } = await import('../src/modules/welcome.ts');
+  const m = { id: '1', displayName: 'Atsushi', user: { username: 'tiger' }, guild: { name: 'Agency', memberCount: 42 } };
+  assert.equal(fill('Hi {user}, welcome to {server}, you are #{count}, {name}!', m as never), 'Hi <@1>, welcome to Agency, you are #42, Atsushi!');
+});

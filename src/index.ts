@@ -6,6 +6,7 @@ import { startScheduler } from './reminders.js';
 import { onComponent, onSlash, onText } from './core/registry.js';
 import { afkWatch } from './modules/utility.js';
 import { watchEpisodes } from './anime/alerts.js';
+import { wireEvents } from './events.js';
 import { watch } from './watch.js';
 
 const token = process.env.DISCORD_TOKEN;
@@ -19,10 +20,11 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildModeration,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.DirectMessages,
   ],
-  partials: [Partials.Channel],
+  partials: [Partials.Channel, Partials.GuildMember],
 });
 
 client.once(Events.ClientReady, (c) => {
@@ -60,4 +62,5 @@ client.on(Events.MessageCreate, (m) => {
 });
 
 watch(client, store);
+wireEvents(client, store);
 client.login(token);

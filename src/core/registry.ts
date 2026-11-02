@@ -6,11 +6,14 @@ import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
 import { anime, onAnimeComponent } from '../modules/anime.js';
 import { onAvatarButton, onPollButton, utility } from '../modules/utility.js';
+import { moderation } from '../modules/moderation.js';
+import { onRoleButton, welcomeModule } from '../modules/welcome.js';
+import { levelsModule } from '../modules/levels.js';
 import { RED, card, type Kind } from '../theme.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import type { Command, Module } from './module.js';
 
-export const modules: Module[] = [core, owo, anime, utility];
+export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule];
 allModules.push(...modules);
 
 const bySlash = new Map<string, { mod: Module; cmd: Command }>();
@@ -83,6 +86,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onAnimeComponent(store, i)) return;
     if (await onPollButton(store, i)) return;
     if (await onAvatarButton(i)) return;
+    if (await onRoleButton(i)) return;
   } catch (e) {
     console.error('component', e);
   }

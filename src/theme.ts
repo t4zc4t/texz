@@ -204,6 +204,63 @@ const bank = {
   afkSet: ['Off on a break? Very wise. I\'ll tell anyone who comes looking.', 'Away you go. I\'ll guard your seat~'],
   afkBack: ['Welcome back! Did you nap? Tell me you napped.', 'Ah, you\'ve returned. The Agency missed you. I did, a little.'],
   afkMention: ['is away right now', 'stepped out for a bit'],
+  warn: [
+    'A friendly warning, filed in my notebook. I never lose those, unlike Kunikida-kun\'s schedules.',
+    'Consider this a gentle tap on the shoulder. The next one won\'t be so gentle~',
+  ],
+  timeout: [
+    'No Longer Human. Their ability to talk is nullified, for now.',
+    'Nullified~ They can sit quietly and reflect. I recommend a nap.',
+  ],
+  kick: [
+    'Shown to the door, politely. Well, mostly politely.',
+    'Out they go. The Agency only keeps the charming ones.',
+  ],
+  ban: [
+    'Banished. Even the Port Mafia would think twice now.',
+    'Gone for good. I\'ll miss them about as much as Chuuya misses me.',
+  ],
+  unban: ['Pardoned. Everyone deserves a second chance. Even Chuuya. Maybe.'],
+  purge: ['Evidence destroyed. I didn\'t see anything, did you?', 'Swept clean. Kunikida-kun would be thrilled.'],
+  lock: ['Channel locked. Nobody talks until I say so~', 'Doors shut. A quiet room is a thinking room.'],
+  unlock: ['Unlocked. Speak freely, partners.', 'The room is open again.'],
+  slowmode: ['Slowing things down. Haste makes for sloppy deductions.'],
+  automod: [
+    'That message broke the house rules, so it vanished. Magic~',
+    'Tidied that up. Let\'s keep the Agency respectable.',
+  ],
+  logs: ['From now on I\'ll write everything down. Discreetly, of course.'],
+  welcomeSetup: ['Welcomes are set. I\'ll greet every newcomer personally. Well, digitally.'],
+  welcome: [
+    'Ah, a new face! Welcome to {server}, {user}. Make yourself at home, the crab is in the back.',
+    '{user} has joined the Agency. Er, {server}. Same thing, really~',
+    'Look who wandered in! {user}, welcome. You\'re member number {count}, a lucky number. Probably.',
+    'Welcome, {user}. Kunikida-kun has a rulebook for you. I\'d skip it.',
+  ],
+  goodbye: [
+    '{user} has left {server}. The Agency will remember them. Briefly.',
+    '{user} slipped away into the night. How mysterious~',
+    'And just like that, {user} is gone. Was it something Kunikida-kun said?',
+  ],
+  roles: ['Pick your roles below. Choose wisely, or don\'t, you can change them anytime.'],
+  roleAdded: ['Role granted. It suits you~'],
+  roleRemoved: ['Role removed. Travel light, I always say.'],
+  rank: [
+    'Your standing in the Agency, as recorded in my notebook.',
+    'A detective always knows who\'s climbing the ranks.',
+    'Here\'s your file. Promotions are earned by talking. Mostly nonsense, but still.',
+  ],
+  levels: ['The Agency\'s most talkative members. Ranked, naturally.', 'Who\'s been working hardest here? By "working" I mean chatting.'],
+  levelUp: [
+    '{user} reached level {level}! The Agency notices hard work. Occasionally.',
+    'Level {level} for {user}~ Kunikida-kun wants to frame this.',
+    '{user} climbed to level {level}. At this rate they\'ll outrank me. I\'m not worried.',
+  ],
+  rankUp: [
+    '{user} is now a **{rank}**! A promotion. I\'d throw a party, but that sounds like effort.',
+    'Congratulations, {user}, you\'re officially a **{rank}**. The paperwork is Kunikida-kun\'s problem.',
+  ],
+  levelSetup: ['Promotion rules updated. Fair, transparent, and mostly my idea.'],
   huntbotBack: [
     'Your huntbot is home, carrying gifts like a loyal little hound.',
     'Ding! The robot returns. Collect its haul before it develops a personality.',

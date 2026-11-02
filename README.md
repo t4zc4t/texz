@@ -28,6 +28,18 @@ AniList's api is free with no key, but it only allows 30 requests a minute right
 
 `tz av` shows someone's picture with buttons for their server picture, main picture and banner (animated ones stay animated), `tz user` opens a dossier with a few deductions from what Texz has seen (account age, join order, last seen, activity), `tz server` for the server, `tz poll question? | a | b` for a button vote, `tz choose`, `tz roll 2d6`, `tz coin`, `tz 8ball` and `tz afk`, which answers for you when someone pings you while you're away (with a made-up excuse if you don't give one).
 
+## Moderation
+
+`tz warn @someone reason`, `tz warns @someone` (or `/warnings` with a number to remove one), `tz timeout @someone 10m reason` (Texz calls it No Longer Human), `tz unmute`, `tz kick`, `tz ban`, `/unban <id>`, `tz purge 20` or `tz purge 20 @someone`, `tz lock` / `tz lock off`, and `tz slow 10s`. Each one checks that whoever runs it has the permission and sits above the person, and the person gets a DM saying what happened. `/modsetup` picks a log channel (joins, leaves, deleted and edited messages, bans and every action above) and switches on the automod rules, each off by default: invite links, spam (six messages in five seconds gets a five minute timeout) and mass mentions. Mods are never caught by automod.
+
+## Welcome and roles
+
+`/welcome` sets a channel for greetings and one for goodbyes, an autorole for newcomers, and optionally your own text with `{user}`, `{name}`, `{server}` and `{count}`. Without your own text Texz uses its own lines, a different one each time. `/welcome test:true` shows a preview. `/rolepicker` posts up to five buttons that give or take a role when pressed.
+
+## Levels
+
+One message a minute earns 15 to 25 xp, so chatting counts and spam doesn't. Levels come with Agency ranks, from Stray and Agency Visitor up through Junior Detective, Ability User and Strategist to Living Legend of Yokohama. `tz rank` shows your card, `tz levels` the server's top ten, and `/levelsetup` picks where level-ups get posted (or turns them off), adds reward roles for certain levels and can set someone's level by hand.
+
 ## Using it
 
 Every command works as a slash command and with the short prefix, so `/status` and `tz status` do the same thing, and most have a shorter alias too (`tz hb`, `tz s`, `tz w <id>`). `tz help` lists everything switched on in the server.
@@ -36,7 +48,7 @@ Server admins (Manage Server) can switch each feature on or off and limit where 
 
 ```
 tz config view
-tz config feature owo off
+tz config feature levels off
 tz config channel owo add #bots
 tz config role owo add @OwO players
 tz config prefix d

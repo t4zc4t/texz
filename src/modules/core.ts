@@ -26,7 +26,7 @@ function rulesText(store: Store, guildId: string) {
   return out.join('\n');
 }
 
-const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '📈', utility: '🧰', anime: '📺' };
+const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '🎖️', utility: '🧰', anime: '📺' };
 
 const help: Command = {
   name: 'help',
