@@ -29,6 +29,19 @@ function rulesText(store: Store, guildId: string) {
 
 const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '🎖️', utility: '🧰', anime: '📺' };
 
+// both ways to run a command, written the same way everywhere in help
+function forms(c: Command, prefix: string) {
+  const t = c.text ?? {};
+  const opts = (c.data.options ?? []) as { name: string; required?: boolean; type: number }[];
+  const slashArgs = opts.filter((o) => o.type !== 1 && o.type !== 2).map((o) => (o.required ? `<${o.name}>` : `[${o.name}]`)).join(' ');
+  const textArgs = (t.args ?? []).map((a) => (opts.find((o) => o.name === a)?.required ? `<${a}>` : `[${a}]`)).join(' ');
+  const short = t.aliases?.length ? ` · short: ${t.aliases.slice(0, 3).map((a) => `\`${prefix} ${a}\``).join(' ')}` : '';
+  return {
+    slash: `\`/${c.name}${slashArgs ? ` ${slashArgs}` : ''}\``,
+    text: `\`${prefix} ${c.name}${textArgs ? ` ${textArgs}` : ''}\`${short}`,
+  };
+}
+
 const help: Command = {
   name: 'help',
   data: new SlashCommandBuilder().setName('help').setDescription('Everything Texz can do, by feature')
@@ -77,14 +90,13 @@ const help: Command = {
             const args = (t.subArgs?.[sc.name] ?? []).map((a) => `<${a}>`).join(' ');
             return `\`${prefix} ${c.name} ${sc.name}${args ? ` ${args}` : ''}\`\n-# ${sc.description}`;
           }).join('\n')
-        : `\`${prefix} ${c.name}${(t.args ?? []).map((a) => ` [${a}]`).join('')}\``;
+        : `${forms(c, prefix).slash}\n${forms(c, prefix).text}`;
       return page(card({
         kind: 'help', title: `${prefix} ${c.name}`, emoji: icons[m.name] ?? '📁', gif,
         body: c.data.description,
         fields: [
           { name: '⌨️ How to use it', value: usage, inline: false },
           ...(subs.length ? [] : opts.length ? [{ name: '🧩 Options', value: opts.map((o) => `\`${o.name}\` ${o.description}`).join('\n'), inline: false }] : []),
-          { name: '⚡ Slash', value: `\`/${c.name}\``, inline: true },
           { name: '🏷️ Short names', value: t.aliases?.length ? t.aliases.map((a) => `\`${prefix} ${a}\``).join(' ') : 'none', inline: true },
           { name: '📁 Part of', value: m.label, inline: true },
           ...(c.admin ? [{ name: '🔐 Who', value: 'Admins with Manage Server', inline: false }] : []),
@@ -96,12 +108,12 @@ const help: Command = {
     }
     if (pickMod) {
       return page(card({
-        kind: 'help', title: pickMod.label, emoji: icons[pickMod.name] ?? '📁', body: pickMod.about, gif,
-        fields: pickMod.commands.filter((c) => !c.hidden).map((c) => ({
-          name: `${prefix} ${c.name}`,
-          value: `${c.data.description}${c.text?.aliases?.length ? `\n-# also \`${prefix} ${c.text.aliases[0]}\`` : ''}`,
-          inline: true,
-        })),
+        kind: 'help', title: pickMod.label, emoji: icons[pickMod.name] ?? '📁', gif,
+        body: `${pickMod.about}\n-# Every command works both ways: slash, or typed with \`${prefix}\`. \`<x>\` is needed, \`[x]\` is optional.`,
+        fields: pickMod.commands.filter((c) => !c.hidden).map((c) => {
+          const f = forms(c, prefix);
+          return { name: c.data.description.slice(0, 256), value: `${f.slash}\n${f.text}`, inline: false };
+        }),
       }));
     }
     return page(card({

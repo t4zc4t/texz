@@ -8,6 +8,7 @@ import { isGifLink, resolve } from '../gifs.js';
 import type { Module } from '../core/module.js';
 import { card } from '../theme.js';
 import { welcomeCard } from '../modules/welcome.js';
+import { ranks } from '../modules/levels.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
@@ -143,18 +144,26 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
   if (page === 'levels') {
     title = 'Levels';
     const rewards = Object.entries(g.levels.rewards).sort((a, b) => Number(a[0]) - Number(b[0]));
-    body = 'Pick where level-ups get posted, or leave it empty to post where people chat. To add a reward, pick a role in the last menu and I\'ll ask which level.';
+    body = [
+      'Pick where level-ups get posted, or leave it empty to post where people chat.',
+      '**Reward roles:** make the Agency ranks in one go, make a single role with your own name, or hand out a role you already have. Pick a reward in the edit menu to rename it or change its level.',
+    ].join('\n');
     fields.push({ name: '🎁 Reward roles', value: rewards.length ? rewards.map(([l, r]) => `lvl ${l} → <@&${r}>`).join('\n') : '*none yet*' });
     comps.push(
       row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'lvch')).setPlaceholder('📣 Level-up channel (empty = where they chat)')
         .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(g.levels.channel ? [g.levels.channel] : [])),
-      row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'rwrole')).setPlaceholder('🎁 Add a reward role').setMinValues(1).setMaxValues(1)),
+      row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'rwrole')).setPlaceholder('🎁 Use a role you already have as a reward').setMinValues(1).setMaxValues(1)),
     );
     if (rewards.length) {
-      comps.push(row(new StringSelectMenuBuilder().setCustomId(id(owner, 'rwdel')).setPlaceholder('🗑️ Remove a reward')
-        .addOptions(rewards.slice(0, 25).map(([l, r]) => ({ label: `Level ${l}`, value: l, description: guild.roles.cache.get(r)?.name ?? r })))));
+      comps.push(row(new StringSelectMenuBuilder().setCustomId(id(owner, 'rwedit')).setPlaceholder('✏️ Rename, move or remove a reward')
+        .addOptions(rewards.slice(0, 25).map(([l, r]) => ({ label: `Level ${l} · ${guild.roles.cache.get(r)?.name ?? 'missing role'}`.slice(0, 100), value: l })))));
     }
-    comps.push(row(toggle(owner, 'ann', '', 'Level-up posts', g.levels.announce, '📣'), back(owner)));
+    comps.push(row(
+      toggle(owner, 'ann', '', 'Posts', g.levels.announce, '📣'),
+      new ButtonBuilder().setCustomId(id(owner, 'rwranks')).setLabel('Make rank roles').setEmoji('✨').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(id(owner, 'rwnew')).setLabel('New reward role').setEmoji('➕').setStyle(ButtonStyle.Primary),
+      back(owner),
+    ));
   }
 
   if (page === 'gifs') {
@@ -178,6 +187,19 @@ function textModal(owner: string, what: string, arg: string, title: string, labe
   );
 }
 
+function rewardModal(owner: string, what: string, arg: string, title: string, name: string, level: string) {
+  return new ModalBuilder().setCustomId(modalId(owner, what, arg)).setTitle(title).addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('name').setLabel('Role name').setStyle(TextInputStyle.Short)
+      .setRequired(true).setMaxLength(100).setValue(name)),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('level').setLabel('At which level (empty removes the reward)').setStyle(TextInputStyle.Short)
+      .setRequired(what !== 'rwedit').setMaxLength(3).setValue(level)),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Colour, like #c2a46e (optional)').setStyle(TextInputStyle.Short)
+      .setRequired(false).setMaxLength(7)),
+  );
+}
+
+const parseColor = (c: string) => (/^#?[0-9a-f]{6}$/i.test(c) ? Number.parseInt(c.replace('#', ''), 16) : undefined);
+
 async function canGive(guild: Guild, roleId: string) {
   const me = await guild.members.fetchMe();
   const r = await guild.roles.fetch(roleId).catch(() => null);
@@ -186,7 +208,8 @@ async function canGive(guild: Guild, roleId: string) {
 
 const pageOf: Record<string, string> = {
   mod: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome',
-  arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', rwrole: 'levels', rwdel: 'levels', ann: 'levels', rw: 'levels', gifm: 'gifs', gif: 'gifs', prefix: 'home',
+  arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', rwrole: 'levels', rwdel: 'levels', ann: 'levels', rw: 'levels',
+  rwranks: 'levels', rwnew: 'levels', rwedit: 'levels', gifm: 'gifs', gif: 'gifs', prefix: 'home',
 };
 
 export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
@@ -201,7 +224,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
   }
   const g = store.guild(i.guild.id);
   const values = i.isAnySelectMenu() ? i.values : [];
-  const text = i.isModalSubmit() ? i.fields.getTextInputValue('v').trim() : '';
+  const text = i.isModalSubmit() && i.fields.fields.has('v') ? i.fields.getTextInputValue('v').trim() : '';
   let page = pageOf[action] === 'f' ? `f:${arg}` : pageOf[action] ?? 'home';
   const fail = (msg: string) => i.reply({ content: msg, flags: MessageFlags.Ephemeral }).then(() => true);
 
@@ -223,6 +246,31 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'rwrole') {
       if (!(await canGive(i.guild, values[0]))) return fail('I can\'t hand out that role. Move my role above it in Server Settings → Roles, then try again.');
       await i.showModal(textModal(owner, 'rw', values[0], 'Reward role', 'At which level? (1 to 200)', '10', TextInputStyle.Short, 3));
+      return true;
+    }
+    if (action === 'rwnew') { await i.showModal(rewardModal(owner, 'rwnew', '', 'New reward role', '', '10')); return true; }
+    if (action === 'rwedit') {
+      const lvl = values[0];
+      const role = await i.guild.roles.fetch(g.levels.rewards[lvl]).catch(() => null);
+      await i.showModal(rewardModal(owner, 'rwedit', lvl, `Reward at level ${lvl}`, role?.name ?? '', lvl));
+      return true;
+    }
+    if (action === 'rwranks') {
+      // one role per Agency rank, sand coloured, placed just under Texz so it can hand them out
+      const me = await i.guild.members.fetchMe();
+      if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) return fail('I need the Manage Roles permission to make roles.');
+      await i.deferUpdate();
+      const shades = [0x8a8172, 0x9c8f78, 0xad9c7c, 0xc2a46e, 0xc9a35a, 0xd1a046, 0xd99a33, 0xe0901f, 0xe8850c];
+      let made = 0;
+      for (const [n, r] of ranks.filter((x) => x.at > 0).entries()) {
+        if (g.levels.rewards[String(r.at)]) continue;
+        const existing = i.guild.roles.cache.find((x) => x.name === r.name);
+        const role = existing ?? await i.guild.roles.create({ name: r.name, colors: { primaryColor: shades[n] ?? 0xc2a46e }, reason: 'Agency rank roles from /setup' }).catch(() => null);
+        if (role) { g.levels.rewards[String(r.at)] = role.id; made++; }
+      }
+      store.saveGuild(i.guild.id, g);
+      await i.editReply(setupPanel(store, i.guild, owner, 'levels'));
+      await i.followUp({ content: made ? `✨ ${made} rank roles ready. Rename any of them from the edit menu~` : 'Every rank already has a role.', flags: MessageFlags.Ephemeral });
       return true;
     }
     if (action === 'preview') {
@@ -247,12 +295,36 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'ann') g.levels.announce = !g.levels.announce;
     if (action === 'rwdel') delete g.levels.rewards[values[0]];
   } else {
+    if (!i.isModalSubmit()) return true;
     if (action === 'wtext') g.welcome.message = text;
     if (action === 'gtext') g.welcome.goodbyeMessage = text;
     if (action === 'rw') {
       const lvl = Number.parseInt(text, 10);
       if (!(lvl >= 1 && lvl <= 200)) return fail('Level has to be a number from 1 to 200.');
       g.levels.rewards[String(lvl)] = arg;
+    }
+    if (action === 'rwnew' || action === 'rwedit') {
+      const name = i.fields.getTextInputValue('name').trim();
+      const lvlRaw = i.fields.getTextInputValue('level').trim();
+      const color = parseColor(i.fields.getTextInputValue('color').trim());
+      const lvl = lvlRaw ? Number.parseInt(lvlRaw, 10) : null;
+      if (lvlRaw && !(lvl! >= 1 && lvl! <= 200)) return fail('Level has to be a number from 1 to 200.');
+      if (action === 'rwnew') {
+        const me = await i.guild.members.fetchMe();
+        if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) return fail('I need the Manage Roles permission to make roles.');
+        const role = await i.guild.roles.create({ name, colors: color !== undefined ? { primaryColor: color } : undefined, reason: 'reward role from /setup' }).catch(() => null);
+        if (!role) return fail('Discord wouldn\'t let me make that role.');
+        g.levels.rewards[String(lvl)] = role.id;
+      } else {
+        const roleId = g.levels.rewards[arg];
+        const role = roleId ? await i.guild.roles.fetch(roleId).catch(() => null) : null;
+        if (role && (role.name !== name || color !== undefined)) {
+          const ok = await role.edit({ name, ...(color !== undefined ? { colors: { primaryColor: color } } : {}) }).then(() => true).catch(() => false);
+          if (!ok) return fail('I couldn\'t edit that role, it might sit above mine.');
+        }
+        delete g.levels.rewards[arg];
+        if (lvl && roleId) g.levels.rewards[String(lvl)] = roleId;
+      }
     }
     if (action === 'prefix') {
       const p = text.toLowerCase();

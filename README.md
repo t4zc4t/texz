@@ -38,7 +38,7 @@ Greetings, goodbyes and the autorole are set in `/setup`: pick the channels and 
 
 ## Levels
 
-One message a minute earns 15 to 25 xp, so chatting counts and spam doesn't. Levels come with Agency ranks, from Stray and Agency Visitor up through Junior Detective, Ability User and Strategist to Living Legend of Yokohama. `tz rank` shows your card, `tz levels` the server's top ten, and `/setup` picks where level-ups get posted (or turns them off) and adds reward roles: pick a role and it asks which level.
+One message a minute earns 15 to 25 xp, so chatting counts and spam doesn't. Levels come with Agency ranks, from Stray and Agency Visitor up through Junior Detective, Ability User and Strategist to Living Legend of Yokohama. `tz rank` shows your card, `tz levels` the server's top ten, and `/setup` picks where level-ups get posted (or turns them off) and handles reward roles: one button makes a role for every Agency rank, another makes a single role with your own name, colour and level, an existing role can be used too, and any reward can be renamed or moved to another level from a menu.
 
 ## Using it
 

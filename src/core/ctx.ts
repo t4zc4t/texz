@@ -1,5 +1,5 @@
 import {
-  EmbedBuilder, MessageFlags, PermissionFlagsBits, type ActionRowBuilder, type MessageActionRowComponentBuilder,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits, type MessageActionRowComponentBuilder,
   type ButtonInteraction, type ChatInputCommandInteraction, type Guild, type GuildMember, type Message, type StringSelectMenuInteraction,
 } from 'discord.js';
 
@@ -82,7 +82,16 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
     reply: (r) => {
       const n = normalise(r);
       // edit mode swaps the page in place, like flipping through a book
-      if (edit) return i.update({ content: n.content ?? null, embeds: n.embeds, components: n.components });
+      if (edit) {
+        // pages opened from another screen get a way back to it
+        const rows = [...n.components];
+        if (opts.back && rows.length < 5) {
+          rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`nav|${opts.back}|owner=${opts.owner}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
+          ));
+        }
+        return i.update({ content: n.content ?? null, embeds: n.embeds, components: rows });
+      }
       return i.reply({ content: n.content, embeds: n.embeds, components: n.components, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     },
   };

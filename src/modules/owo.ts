@@ -64,7 +64,7 @@ const status: Command = {
     }
     const nav = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
       ...[['huntbot', '🤖', 'Huntbot'], ['armoury', '⚔️', 'Armoury'], ['zoo', '🦁', 'Zoo'], ['stats', '📈', 'Week'], ['settings', '🎛️', 'Reminders']]
-        .map(([cmd, emoji, label]) => new ButtonBuilder().setCustomId(`nav|${cmd}`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary)),
+        .map(([cmd, emoji, label]) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId},back=status`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary)),
     );
     return ctx.reply({ embeds: [card({ kind: 'status', title: 'Case file', emoji: '🗂️', fields, gif: gifFor(store, ctx, 'status') })], components: [nav] });
   },
