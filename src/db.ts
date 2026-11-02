@@ -111,6 +111,23 @@ export class Store {
         user_id TEXT NOT NULL,
         PRIMARY KEY (guild_id, user_id)
       );
+      CREATE TABLE IF NOT EXISTS follows (
+        user_id TEXT NOT NULL,
+        media_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        next_at INTEGER,
+        channel_id TEXT,
+        PRIMARY KEY (user_id, media_id)
+      );
+      CREATE TABLE IF NOT EXISTS polls (
+        message_id TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS afk (
+        user_id TEXT PRIMARY KEY,
+        reason TEXT NOT NULL,
+        at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS guilds (
         id TEXT PRIMARY KEY,
         settings TEXT NOT NULL
@@ -180,6 +197,39 @@ export class Store {
 
   buddies(guildId: string): string[] {
     return (this.db.prepare('SELECT user_id FROM buddies WHERE guild_id = ?').all(guildId) as { user_id: string }[]).map((r) => r.user_id);
+  }
+
+  follow(userId: string, mediaId: number, title: string, nextAt: number | null, channelId: string | null) {
+    this.db.prepare(`INSERT INTO follows (user_id, media_id, title, next_at, channel_id) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, media_id) DO UPDATE SET title = excluded.title, next_at = excluded.next_at`).run(userId, mediaId, title, nextAt, channelId);
+  }
+
+  unfollow(userId: string, mediaId: number) {
+    this.db.prepare('DELETE FROM follows WHERE user_id = ? AND media_id = ?').run(userId, mediaId);
+    this.db.prepare('DELETE FROM reminders WHERE user_id = ? AND kind = ?').run(userId, `ep:${mediaId}`);
+  }
+
+  follows(userId?: string): { user_id: string; media_id: number; title: string; next_at: number | null; channel_id: string | null }[] {
+    const q = userId ? this.db.prepare('SELECT * FROM follows WHERE user_id = ?').all(userId) : this.db.prepare('SELECT * FROM follows').all();
+    return q as unknown as { user_id: string; media_id: number; title: string; next_at: number | null; channel_id: string | null }[];
+  }
+
+  poll(messageId: string): { question: string; options: string[]; votes: Record<string, number>; owner: string; closed?: boolean } | null {
+    const row = this.db.prepare('SELECT data FROM polls WHERE message_id = ?').get(messageId) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) : null;
+  }
+
+  savePoll(messageId: string, data: object) {
+    this.db.prepare('INSERT INTO polls (message_id, data) VALUES (?, ?) ON CONFLICT(message_id) DO UPDATE SET data = excluded.data').run(messageId, JSON.stringify(data));
+  }
+
+  setAfk(userId: string, reason: string | null) {
+    if (reason === null) this.db.prepare('DELETE FROM afk WHERE user_id = ?').run(userId);
+    else this.db.prepare('INSERT INTO afk (user_id, reason, at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET reason = excluded.reason, at = excluded.at').run(userId, reason, Date.now());
+  }
+
+  afk(userId: string): { reason: string; at: number } | null {
+    return (this.db.prepare('SELECT reason, at FROM afk WHERE user_id = ?').get(userId) as { reason: string; at: number } | undefined) ?? null;
   }
 
   touch(userId: string, channelId: string) {

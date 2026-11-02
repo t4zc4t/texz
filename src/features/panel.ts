@@ -23,9 +23,10 @@ const names: Record<Toggle, { label: string; emoji: string; about: string }> = {
 };
 
 // reminder types that can each go to DM or a channel
-export const routable = ['huntbot', 'pray', 'vote', 'daily', 'lastcall', 'huntbattle', 'custom'] as const;
+export const routable = ['huntbot', 'pray', 'vote', 'daily', 'lastcall', 'huntbattle', 'custom', 'anime'] as const;
 const customName = { label: 'My own', emoji: '📝', about: 'reminders you set yourself' };
-const nameOf = (k: string) => (k === 'custom' ? customName : names[k as Toggle]);
+const animeName = { label: 'Episode alerts', emoji: '📺', about: 'new episodes of shows you follow' };
+const nameOf = (k: string) => (k === 'custom' ? customName : k === 'anime' ? animeName : names[k as Toggle]);
 
 export const autodeleteChoices = [
   { label: 'Keep them', value: 0 },
@@ -40,6 +41,7 @@ const kindLabel: Record<string, string> = {
   huntbot: '🤖 huntbot home', pray: '🙏 pray ready', vote: '🗳️ vote open', hunt: '🏹 hunt ready',
   reset: '🌅 new OwO day', lastcall: '⏳ last call', custom: '📝',
 };
+const labelOf = (kind: string, note: string) => (kind.startsWith('ep:') ? `📺 ${note.split('|')[0]} ep ${note.split('|')[1]}` : null);
 
 // custom ids carry the owner and the action, nothing is kept in memory
 export const rpId = (userId: string, action: string, arg = '') => `rp|${userId}|${action}|${arg}`;
@@ -62,7 +64,8 @@ function settingsPanel(store: Store, userId: string) {
       {
         name: '🔔 What I remind you about',
         value: toggles.map((t) => `${s[t] ? '🟢' : '⚫'} ${names[t].emoji} **${names[t].label}** · ${names[t].about}${t === 'minigames' ? '' : ` · ${tag(t)}`}`).join('\n')
-          + `\n🟢 ${customName.emoji} **${customName.label}** · ${customName.about} · ${tag('custom')}`,
+          + `\n🟢 ${customName.emoji} **${customName.label}** · ${customName.about} · ${tag('custom')}`
+          + `\n🟢 ${animeName.emoji} **${animeName.label}** · ${animeName.about} · ${tag('anime')}`,
         inline: false,
       },
       { name: '🧹 Channel pings', value: del, inline: true },
@@ -101,14 +104,14 @@ function listPanel(store: Store, userId: string) {
   const embed = card({
     kind: 'remindAdd', title: 'Promises I made', emoji: '📝',
     body: list.length
-      ? list.map((r) => `\`#${r.id}\` ${kindLabel[r.kind] ?? r.kind}${r.note ? ` ${r.note}` : ''} · <t:${Math.floor(r.due_at / 1000)}:R>`).join('\n')
+      ? list.map((r) => `\`#${r.id}\` ${labelOf(r.kind, r.note) ?? `${kindLabel[r.kind] ?? r.kind}${r.note ? ` ${r.note}` : ''}`} · <t:${Math.floor(r.due_at / 1000)}:R>`).join('\n')
       : 'Nothing queued. A rare quiet moment, enjoy it.',
   });
   const components: Row[] = [];
   if (list.length) {
     components.push(row(new StringSelectMenuBuilder().setCustomId(rpId(userId, 'cancel')).setPlaceholder('🗑️ Cancel a reminder')
       .addOptions(list.slice(0, 25).map((r) => ({
-        label: `#${r.id} ${(kindLabel[r.kind] ?? r.kind).replace(/^\S+\s/, '')}${r.note ? ` ${r.note}` : ''}`.slice(0, 100),
+        label: `#${r.id} ${labelOf(r.kind, r.note)?.replace(/^\S+\s/, '') ?? `${(kindLabel[r.kind] ?? r.kind).replace(/^\S+\s/, '')}${r.note ? ` ${r.note}` : ''}`}`.slice(0, 100),
         value: String(r.id),
         description: new Date(r.due_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC',
       })))));

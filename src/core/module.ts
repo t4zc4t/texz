@@ -8,6 +8,8 @@ export interface Command {
   // text form: extra names after the prefix and the order of positional args
   text?: { aliases?: string[]; args?: string[]; sub?: boolean; subArgs?: Record<string, string[]> };
   admin?: boolean;
+  // reachable from buttons and text, but no slash command of its own
+  hidden?: boolean;
   run(ctx: Ctx, store: Store): Promise<unknown>;
 }
 

@@ -4,11 +4,13 @@ import { apply, modalFor, panel, parseRp } from '../features/panel.js';
 import type { Store } from '../db.js';
 import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
+import { anime, onAnimeComponent } from '../modules/anime.js';
+import { onPollButton, utility } from '../modules/utility.js';
 import { RED, card, type Kind } from '../theme.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import type { Command, Module } from './module.js';
 
-export const modules: Module[] = [core, owo];
+export const modules: Module[] = [core, owo, anime, utility];
 allModules.push(...modules);
 
 const bySlash = new Map<string, { mod: Module; cmd: Command }>();
@@ -18,7 +20,7 @@ for (const mod of modules) for (const cmd of mod.commands) {
   for (const name of [cmd.name, ...(cmd.text?.aliases ?? [])]) byText.set(name, { mod, cmd });
 }
 
-export const definitions = modules.flatMap((m) => m.commands.map((c) => c.data));
+export const definitions = modules.flatMap((m) => m.commands.filter((c) => !c.hidden).map((c) => c.data));
 
 // the on/off switch, channel limits and role limits, checked before every command
 type Block = { kind: Kind; vars?: Record<string, string> };
@@ -77,6 +79,12 @@ export function onText(store: Store, m: Message): boolean {
 
 // buttons and menus on Texz's own messages
 export async function onComponent(store: Store, i: Interaction) {
+  try {
+    if (await onAnimeComponent(store, i)) return;
+    if (await onPollButton(store, i)) return;
+  } catch (e) {
+    console.error('component', e);
+  }
   if (i.isModalSubmit() || i.isButton() || i.isStringSelectMenu()) {
     const rp = parseRp(i.customId);
     if (rp) return onPanel(store, i, rp).catch((e) => console.error('panel', e));

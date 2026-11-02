@@ -26,7 +26,7 @@ function rulesText(store: Store, guildId: string) {
   return out.join('\n');
 }
 
-const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '📈', fun: '🎲', anime: '📺' };
+const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '📈', utility: '🧰', anime: '📺' };
 
 const help: Command = {
   name: 'help',
@@ -74,7 +74,7 @@ const help: Command = {
     if (want && pickMod) {
       return ctx.reply(card({
         kind: 'help', title: pickMod.label, emoji: icons[pickMod.name] ?? '📁', body: pickMod.about, gif,
-        fields: pickMod.commands.map((c) => ({
+        fields: pickMod.commands.filter((c) => !c.hidden).map((c) => ({
           name: `/${c.name}`,
           value: `${c.data.description}\n\`${prefix} ${c.name}\`${c.text?.aliases?.length ? ` · \`${prefix} ${c.text.aliases[0]}\`` : ''}`,
           inline: true,
@@ -90,7 +90,7 @@ const help: Command = {
       body: `Slash commands work, and so does the lazy way: \`${prefix} <command>\`.\nAsk \`${prefix} help <feature>\` and I'll walk you through one.`,
       fields: mods.map((m) => ({
         name: `${icons[m.name] ?? '📁'} ${m.label}`,
-        value: `${m.about}\n${m.commands.map((c) => `\`${c.name}\``).join(' ')}`,
+        value: `${m.about}\n${m.commands.filter((c) => !c.hidden).map((c) => `\`${c.name}\``).join(' ')}`,
         inline: false,
       })),
     })] });

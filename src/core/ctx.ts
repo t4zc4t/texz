@@ -55,7 +55,7 @@ export function fromSlash(i: ChatInputCommandInteraction): Ctx {
       const payload = n.private
         ? { content: n.content, embeds: n.embeds, components: n.components, flags: MessageFlags.Ephemeral as const, allowedMentions: { parse: [] } }
         : { content: n.content, embeds: n.embeds, components: n.components, allowedMentions: { parse: [], users: n.ping } };
-      return i.replied || i.deferred ? i.followUp(payload) : i.reply(payload);
+      return i.replied || i.deferred ? i.followUp(payload) : i.reply({ ...payload, withResponse: true });
     },
   };
 }

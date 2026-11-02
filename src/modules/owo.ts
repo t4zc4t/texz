@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
-import type { Settings, Store } from '../db.js';
+import type { Store } from '../db.js';
 import type { Ctx } from '../core/ctx.js';
 import type { Command, Module } from '../core/module.js';
 import { armouryPage, filters, type Filter } from '../features/armoury-pages.js';
@@ -9,7 +9,6 @@ import { advise, maxLevel } from '../features/huntbot.js';
 import { damageOn, teamCheck } from '../features/weapons.js';
 import { planZoo, values } from '../features/zoo.js';
 import { refresh, traits, weaponType, type Huntbot, type ListedWeapon, type Pet, type Weapon, type ZooRank } from '../owo/parse.js';
-import { scheduleDailies } from '../reminders.js';
 import { momentOf } from '../gifs.js';
 import { panel } from '../features/panel.js';
 import { RED, bar, card, say, type CardOptions } from '../theme.js';
@@ -64,7 +63,7 @@ const status: Command = {
       fields.push({ name: '🤖 Huntbot', value: [g ? `Gain **${g.level}**` : null, e ? `Efficiency **${e.level}**` : null, a.pick ? `next up: **${a.pick}**` : null].filter(Boolean).join(' · '), inline: false });
     }
     const nav = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      ...[['huntbot', '🤖', 'Huntbot'], ['gems', '💎', 'Gems'], ['zoo', '🦁', 'Zoo'], ['armoury', '⚔️', 'Armoury'], ['settings', '🎛️', 'Reminders']]
+      ...[['huntbot', '🤖', 'Huntbot'], ['armoury', '⚔️', 'Armoury'], ['zoo', '🦁', 'Zoo'], ['stats', '📈', 'Week'], ['settings', '🎛️', 'Reminders']]
         .map(([cmd, emoji, label]) => new ButtonBuilder().setCustomId(`nav|${cmd}`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary)),
     );
     return ctx.reply({ embeds: [card({ kind: 'status', title: 'Case file', emoji: '🗂️', fields, gif: gifFor(store, ctx, 'status') })], components: [nav] });
@@ -231,6 +230,7 @@ const quests: Command = {
 
 const stats: Command = {
   name: 'stats',
+  hidden: true,
   data: new SlashCommandBuilder().setName('stats').setDescription('Your hunts and battles over the last 7 days').toJSON(),
   run: (ctx, store) => {
     const from = owoDay(new Date(Date.now() - 6 * 86_400_000));
@@ -267,93 +267,28 @@ const leaderboard: Command = {
 
 const remind: Command = {
   name: 'remind',
-  data: new SlashCommandBuilder().setName('remind').setDescription('Your own reminders')
-    .addSubcommand((s) => s.setName('add').setDescription('Remind me later')
-      .addIntegerOption((o) => o.setName('minutes').setDescription('In how many minutes').setRequired(true).setMinValue(1).setMaxValue(10080))
-      .addStringOption((o) => o.setName('note').setDescription('What to remind you about').setRequired(true).setMaxLength(200)))
-    .addSubcommand((s) => s.setName('list').setDescription('Everything queued for you'))
-    .addSubcommand((s) => s.setName('cancel').setDescription('Cancel a reminder')
-      .addIntegerOption((o) => o.setName('id').setDescription('ID from /remind list').setRequired(true))).toJSON(),
-  text: { aliases: ['r'], sub: true, subArgs: { add: ['minutes', 'note'], cancel: ['id'] } },
+  data: new SlashCommandBuilder().setName('remind').setDescription('Your reminders, or add one straight away')
+    .addIntegerOption((o) => o.setName('minutes').setDescription('Remind me in this many minutes').setMinValue(1).setMaxValue(10080))
+    .addStringOption((o) => o.setName('note').setDescription('What about').setMaxLength(200)).toJSON(),
+  text: { aliases: ['r'], args: ['minutes', 'note'] },
   run: (ctx, store) => {
-    const sub = ctx.sub() ?? 'list';
-    if (sub === 'add') {
-      const mins = ctx.int('minutes');
-      const note = ctx.str('note');
-      if (!mins || mins < 1 || !note) return ctx.reply('Like this: `tz remind add 30 restart huntbot`');
-      const at = new Date(Date.now() + Math.min(mins, 10080) * 60_000);
+    // "tz r 30 restart huntbot" adds one, plain "tz r" opens the list
+    const mins = ctx.int('minutes');
+    const note = ctx.str('note');
+    if (mins && note) {
+      const at = new Date(Date.now() + Math.min(Math.max(mins, 1), 10080) * 60_000);
       const id = store.addReminder(ctx.userId, 'custom', at, note.slice(0, 200), ctx.channelId);
       return show(ctx, store, { kind: 'remindAdd', title: `Promise #${id}`, emoji: '📝', body: `**${note}**\n⏰ <t:${unix(at)}:R>` });
-    }
-    if (sub === 'cancel') {
-      const id = ctx.int('id');
-      return id && store.deleteReminder(id, ctx.userId)
-        ? show(ctx, store, { kind: 'remindCancel', title: 'Promise broken, as requested', emoji: '🗑️' })
-        : ctx.reply('No reminder with that ID.');
     }
     return ctx.reply(panel(store, ctx.userId, 'list'));
   },
 };
 
-function settingsFields(s: Settings) {
-  const names: Record<string, string> = { huntbot: '🤖 huntbot back', pray: '🙏 pray/curse', daily: '🌅 new day list', vote: '🗳️ vote', minigames: '🦀 patreon minigames', huntbattle: '🏹 hunt/battle every 15s', lastcall: '⏳ last call' };
-  return [
-    { name: '📬 Delivery', value: s.delivery === 'dm' ? 'DM' : 'ping in channel', inline: true },
-    { name: '🌏 Timezone', value: s.timezone, inline: true },
-    { name: '🌙 Quiet hours', value: s.quiet ?? 'off', inline: true },
-    { name: '🔔 Reminders', value: toggles.map((t) => `${s[t] ? '✅' : '▫️'} ${names[t]}`).join('\n'), inline: false },
-  ];
-}
-
 const settings: Command = {
   name: 'settings',
-  data: new SlashCommandBuilder().setName('settings').setDescription('How and when your OwO reminders reach you')
-    .addSubcommand((s) => s.setName('view').setDescription('Show your settings'))
-    .addSubcommand((s) => s.setName('delivery').setDescription('DM or ping in the channel')
-      .addStringOption((o) => o.setName('to').setDescription('Where').setRequired(true)
-        .addChoices({ name: 'DM', value: 'dm' }, { name: 'Channel', value: 'channel' })))
-    .addSubcommand((s) => s.setName('timezone').setDescription('Your timezone, used for quiet hours')
-      .addStringOption((o) => o.setName('zone').setDescription('Like Asia/Kolkata').setRequired(true)))
-    .addSubcommand((s) => s.setName('quiet').setDescription('No reminders during these hours, they wait until it ends')
-      .addStringOption((o) => o.setName('hours').setDescription('Like 00:30-07:30, or "off"').setRequired(true)))
-    .addSubcommand((s) => s.setName('toggle').setDescription('Turn a reminder type on or off')
-      .addStringOption((o) => o.setName('reminder').setDescription('Which one').setRequired(true)
-        .addChoices(...toggles.map((t) => ({ name: t, value: t }))))
-      .addBooleanOption((o) => o.setName('on').setDescription('On or off').setRequired(true))).toJSON(),
-  text: { aliases: ['set'], sub: true, subArgs: { delivery: ['to'], timezone: ['zone'], quiet: ['hours'], toggle: ['reminder', 'on'] } },
-  run: (ctx, store) => {
-    const s = store.settings(ctx.userId);
-    const sub = ctx.sub() ?? 'view';
-    if (sub === 'view') return ctx.reply(panel(store, ctx.userId, 'settings'));
-    if (sub === 'delivery') {
-      const to = ctx.str('to');
-      if (to !== 'dm' && to !== 'channel') return ctx.reply('Pick `dm` or `channel`.');
-      s.delivery = to;
-    }
-    if (sub === 'timezone') {
-      const zone = ctx.str('zone') ?? '';
-      try { new Intl.DateTimeFormat('en', { timeZone: zone }); } catch { return ctx.reply('That timezone isn\'t real, use one like Asia/Kolkata.'); }
-      s.timezone = zone;
-    }
-    if (sub === 'quiet') {
-      const h = (ctx.str('hours') ?? '').trim();
-      if (h === 'off') s.quiet = null;
-      else if (/^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(h)) s.quiet = h;
-      else return ctx.reply('Use the format 00:30-07:30, or "off".');
-    }
-    if (sub === 'toggle') {
-      const t = ctx.str('reminder') as (typeof toggles)[number];
-      const on = ctx.bool('on');
-      if (!toggles.includes(t) || on === null) return ctx.reply(`Like this: \`tz settings toggle pray off\`. Options: ${toggles.join(', ')}`);
-      s[t] = on;
-      if (!on) for (const r of store.userReminders(ctx.userId)) {
-        if (r.kind === t || (t === 'daily' && r.kind === 'reset') || (t === 'huntbattle' && r.kind === 'hunt')) store.deleteReminder(r.id);
-      }
-    }
-    store.saveSettings(ctx.userId, s);
-    scheduleDailies(store, ctx.userId);
-    return show(ctx, store, { kind: 'settings', title: 'Your settings', emoji: '⚙️', fields: settingsFields(s) });
-  },
+  data: new SlashCommandBuilder().setName('settings').setDescription('Your reminder control room: what, where and when').toJSON(),
+  text: { aliases: ['set', 'reminders'] },
+  run: (ctx, store) => ctx.reply(panel(store, ctx.userId, 'settings')),
 };
 
 const buddy: Command = {

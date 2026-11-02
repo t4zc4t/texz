@@ -92,3 +92,22 @@ test('giphy links turn into gif files without any api', async () => {
   assert.ok(isGifLink('https://giphy.com/gifs/dazai-bungo-stray-dogs-osamu-vayuMKG6qqHlRUwRaG'));
   assert.ok(!isGifLink('https://example.com/page'));
 });
+
+test('anilist text cleanup and seasons', async () => {
+  const { plain, currentSeason, titleOf } = await import('../src/anime/anilist.ts');
+  assert.equal(plain('A <i>detective</i><br>agency. ~!he dies!~ __big__'), 'A detective\nagency. [spoiler hidden] **big**');
+  assert.ok(plain('x'.repeat(1000), 50).endsWith('…'));
+  assert.deepEqual(currentSeason(new Date('2026-11-02T00:00:00Z')), { season: 'FALL', year: 2026 });
+  assert.equal(titleOf({ title: { english: null, romaji: 'Bungou Stray Dogs' } }), 'Bungou Stray Dogs');
+});
+
+test('poll view counts votes', async () => {
+  const { pollView } = await import('../src/modules/utility.ts');
+  const v = pollView('123', { question: 'snack?', options: ['crab', 'pizza'], votes: { a: 0, b: 0, c: 1 }, owner: 'a' });
+  const json = JSON.stringify(v.embeds[0].toJSON());
+  assert.match(json, /67%/);
+  assert.equal(v.components.length, 2);
+  const closed = pollView('123', { question: 'snack?', options: ['crab', 'pizza'], votes: { a: 0 }, owner: 'a', closed: true });
+  assert.equal(closed.components.length, 0);
+  assert.match(JSON.stringify(closed.embeds[0].toJSON()), /👑/);
+});

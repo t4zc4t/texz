@@ -16,7 +16,17 @@ It reads a few more screens too. `owo zoo` feeds `/zoo`, which works out what to
 
 Some quests need other people, so there are quest buddies: `tz buddy join` to opt in, and `tz ask pray` pings the buddies in the server when you need a pray, curse, cookie or battle. `/leaderboard` ranks the week's hunters and battlers in the server.
 
-`/status` shows the timers and today's list in one place, `/stats` counts my hunts and battles for the week, and `/remind` is for my own reminders. `tz settings` opens a control panel where each reminder type is a button to switch on or off. Each one can go to DM or the channel on its own, channel reminders are a short ping instead of a card, and they can delete themselves after a while so the channel stays clean. `tz remind` shows everything queued, with a menu to cancel one and a button to add a new one. The hunt/battle one is off by default because every 15 seconds gets annoying.
+`/status` shows the timers and today's list in one place, with buttons to jump to the huntbot, armoury, zoo, the week's hunt and battle counts, and reminders. `tz r 30 restart huntbot` sets a quick reminder of my own. `tz settings` opens a control panel where each reminder type is a button to switch on or off. Each one can go to DM or the channel on its own, channel reminders are a short ping instead of a card, and they can delete themselves after a while so the channel stays clean. `tz remind` shows everything queued, with a menu to cancel one and a button to add a new one. The hunt/battle one is off by default because every 15 seconds gets annoying.
+
+## Anime and manga
+
+`tz anime <title>` and `tz manga <title>` pull the full card from AniList (score, episodes or chapters, studio, genres, a spoiler-free blurb and the next episode countdown), with a menu for other matches if it picked the wrong one. `tz char <name>` looks up characters, `tz season` shows the season's most popular shows, `tz trending` what everyone is watching or reading, and `tz rec` throws a random popular pick at you. Pressing 🔔 on a show that's airing gets you an alert when each new episode comes out, `tz alerts` lists them.
+
+AniList's api is free with no key, but it only allows 30 requests a minute right now, so Texz paces itself and keeps answers for half an hour.
+
+## Utility
+
+`tz av`, `tz user` and `tz server` for avatars and info, `tz poll question? | a | b` for a button vote, `tz choose`, `tz roll 2d6`, `tz coin`, `tz 8ball` and `tz afk`, which answers for you when someone pings you while you're away.
 
 ## Using it
 

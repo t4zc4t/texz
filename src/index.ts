@@ -4,6 +4,8 @@ import { look } from './theme.js';
 import { warmUp } from './gifs.js';
 import { startScheduler } from './reminders.js';
 import { onComponent, onSlash, onText } from './core/registry.js';
+import { afkWatch } from './modules/utility.js';
+import { watchEpisodes } from './anime/alerts.js';
 import { watch } from './watch.js';
 
 const token = process.env.DISCORD_TOKEN;
@@ -28,6 +30,7 @@ client.once(Events.ClientReady, (c) => {
   const custom = store.db.prepare('SELECT settings FROM guilds').all().flatMap((r) => Object.values((JSON.parse((r as { settings: string }).settings).gifs ?? {}) as Record<string, string>));
   void warmUp(custom).then((n) => console.log(`gifs ready: ${n}`));
   startScheduler(client, store);
+  watchEpisodes(store);
   // rotating status, so the profile looks alive
   const moods = [
     'hiding from Kunikida\'s schedule',
@@ -48,7 +51,9 @@ client.on(Events.InteractionCreate, (i) => {
 });
 
 client.on(Events.MessageCreate, (m) => {
-  if (!m.author.bot) onText(store, m);
+  if (m.author.bot) return;
+  onText(store, m);
+  void afkWatch(store, m);
 });
 
 watch(client, store);

@@ -12,28 +12,17 @@ export function giphyFile(url: string): string | null {
   return id ? `https://media.giphy.com/media/${id}/giphy.gif` : null;
 }
 
-const giphy = (id: string) => `https://giphy.com/gifs/${id}`;
+export const giphy = (id: string) => `https://giphy.com/gifs/${id}`;
 
 const cache = new Map<string, string>();
 
 // defaults per moment, servers can swap any of them with tz config gif
-const pool = ['Waq81Yz6Vw3GuCxGPZ', 'vayuMKG6qqHlRUwRaG', 'NlqHgtqm81qCLddNuP', 'H8qFRCudgzZxYDG7iD', 'BXg1C1BgOi1Znvtone',
-  '6Z23HNepLbpwJlvbE1', 'EfNYxWJm1xTCSzlA9z', '5ondf28Ao8IhXnoPDL', '99WDYnKHEhfizOW5N3', 'bILqpu1iGcUYlKogLX', 'UiS0RFzuN3rHzaZomu'].map(giphy);
-const dance = giphy('UzGnrtOUKXmdrtja0V');
-
-export const defaults: Record<string, string[]> = {
-  help: pool,
-  status: pool,
-  ping: [dance, ...pool.slice(0, 3)],
-  error: pool,
-  welcome: [dance],
-  levelup: [dance],
-};
+// one hand-picked gif per moment, only where a gif actually adds something
+export const defaults: Record<string, string[]> = {};
 
 // which card kinds show which moment's gif
 export const momentOf: Record<string, string> = {
-  help: 'help', status: 'status', ping: 'ping', error: 'error', missing: 'error', leaderboard: 'leaderboard',
-  huntbot: 'huntbot', ask: 'ask',
+  help: 'help', ping: 'ping', status: 'status', leaderboard: 'leaderboard', ask: 'ask',
 };
 
 export const isGifLink = (url: string) => direct.test(url) || tenorPage.test(url) || giphyPage.test(url);
