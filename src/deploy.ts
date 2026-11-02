@@ -1,5 +1,5 @@
 import { REST, Routes } from 'discord.js';
-import { definitions } from './slash.js';
+import { definitions } from './core/registry.js';
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;

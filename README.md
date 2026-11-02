@@ -14,6 +14,22 @@ It also reads a few OwO screens when I open them and turns them into advice:
 
 `/status` shows the timers and today's list in one place, `/stats` counts my hunts and battles for the week, and `/remind` is for my own reminders. With `/settings` I pick DM or a ping in the channel, set quiet hours (reminders wait until they end), and switch each reminder type on or off. The hunt/battle one is off by default because every 15 seconds gets annoying.
 
+## Using it
+
+Every command works as a slash command and with the short prefix, so `/status` and `tz status` do the same thing, and most have a shorter alias too (`tz hb`, `tz s`, `tz w <id>`). `tz help` lists everything switched on in the server.
+
+Server admins (Manage Server) can switch each feature on or off and limit where it works with `/config`:
+
+```
+tz config view
+tz config feature owo off
+tz config channel owo add #bots
+tz config role owo add @OwO players
+tz config prefix d
+```
+
+Channel and role limits stack, and admins can always use everything so nobody locks themselves out.
+
 ## Setting it up
 
 1. Make an application on the [Discord developer portal](https://discord.com/developers/applications), add a bot, and switch on the Message Content intent under Bot. texz needs it to read OwO's replies.

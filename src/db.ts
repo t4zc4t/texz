@@ -38,6 +38,19 @@ export interface Reminder {
   channel_id: string | null;
 }
 
+export interface ModuleRules {
+  enabled: boolean;
+  channels: string[];
+  roles: string[];
+}
+
+export interface GuildSettings {
+  prefix: string;
+  modules: Record<string, ModuleRules>;
+}
+
+export const defaultRules = (): ModuleRules => ({ enabled: true, channels: [], roles: [] });
+
 export class Store {
   db: DatabaseSync;
 
@@ -80,6 +93,10 @@ export class Store {
         n INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (user_id, day, what)
       );
+      CREATE TABLE IF NOT EXISTS guilds (
+        id TEXT PRIMARY KEY,
+        settings TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS cooldowns (
         user_id TEXT NOT NULL,
         what TEXT NOT NULL,
@@ -102,6 +119,23 @@ export class Store {
         'INSERT INTO users (id, settings) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET settings = excluded.settings',
       )
       .run(userId, JSON.stringify(s));
+  }
+
+  guild(guildId: string): GuildSettings {
+    const row = this.db.prepare('SELECT settings FROM guilds WHERE id = ?').get(guildId) as { settings: string } | undefined;
+    const saved = row ? (JSON.parse(row.settings) as Partial<GuildSettings>) : {};
+    return { prefix: saved.prefix ?? 'tz', modules: saved.modules ?? {} };
+  }
+
+  rules(guildId: string | null, module: string): ModuleRules {
+    if (!guildId) return defaultRules();
+    return { ...defaultRules(), ...this.guild(guildId).modules[module] };
+  }
+
+  saveGuild(guildId: string, s: GuildSettings) {
+    this.db
+      .prepare('INSERT INTO guilds (id, settings) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET settings = excluded.settings')
+      .run(guildId, JSON.stringify(s));
   }
 
   touch(userId: string, channelId: string) {

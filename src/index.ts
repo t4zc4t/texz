@@ -1,7 +1,7 @@
-import { Client, Events, GatewayIntentBits, MessageFlags, Partials } from 'discord.js';
+import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { Store } from './db.js';
 import { startScheduler } from './reminders.js';
-import { handle } from './slash.js';
+import { onSlash, onText } from './core/registry.js';
 import { watch } from './watch.js';
 
 const token = process.env.DISCORD_TOKEN;
@@ -24,14 +24,12 @@ client.once(Events.ClientReady, (c) => {
   startScheduler(client, store);
 });
 
-client.on(Events.InteractionCreate, async (i) => {
-  if (!i.isChatInputCommand()) return;
-  try {
-    await handle(store, i);
-  } catch (e) {
-    console.error(e);
-    if (!i.replied) await i.reply({ content: 'Something broke on my side, try again in a bit.', flags: MessageFlags.Ephemeral }).catch(() => {});
-  }
+client.on(Events.InteractionCreate, (i) => {
+  if (i.isChatInputCommand()) void onSlash(store, i);
+});
+
+client.on(Events.MessageCreate, (m) => {
+  if (!m.author.bot) onText(store, m);
 });
 
 watch(client, store);

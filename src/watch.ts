@@ -168,6 +168,8 @@ function onReply(store: Store, m: Message | PartialMessage, p: Pending) {
 export function watch(client: Client, store: Store) {
   const handle = async (m: Message | PartialMessage, edited: boolean) => {
     if (!m.author) return;
+    // a server can switch the whole OwO helper off
+    if (m.guildId && !store.rules(m.guildId, 'owo').enabled) return;
     if (!m.author.bot && !edited) return onCommand(store, m as Message);
     if (m.author.id !== OWO_BOT_ID) return;
 
