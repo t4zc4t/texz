@@ -9,15 +9,15 @@ import { armouryReport } from '../features/armoury.js';
 import { planZoo } from '../features/zoo.js';
 import type { Huntbot, ListedWeapon, Pet, Weapon, ZooRank } from '../owo/parse.js';
 import { scheduleDailies } from '../reminders.js';
-import { embed } from '../theme.js';
+import { agency, embed, say } from '../theme.js';
 import { fmtLeft, nextReset, owoDay, unix } from '../time.js';
 
 const toggles = ['huntbot', 'pray', 'daily', 'vote', 'minigames', 'huntbattle', 'lastcall'] as const;
 
-const missing = (cmd: string) => `I haven't seen your \`${cmd}\` yet. Run it somewhere I can read, then ask again.`;
+const missing = (cmd: string) => `${say('missing')} Run \`${cmd}\` somewhere I can read, then come back to me.`;
 
 function statusEmbed(store: Store, userId: string) {
-  const e = embed('Status');
+  const e = embed('Case file').setDescription(`*${say('status')}*`);
   const cds = store.cooldowns(userId);
   const now = Date.now();
   const timer = (what: string, label: string) => {
@@ -68,7 +68,7 @@ const commands: Command[] = [
       const zoo = store.snapshot<Partial<Record<ZooRank, number>>>(ctx.userId, 'zoo');
       if (!zoo) return ctx.reply(missing('owo zoo'));
       const hb = store.snapshot<Huntbot>(ctx.userId, 'huntbot')?.data ?? null;
-      return ctx.reply(embed('Zoo planner').setDescription(planZoo(zoo.data, hb).join('\n')).setFooter({ text: 'From your owo zoo' }).setTimestamp(zoo.at));
+      return ctx.reply(agency('Zoo planner', 'zoo', planZoo(zoo.data, hb).join('\n')).setTimestamp(zoo.at));
     },
   },
   {
@@ -82,7 +82,7 @@ const commands: Command[] = [
       const seen = new Map(store.snapshot<[string, Weapon][]>(ctx.userId, 'weapons')?.data ?? []);
       const shards = store.snapshot<number>(ctx.userId, 'shards')?.data ?? null;
       const report = armouryReport(list.data.map(([, w]) => w), team, seen, shards).join('\n');
-      return ctx.reply(embed('Armoury').setDescription(report.slice(0, 4000)).setFooter({ text: 'Flip through every page of owo weapon so I see them all' }).setTimestamp(list.at));
+      return ctx.reply(agency('Armoury', 'armoury', `${report}\n\n-# Flip through every page of owo weapon so I see them all`).setTimestamp(list.at));
     },
   },
   {
@@ -94,7 +94,7 @@ const commands: Command[] = [
       if (!q) return ctx.reply(missing('owo quest'));
       const body = q.data.allDone ? 'All done for today. Even I\'m impressed, a little.' : q.data.lines.join('\n') || 'Nothing readable in it.';
       const social = /cookie|pray|curse|battle/i.test(body) && !q.data.allDone;
-      return ctx.reply(embed('Quests').setDescription(body + (social ? '\n\nSome of these need other people, `tz ask` pings the quest buddies here.' : '')).setTimestamp(q.at));
+      return ctx.reply(agency('Quests', q.data.allDone ? 'questsDone' : 'quests', q.data.allDone ? 'Nothing left for today.' : body + (social ? '\n\nSome of these need other people, `tz ask` calls in the quest buddies here.' : '')).setTimestamp(q.at));
     },
   },
   {
@@ -104,10 +104,10 @@ const commands: Command[] = [
     run: (ctx, store) => {
       if (!ctx.guildId) return ctx.reply('Leaderboards live in servers.');
       const rows = store.board(ctx.guildId, owoDay(new Date(Date.now() - 6 * 86_400_000)));
-      if (!rows.length) return ctx.reply('Nobody has hunted where I could see it this week. Peaceful, honestly.');
+      if (!rows.length) return ctx.reply('Nobody hunted where I could see it this week. Peaceful. I loved it.');
       const medal = ['🥇', '🥈', '🥉'];
       return ctx.reply({
-        embeds: [embed('This week\'s hunters').setDescription(rows.map((r, i) =>
+        embeds: [agency('This week\'s hunters', 'leaderboard', rows.map((r, i) =>
           `${medal[i] ?? `**${i + 1}.**`} <@${r.user_id}> · ${r.hunts} hunts · ${r.battles} battles`).join('\n'))],
         private: false,
       });
@@ -123,8 +123,8 @@ const commands: Command[] = [
     run: (ctx, store) => {
       if (!ctx.guildId) return ctx.reply('Buddies live in servers.');
       const sub = ctx.sub() ?? 'list';
-      if (sub === 'join') { store.setBuddy(ctx.guildId, ctx.userId, true); return ctx.reply('You\'re a quest buddy now. Be nice when I ping you.'); }
-      if (sub === 'leave') { store.setBuddy(ctx.guildId, ctx.userId, false); return ctx.reply('Out you go, no more pings.'); }
+      if (sub === 'join') { store.setBuddy(ctx.guildId, ctx.userId, true); return ctx.reply(`${say('buddyJoin')} You'll get pinged when someone needs a hand.`); }
+      if (sub === 'leave') { store.setBuddy(ctx.guildId, ctx.userId, false); return ctx.reply(say('buddyLeave')); }
       const list = store.buddies(ctx.guildId);
       return ctx.reply(list.length ? `Quest buddies: ${list.map((u) => `<@${u}>`).join(' ')}` : 'No buddies yet, `tz buddy join` to start.');
     },
@@ -141,12 +141,12 @@ const commands: Command[] = [
       const cmd: Record<string, string> = { cookie: 'owo cookie', pray: 'owo pray', curse: 'owo curse', battle: 'owo battle' };
       if (!what || !cmd[what]) return ctx.reply('Ask for `cookie`, `pray`, `curse` or `battle`.');
       const last = store.cooldowns(ctx.userId).get('ask') ?? 0;
-      if (Date.now() - last < 30 * 60_000) return ctx.reply('You asked recently, give them a little time.');
+      if (Date.now() - last < 30 * 60_000) return ctx.reply(say('askCooldown'));
       const others = store.buddies(ctx.guildId).filter((u) => u !== ctx.userId);
       if (!others.length) return ctx.reply('No other quest buddies here yet. Get a friend to run `tz buddy join`.');
       store.setCooldown(ctx.userId, 'ask', new Date());
       return ctx.reply({
-        content: `${others.map((u) => `<@${u}>`).join(' ')} <@${ctx.userId}> needs a ${what} for a quest: \`${cmd[what]} @them\``,
+        content: `${others.map((u) => `<@${u}>`).join(' ')} <@${ctx.userId}> ${say('ask')} They need a **${what}** for a quest: \`${cmd[what]} @them\``,
         private: false,
         ping: others,
       });
@@ -165,7 +165,7 @@ const commands: Command[] = [
     run: (ctx, store) => {
       const hb = store.snapshot<Huntbot>(ctx.userId, 'huntbot');
       if (!hb) return ctx.reply(missing('owo hb'));
-      return ctx.reply(embed('Huntbot advice').setDescription(advise(hb.data).lines.join('\n')).setFooter({ text: 'From your owo hb' }).setTimestamp(hb.at));
+      return ctx.reply(agency('Huntbot advice', 'huntbot', advise(hb.data).lines.join('\n')).setTimestamp(hb.at));
     },
   },
   {
@@ -175,7 +175,7 @@ const commands: Command[] = [
     run: (ctx, store) => {
       const inv = store.snapshot<[number, number][]>(ctx.userId, 'inv');
       if (!inv) return ctx.reply(missing('owo inv'));
-      return ctx.reply(embed('Gem plan').setDescription(planGems(new Map(inv.data)).lines.join('\n')).setFooter({ text: 'From your owo inv' }).setTimestamp(inv.at));
+      return ctx.reply(agency('Gem plan', 'gems', planGems(new Map(inv.data)).lines.join('\n')).setTimestamp(inv.at));
     },
   },
   {
@@ -190,8 +190,7 @@ const commands: Command[] = [
       const id = ctx.str('id')?.toUpperCase() ?? store.snapshot<string>(ctx.userId, 'lastweapon')?.data;
       const w = id ? all.get(id) : undefined;
       if (!w) return ctx.reply(`I haven't seen that weapon yet. Run \`owo weapon ${id ?? '<id>'}\` first so I can read it.`);
-      return ctx.reply(embed(`${w.name} ${w.quality ?? ''}%`).setDescription(weaponReport(w, team.data).join('\n'))
-        .setFooter({ text: 'Before enemy resistance, total counts every enemy hit' }));
+      return ctx.reply(agency(`${w.name} ${w.quality ?? ''}%`, 'weapon', `${weaponReport(w, team.data).join('\n')}\n\n-# Before enemy resistance, total counts every enemy hit`));
     },
   },
   {
@@ -211,7 +210,7 @@ const commands: Command[] = [
       if (warn.length) lines.push('', ...warn.map((w) => `⚠️ ${w}`));
       const unseen = team.data.filter((p) => p.weaponId && !weapons.has(p.weaponId));
       if (unseen.length) lines.push('', `Run \`owo weapon <id>\` on ${unseen.map((p) => p.weaponId).join(', ')} so I can check those too.`);
-      return ctx.reply(embed('Team').setDescription(lines.join('\n')).setTimestamp(team.at));
+      return ctx.reply(agency('Team', 'team', lines.join('\n')).setTimestamp(team.at));
     },
   },
   {
@@ -222,14 +221,15 @@ const commands: Command[] = [
       const byDay = new Map<string, Record<string, number>>();
       for (const r of store.countsSince(ctx.userId, from)) byDay.set(r.day, { ...(byDay.get(r.day) ?? {}), [r.what]: r.n });
       const e = embed('Last 7 days');
-      if (!byDay.size) return ctx.reply(e.setDescription('Nothing counted yet, I count hunts and battles as you do them.'));
+      const quip = `*${say('stats')}*\n\n`;
+      if (!byDay.size) return ctx.reply(e.setDescription('Nothing counted yet. I count hunts and battles as you do them, quietly, like a good detective.'));
       let th = 0; let tb = 0;
       const lines = [...byDay].map(([day, c]) => {
         th += c.hunt ?? 0; tb += c.battle ?? 0;
         return `\`${day}\` hunts ${c.hunt ?? 0}, battles ${c.battle ?? 0}`;
       });
       lines.push(`**Total** hunts ${th}, battles ${tb}`);
-      return ctx.reply(e.setDescription(lines.join('\n')));
+      return ctx.reply(e.setDescription(quip + lines.join('\n')));
     },
   },
   {
@@ -250,15 +250,15 @@ const commands: Command[] = [
         if (!mins || mins < 1 || !note) return ctx.reply('Like this: `tz remind add 30 restart huntbot`');
         const at = new Date(Date.now() + Math.min(mins, 10080) * 60_000);
         const id = store.addReminder(ctx.userId, 'custom', at, note.slice(0, 200), ctx.channelId);
-        return ctx.reply(`Noted, reminder #${id} <t:${unix(at)}:R>. I'll remember so you don't have to.`);
+        return ctx.reply(`${say('remindAdd')} Reminder #${id}, <t:${unix(at)}:R>.`);
       }
       if (sub === 'cancel') {
         const id = ctx.int('id');
-        return ctx.reply(id && store.deleteReminder(id, ctx.userId) ? 'Cancelled, consider it forgotten.' : 'No reminder with that ID.');
+        return ctx.reply(id && store.deleteReminder(id, ctx.userId) ? say('remindCancel') : 'No reminder with that ID.');
       }
       const list = store.userReminders(ctx.userId);
       if (!list.length) return ctx.reply('Nothing queued.');
-      return ctx.reply(embed('Queued').setDescription(list.map((r) =>
+      return ctx.reply(embed('Promises I made').setDescription(list.map((r) =>
         `#${r.id} **${r.kind}**${r.note ? ` ${r.note}` : ''} <t:${Math.floor(r.due_at / 1000)}:R>`).join('\n')));
     },
   },
@@ -308,7 +308,7 @@ const commands: Command[] = [
       }
       store.saveSettings(ctx.userId, s);
       scheduleDailies(store, ctx.userId);
-      return ctx.reply(embed('Your settings').setDescription(settingsText(s)));
+      return ctx.reply(agency('Your settings', 'settings', settingsText(s)));
     },
   },
 ];

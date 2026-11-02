@@ -3,6 +3,7 @@ import type { Reminder, Store } from './db.js';
 import { todoLines } from './features/daily.js';
 import { advise } from './features/huntbot.js';
 import type { Huntbot } from './owo/parse.js';
+import { say } from './theme.js';
 import { HOUR, afterQuiet, nextReset } from './time.js';
 
 const VOTE_URL = 'https://top.gg/bot/408785106942164992/vote';
@@ -24,7 +25,7 @@ function text(store: Store, r: Reminder): string | null {
   switch (r.kind) {
     case 'huntbot': {
       const hb = store.snapshot<Huntbot>(r.user_id, 'huntbot')?.data;
-      const lines = ['Your huntbot is back. Collect it with `owo hb`, then sacrifice the spare animals and send it out again.'];
+      const lines = [say('huntbotBack'), 'Collect it with `owo hb`, sacrifice the spares and send it out again.'];
       if (hb) {
         const a = advise(hb);
         if (a.pick) lines.push(`Next upgrade: **${a.pick}**.`);
@@ -33,22 +34,22 @@ function text(store: Store, r: Reminder): string | null {
       return lines.join('\n');
     }
     case 'pray':
-      return 'Pray and curse are ready again: `owo pray` / `owo curse @user`';
+      return `${say('prayReady')} \`owo pray\` / \`owo curse @user\``;
     case 'hunt':
-      return 'Hunt and battle are off cooldown.';
+      return say('huntReady');
     case 'vote':
-      return `You can vote again: ${VOTE_URL} then \`owo vote\` to claim.`;
+      return `${say('voteReady')} ${VOTE_URL} then \`owo vote\` to claim.`;
     case 'reset': {
       const todo = todoLines(store, r.user_id);
-      return ['New OwO day just started. Today\'s list:', ...todo].join('\n');
+      return [say('newDay'), ...todo].join('\n');
     }
     case 'lastcall': {
       const todo = todoLines(store, r.user_id);
       if (!todo.length) return null;
-      return ['OwO resets in 2 hours and these are still open:', ...todo].join('\n');
+      return [say('lastCall'), ...todo].join('\n');
     }
     case 'custom':
-      return `Reminder: ${r.note}`;
+      return `${say('custom')} **${r.note}**`;
     default:
       return r.note || null;
   }

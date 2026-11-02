@@ -1,7 +1,7 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { defaultRules, type Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
-import { embed, pick } from '../theme.js';
+import { agency, embed, say } from '../theme.js';
 
 // filled in by the registry so help and config can list every module
 export const allModules: Module[] = [];
@@ -41,9 +41,9 @@ const help: Command = {
       });
       return ctx.reply(e);
     }
-    const e = embed('Texz').setDescription([
-      'A detective who prefers napping, but fine, I\'ll help. Slash commands work, and so does the short way: `' + prefix + ' <command>`.',
-      `Ask \`${prefix} help <feature>\` for the details of one.`,
+    const e = agency('Texz · Armed Detective Agency', 'help', [
+      `Slash commands work, and so does the lazy way: \`${prefix} <command>\`.`,
+      `Ask \`${prefix} help <feature>\` and I'll explain one properly.`,
     ].join('\n'));
     for (const m of mods) e.addFields({ name: m.label, value: `${m.about}\n${m.commands.map((c) => `\`${c.name}\``).join(' ')}` });
     return ctx.reply(e);
@@ -111,14 +111,14 @@ const config: Command = {
     }
     if (mod && rules) g.modules[mod.name] = rules;
     if (sub !== 'view') store.saveGuild(ctx.guildId, g);
-    return ctx.reply(embed('Server settings').setDescription(rulesText(store, ctx.guildId)));
+    return ctx.reply(agency('Server settings', 'settings', rulesText(store, ctx.guildId)));
   },
 };
 
 const ping: Command = {
   name: 'ping',
   data: new SlashCommandBuilder().setName('ping').setDescription('Check that Texz is awake').toJSON(),
-  run: (ctx) => ctx.reply(pick(['Awake. Barely.', 'Here. Was hoping for a nap.', 'Present, unfortunately.'])),
+  run: (ctx) => ctx.reply(say('ping')),
 };
 
 export const core: Module = {

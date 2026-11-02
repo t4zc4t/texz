@@ -37,10 +37,14 @@ export function armouryReport(list: ListedWeapon[], team: Pet[] | null, seen: Ma
   // best damage weapon for each pet, using its stronger stat
   if (team?.length) {
     lines.push('', '**Best damage pick per pet**');
-    for (const p of team) {
+    // strongest pets pick first and a weapon only goes to one pet
+    const used = new Set<string>();
+    const order = [...team].sort((a, b) => Math.max(b.str, b.mag) - Math.max(a.str, a.mag));
+    for (const p of order) {
       const stat = p.str >= p.mag ? 'STR' : 'MAG';
       const fits = list
         .filter((w) => roles[weaponType(w.name)]?.stat === stat && roles[weaponType(w.name)]?.role === 'damage')
+        .filter((w) => !used.has(w.id) && (!w.equippedOn || w.equippedOn === p.name || !team.some((t) => t.name === w.equippedOn)))
         .map((w) => {
           const full = seen.get(w.id);
           const est = full ? damageOn(full, p).total : null;
@@ -49,7 +53,13 @@ export function armouryReport(list: ListedWeapon[], team: Pet[] | null, seen: Ma
         .sort((a, b) => (b.est ?? -1) - (a.est ?? -1) || (rarityRank[b.w.rarity] ?? 0) - (rarityRank[a.w.rarity] ?? 0) || b.w.quality - a.w.quality)
         .slice(0, 2);
       if (!fits.length) { lines.push(`${p.name} (${stat}): nothing that fits yet`); continue; }
-      lines.push(`${p.name} (${stat}): ${fits.map((f) => `\`${f.w.id}\` ${f.w.name} ${f.w.quality}%${f.est !== null ? ` ~${f.est} dmg` : ''}`).join(', then ')}`);
+      used.add(fits[0].w.id);
+      const est = (f: (typeof fits)[number]) => {
+        if (f.est) return ` ~${f.est} dmg`;
+        const full = seen.get(f.w.id);
+        return full && !full.hits.length ? ' (scales with the fight)' : '';
+      };
+      lines.push(`${p.name} (${stat}): ${fits.map((f) => `\`${f.w.id}\` ${f.w.name} ${f.w.quality}%${est(f)}`).join(', then ')}`);
     }
   }
 

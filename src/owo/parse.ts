@@ -168,6 +168,8 @@ export function parseWeapon(raw: string): Weapon | null {
   const hits: Hit[] = [];
   // sentences like "Deals 51.4% of your :att: STR to all opponents."
   for (const m of text.matchAll(/(?:deals?|deal)\s+([\d.]+)%\s+of your\s*(?::\w+:\s*)?(STR|MAG)([^.\n]*)/gi)) {
+    // "for every 1 WP absorbed" style damage depends on the fight, not a flat %
+    if (/for every/i.test(m[3])) continue;
     hits.push({
       percent: Number(m[1]),
       stat: m[2].toUpperCase() as 'STR' | 'MAG',

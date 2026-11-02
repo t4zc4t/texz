@@ -1,4 +1,4 @@
-import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
+import { ActivityType, Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { Store } from './db.js';
 import { startScheduler } from './reminders.js';
 import { onSlash, onText } from './core/registry.js';
@@ -22,6 +22,18 @@ const client = new Client({
 client.once(Events.ClientReady, (c) => {
   console.log(`texz online as ${c.user.tag}`);
   startScheduler(client, store);
+  // rotating status, so the profile looks alive
+  const moods = [
+    'hiding from Kunikida\'s schedule',
+    'tz help · reading case files',
+    'a crab buffet, in my dreams',
+    'Chuuya lose at cards',
+    'your huntbot, lovingly',
+  ];
+  let i = 0;
+  const mood = () => c.user.setActivity(moods[i++ % moods.length], { type: ActivityType.Watching });
+  mood();
+  setInterval(mood, 10 * 60_000);
 });
 
 client.on(Events.InteractionCreate, (i) => {

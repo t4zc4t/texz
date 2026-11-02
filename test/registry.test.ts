@@ -33,7 +33,7 @@ test('prefix commands and aliases', async () => {
   const a = fake('tz status');
   assert.equal(onText(store, a.m), true);
   await tick();
-  assert.equal(a.replies[0].embeds?.[0].data.title, 'Status');
+  assert.equal(a.replies[0].embeds?.[0].data.title, 'Case file');
 
   const b = fake('TZ hb');
   assert.equal(onText(store, b.m), true);
@@ -60,7 +60,7 @@ test('features switch off and stay admin only to change', async () => {
   const blocked = fake('tz status');
   onText(store, blocked.m);
   await tick();
-  assert.match(blocked.replies[0].content ?? '', /switched off|turned that off/);
+  assert.match(blocked.replies[0].content ?? '', /locked here|switched it off/);
 });
 
 test('channel and role limits', async () => {
@@ -77,7 +77,7 @@ test('channel and role limits', async () => {
   const right = fake('tz status', { channel: '222222222222222222' });
   onText(store, right.m);
   await tick();
-  assert.equal(right.replies[0].embeds?.[0].data.title, 'Status');
+  assert.equal(right.replies[0].embeds?.[0].data.title, 'Case file');
 
   onText(store, fake('tz config role owo add <@&333333333333333333>', { admin: true }).m);
   await tick();
@@ -88,7 +88,7 @@ test('channel and role limits', async () => {
   const withRole = fake('tz status', { channel: '222222222222222222', roles: ['333333333333333333'] });
   onText(store, withRole.m);
   await tick();
-  assert.equal(withRole.replies[0].embeds?.[0].data.title, 'Status');
+  assert.equal(withRole.replies[0].embeds?.[0].data.title, 'Case file');
 });
 
 test('custom prefix', async () => {
