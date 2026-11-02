@@ -17,6 +17,7 @@ const aliases: Record<string, string> = {
   cowoncy: 'cash', cash: 'cash', money: 'cash', balance: 'cash', bal: 'cash',
   lootbox: 'lootbox', lb: 'lootbox',
   crate: 'crate', wc: 'crate',
+  ws: 'ws', weaponshard: 'ws',
   sacrifice: 'sacrifice', sac: 'sacrifice',
   upgrade: 'upgrade', up: 'upgrade',
   alastor: 'alastor',
