@@ -3,7 +3,7 @@ import type { Reminder, Store } from './db.js';
 import { todoLines } from './features/daily.js';
 import { advise } from './features/huntbot.js';
 import type { Huntbot } from './owo/parse.js';
-import { RED, card } from './theme.js';
+import { RED, card, say } from './theme.js';
 import { HOUR, afterQuiet, nextReset } from './time.js';
 
 const VOTE_URL = 'https://top.gg/bot/408785106942164992/vote';
@@ -55,9 +55,36 @@ function text(store: Store, r: Reminder): EmbedBuilder | null {
   }
 }
 
+// reminder kind -> the setting that decides where it goes
+export const routeOf: Record<string, string> = {
+  huntbot: 'huntbot', pray: 'pray', vote: 'vote', reset: 'daily', lastcall: 'lastcall', hunt: 'huntbattle', custom: 'custom',
+};
+
+// channel reminders are a short line with a ping, not a whole card
+function line(store: Store, r: Reminder): string | null {
+  const todo = () => todoLines(store, r.user_id).map((l) => l.replace(/^•\s*/, '')).join(', ');
+  switch (r.kind) {
+    case 'huntbot': {
+      const hb = store.snapshot<Huntbot>(r.user_id, 'huntbot')?.data;
+      return `🤖 ${say('huntbotBackShort')} \`owo hb\`${hb?.maxRunCost ? ` then \`owo autohunt ${hb.maxRunCost}\`` : ''}`;
+    }
+    case 'pray': return `🙏 ${say('prayShort')} \`owo pray\``;
+    case 'vote': return `🗳️ ${say('voteShort')} <${VOTE_URL}>`;
+    case 'hunt': return `🏹 ${say('huntReady')}`;
+    case 'reset': return `🌅 ${say('newDayShort')} ${todo()}`;
+    case 'lastcall': {
+      const t = todo();
+      return t ? `⏳ ${say('lastCallShort')} ${t}` : null;
+    }
+    case 'custom': return `📝 ${say('customShort')} **${r.note}**`;
+    default: return r.note ? `📝 ${r.note}` : null;
+  }
+}
+
 async function deliver(client: Client, store: Store, r: Reminder, body: EmbedBuilder) {
   const s = store.settings(r.user_id);
-  if (s.delivery === 'dm') {
+  const where = s.routes[routeOf[r.kind] ?? ''] ?? s.delivery;
+  if (where === 'dm' || r.kind === 'urgent') {
     try {
       const user = await client.users.fetch(r.user_id);
       await user.send({ embeds: [body] });
@@ -69,7 +96,13 @@ async function deliver(client: Client, store: Store, r: Reminder, body: EmbedBui
   const channelId = r.channel_id ?? store.lastChannel(r.user_id);
   if (!channelId) return;
   const ch = await client.channels.fetch(channelId).catch(() => null);
-  if (ch?.isSendable()) await ch.send({ content: `<@${r.user_id}>`, embeds: [body], allowedMentions: { users: [r.user_id] } });
+  if (!ch?.isSendable()) return;
+  const text = r.kind === 'urgent' ? null : line(store, r);
+  const sent = text
+    ? await ch.send({ content: `<@${r.user_id}> ${text}`.slice(0, 2000), allowedMentions: { users: [r.user_id] } })
+    : await ch.send({ content: `<@${r.user_id}>`, embeds: [body], allowedMentions: { users: [r.user_id] } });
+  // some people don't want reminders sitting in the channel
+  if (s.autodelete > 0) setTimeout(() => void sent.delete().catch(() => {}), s.autodelete * 1000);
 }
 
 export function startScheduler(client: Client, store: Store) {

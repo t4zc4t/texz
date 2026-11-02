@@ -14,6 +14,10 @@ export interface Settings {
   minigames: boolean;
   huntbattle: boolean;
   lastcall: boolean;
+  // where each reminder type goes, falls back to delivery when not set
+  routes: Partial<Record<string, Delivery>>;
+  // seconds before a channel reminder deletes itself, 0 keeps it
+  autodelete: number;
 }
 
 export const defaultSettings: Settings = {
@@ -27,6 +31,8 @@ export const defaultSettings: Settings = {
   minigames: true,
   huntbattle: false,
   lastcall: true,
+  routes: {},
+  autodelete: 0,
 };
 
 export interface Reminder {

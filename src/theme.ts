@@ -1,4 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
+import { cached, momentOf, pickDefault } from './gifs.js';
 
 // sand coat and old bandages
 export const COLOR = 0xc2a46e;
@@ -11,164 +12,163 @@ export const pick = <T>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs
 // All lines are written for this bot, in the spirit of the character.
 const bank = {
   footer: [
-    'Armed Detective Agency · on a well deserved break',
-    'Texz · bandages, crab, and the occasional good idea',
-    'Kunikida says I should be working. I am, technically.',
-    'Filed under: things I solved while lying down',
-    'Agency case notes · do not show Kunikida',
+    'Armed Detective Agency · currently on an extended break',
+    'Texz · bandages, crab, and a frightening amount of foresight',
+    'Kunikida-kun says I should be working. I am. Spiritually.',
+    'Filed under: mysteries I solved without getting up',
+    'Agency case notes · please hide these from Kunikida-kun',
+    'Sponsored by nobody. Crab donations welcome.',
+    'Written by a humble detective with a terrible work ethic',
+    'Ranpo-san solved this first. He always does. Rude.',
   ],
   help: [
-    'Detective, informant, occasional crab enthusiast. Here is everything I can do for you.',
-    'Ask and the Agency answers. Well, I answer. The others are busy being responsible.',
-    'Ah, a client! Sit, sit. I solve OwO problems, server problems, and occasionally my own boredom.',
-    'You want to know what I can do? Everything, obviously. But here is the polite version.',
-    'Kunikida made me write a list of my duties. I lost it twice, so here is the third one.',
+    'Ahh, a client! Come in, come in. Don\'t mind the bandages, they\'re fashion.',
+    'You want my services? How flattering. Here\'s everything this humble detective does~',
+    'Kunikida-kun made me write a list of my duties. I lost it twice. This is attempt number three.',
+    'Detective, informant, professional napper. Pick a service, any service.',
+    'The Agency is at your disposal. Well, I am. The others are busy being responsible.',
   ],
   ping: [
-    'Alive and well. Disappointingly well, really, I had plans to nap.',
-    'Pong. Kunikida timed that, by the way. He wrote it in his notebook.',
-    'Awake. Barely. I was dreaming of a crab buffet.',
-    'Present, unfortunately. I had a perfect nap going.',
-    'Here! Don\'t tell Kunikida you found me this quickly, he\'ll expect it every time.',
-    'Pong. You see? I can be reliable when nobody is watching.',
+    'Haah~ you woke me. I was dreaming of an all-you-can-eat crab buffet.',
+    'Present! Don\'t tell Kunikida-kun you found me this fast, he\'ll start expecting it.',
+    'Alive and well. Disappointingly punctual, even.',
+    'Pong~ Kunikida-kun timed that. He wrote it in his notebook. Twice.',
+    'Ara, checking if I\'m awake? I\'m always watching. Mostly with my eyes closed.',
   ],
   status: [
-    'Your whole life on one page. Mine would mostly say napped.',
-    'Atsushi would read this twice. I only needed a glance.',
-    'Case file opened. The suspect is you, the crime is unfinished dailies.',
-    'Let me read your case file. Hmm, hmm, yes, I see everything.',
-    'A detective always knows where his client stands. Here is where you stand.',
-    'Your timers, your duties, your little OwO empire. Summarised, because I\'m kind.',
+    'Let\'s open your case file... hmm, hmm. I see everything. Including that daily you skipped.',
+    'Atsushi-kun would read this twice. One glance was enough for me~',
+    'Case file opened. The suspect: you. The crime: unfinished dailies.',
+    'Your whole little empire on one page. Mine would just say "napped, ate crab".',
+    'A good detective always knows where his client stands. You stand... right here.',
   ],
   huntbot: [
-    'A loyal little hunter. If only Kunikida followed my schedule this nicely.',
-    'I could explain the maths slowly. Or you could trust a genius. Both, then.',
-    'Your little robot is hunting while you rest. I approve of that philosophy entirely.',
-    'I studied your huntbot. Honestly, the answer was obvious, but I\'ll explain anyway.',
-    'Essence math. Kunikida would make a spreadsheet, I just know the answer.',
+    'Your little robot hunts while you rest. I admire that philosophy deeply.',
+    'I studied your huntbot. The answer was obvious, but I\'ll pretend it took effort.',
+    'Essence maths. Kunikida-kun would build a spreadsheet. I just know.',
+    'If only Kunikida-kun followed my schedule as loyally as this huntbot follows yours.',
   ],
   gems: [
-    'Ranpo would call this obvious. He\'s right, but I\'m prettier about it.',
-    'Shiny stones, perfectly paired. I\'d make a wonderful jeweller, if jewellers napped more.',
-    'Gems are like plans: pair them properly and they all finish at the same moment.',
-    'I sorted your gems. Matching sets, nothing wasted, very elegant if I say so myself.',
+    'Gems are like a good scheme. Pair them right and everything falls into place at once~',
+    'Ranpo-san would call this obvious. He\'s right. I\'m just prettier about it.',
+    'Shiny little stones, perfectly matched. I\'d make a lovely jeweller, if jewellers napped more.',
   ],
   zoo: [
-    'So many spare animals. Don\'t worry, the ones you love stay. The rest pay rent in essence.',
-    'Kyouka asked me to count them nicely. I did. Mostly.',
-    'A zoo full of spare animals. The ones you love stay, the extras become essence. Simple.',
-    'I counted your animals. Twice. The second time was out of boredom.',
+    'So many spare animals... the ones you love stay. The rest can pay rent in essence.',
+    'I counted your zoo. Twice. The second time purely out of boredom.',
+    'Kyouka-chan asked me to be gentle with the animals. I promised. Mostly.',
   ],
   armoury: [
-    'Every weapon here, on the table. Some treasures, some scrap, all yours.',
-    'An arsenal fit for the Port Mafia. Don\'t tell them I said that.',
-    'An armoury! Let me see which of these are treasures and which are scrap.',
-    'Weapons tell you a lot about a person. Yours say "hoarder", fondly.',
+    'An armoury! Let\'s see which of these are treasures and which are... decoration.',
+    'An arsenal worthy of the Port Mafia. Please don\'t tell them I said that.',
+    'Weapons say a lot about a person. Yours say "hoarder". Affectionately.',
+  ],
+  armouryAll: [
+    'Every blade, staff and... fish? you own, lined up for inspection. I don\'t judge.',
+    'The full arsenal. Kunikida-kun would alphabetise it. I sorted it by sparkle.',
   ],
   team: [
     'Partners are everything. Trust me, I once had a hat-wearing chibi for one.',
-    'Let me see who holds what. A good detective notices a sword in the wrong hands.',
-    'Your team, inspected. A detective notices which weapon sits on the wrong hands.',
-    'Three partners and their weapons. Partnerships matter, trust me, I\'ve had some terrible ones.',
+    'Let\'s see who holds what. A sword in the wrong hands is a tragedy. Or a comedy.',
+    'Your trio, inspected. Better teamwork than the Agency on a Monday, I\'ll admit.',
   ],
   weapon: [
-    'Numbers don\'t lie. People do, constantly, but numbers never.',
-    'Who should wield this? Let the evidence decide.',
-    'Let me run the numbers. A genius does it in his head, but I\'ll write them down for you.',
-    'Which pet should hold this? I already know. Here\'s the proof, for the sceptics.',
+    'Numbers never lie. People do, constantly, delightfully. But numbers? Never.',
+    'Who should wield this? Let\'s let the evidence decide, like proper detectives.',
+    'A genius does this in his head. I wrote it down anyway, for the sceptics.',
   ],
   questsDone: [
-    'All quests done. How diligent. You make me look bad, please stop.',
-    'Finished everything? Then you\'ve earned a nap. I\'ve earned three.',
+    'Every quest done? How diligent. You\'re making me look bad, please stop.',
+    'All finished. You\'ve earned a nap. I\'ve earned three, for supervising.',
   ],
   quests: [
-    'Your quest log. Some of these need friends, luckily you know a charming detective.',
-    'Quests! Small mysteries, small rewards. Here\'s what\'s still open.',
+    'Little mysteries, little rewards. Here\'s what\'s still open on your board.',
+    'Some of these need friends. Lucky you, you know a very charming detective.',
   ],
   stats: [
-    'Your week, in numbers. I counted every hunt while pretending to sleep.',
+    'Your week in numbers. I counted every hunt while pretending to sleep.',
+    'Statistics! Kunikida-kun\'s favourite bedtime story.',
   ],
   leaderboard: [
-    'The most hardworking people here. I\'m deeply proud and slightly tired just reading it.',
-    'The Agency\'s most dedicated hunters this week. I am not on it, by choice.',
-    'Rankings! Someone has been working far too hard. Admirable. Exhausting to watch.',
+    'The most dedicated hunters this week. I\'m not on it. By choice. Obviously.',
+    'Someone here works far too hard. Admirable. Exhausting just to look at.',
+    'A ranking! Chuuya would demand a recount. He always loses those.',
   ],
   remindAdd: [
-    'Noted. I\'ll remember so you don\'t have to, that\'s what partners are for.',
+    'Noted~ I\'ll remember so you don\'t have to. That\'s what partners are for.',
     'Leave it to me. I may nap, but I never forget a promise. Mostly.',
   ],
-  remindCancel: ['Cancelled. Consider it forgotten, I\'m very good at forgetting things.'],
-  buddyJoin: ['Welcome to the network. Informants are the backbone of any good detective agency.'],
-  buddyLeave: ['Leaving the network? Fine. I\'ll pretend I didn\'t notice.'],
+  remindCancel: ['Cancelled. Consider it forgotten. I\'m wonderfully good at forgetting things.'],
+  buddyJoin: ['Welcome to my network of informants. Every great detective needs a few~'],
+  buddyLeave: ['Leaving the network? Fine. I\'ll pretend I didn\'t notice. I noticed.'],
   ask: [
-    'calling in a favour from the network.',
+    'is calling in a favour from the network~',
     'needs a small kindness. The Agency runs on these.',
+    'sent word through my informants. Who answers first gets my eternal respect.',
   ],
-  askCooldown: ['Patience. You asked recently, and pestering informants makes them disappear.'],
+  askCooldown: ['Patience, partner. Pester informants too often and they vanish into the night.'],
   settings: [
-    'Filed and stamped. Look at me, doing paperwork voluntarily.',
-    'Your preferences, filed neatly. Kunikida would be proud of me for once.',
+    'Your preferences, filed and stamped. Look at me, doing paperwork voluntarily.',
+    'Every switch and lever, right here. Kunikida-kun would weep with pride.',
   ],
   missing: [
-    'Even I need a clue before I can be brilliant.',
-    'I can\'t solve a case without evidence.',
-    'No evidence yet, and I refuse to guess. Well, I could guess, but I\'d be right and you\'d learn nothing.',
+    'I can\'t crack a case without evidence, partner.',
+    'Even a genius needs one tiny clue first.',
+    'No evidence. I could guess, I\'d be right, but you\'d learn nothing~',
   ],
   off: [
-    'Closed for today. The Agency needs its rest, and so do I.',
-    'That door is locked here. Someone with the keys decided I deserve a holiday.',
-    'Not in this server, I\'m afraid. They switched it off, and I\'m happily resting.',
+    'That door\'s locked here. Someone with the keys decided I deserve a holiday.',
+    'Closed for today. The Agency needs its rest. Mostly me.',
+    'Not in this server, I\'m afraid. They switched it off, and I\'m happily lounging.',
   ],
   wrongChannel: [
     'Wrong room, partner. Try it in {where}, I\'ll be lying down there.',
-    'I only take that case in {where}. Even I follow some rules.',
+    'I only take that case in {where}. Even I follow a rule or two.',
   ],
   noRole: [
-    'That case is for a select few. Not you, not today.',
-    'You need a certain role for that one. I don\'t make the rules, I just enjoy watching them.',
+    'That case is for a select few. Not you, not today~',
+    'You need a certain role for that. I don\'t make the rules, I just enjoy watching them.',
   ],
   noPerm: [
-    'You\'d need Manage Server for that. Nice try though, very bold.',
-    'Admin business. Fetch me an admin and some crab, in that order.',
+    'You\'d need Manage Server for that. Bold attempt though, I respect it.',
+    'Admin business. Fetch me an admin and some crab. In that order.',
   ],
   error: [
-    'Well, that didn\'t go as planned. Plans rarely survive me. Try again?',
-    'Something slipped. Even a genius trips on his own coat sometimes. Try again?',
+    'Ah. That slipped. Even a genius trips over his own coat sometimes.',
     'That broke on my side. How embarrassing. Don\'t tell Chuuya, he\'ll never let it go.',
+    'Well, that didn\'t go to plan. Plans rarely survive contact with me. Try again?',
   ],
-  armouryAll: [
-    'Every blade, staff and fish you own, lined up for inspection. Yes, fish. I don\'t judge.',
-    'The full arsenal. Kunikida would alphabetise it. I sorted it by shine.',
+  gif: ['A moving picture for the moment. Taste matters, even for detectives.'],
+  huntbotBackShort: [
+    'your huntbot is home, collect the loot before it gets ideas.',
+    'the little robot is back, tail wagging.',
+    'huntbot returned. Loyal thing. Unlike some partners I could name.',
   ],
-  gif: [
-    'A moving picture for the moment. Taste matters, even for detectives.',
-  ],
-  // reminders, sent as DMs
+  prayShort: ['prayers recharged~ go bless someone. Or curse them. I won\'t tell.', 'pray and curse are ready again.'],
+  voteShort: ['voting\'s open again, crab money awaits.', 'twelve hours passed, go vote~'],
+  newDayShort: ['a brand new OwO day! Today\'s duties:', 'the clock reset, here\'s the list:'],
+  lastCallShort: ['two hours left and these are still open:', 'last call before the reset, partner:'],
+  customShort: ['you asked me to remind you:', 'as promised~'],
   huntbotBack: [
     'Your huntbot is home, carrying gifts like a loyal little hound.',
-    'Ding! The robot returns. Collect its haul before it gets ideas.',
+    'Ding! The robot returns. Collect its haul before it develops a personality.',
   ],
   prayReady: [
-    'Your prayers and curses are recharged. Use them wisely, or chaotically, I won\'t judge.',
-    'Pray and curse are ready. Bless a friend, curse a rival, live a little.',
+    'Prayers and curses recharged. Use them wisely. Or chaotically. I won\'t judge.',
+    'Pray and curse are ready. Bless a friend, curse a rival, live a little~',
   ],
-  voteReady: [
-    'Voting is open again. Democracy, crab money, everyone wins.',
-    'Twelve hours passed. Your vote awaits, and so does the cowoncy.',
-  ],
-  huntReady: ['Hunt and battle are ready. Off you go.'],
+  voteReady: ['Voting is open again. Democracy and crab money, everybody wins.', 'Twelve hours passed. Your vote awaits~'],
+  huntReady: ['Hunt and battle are ready. Off you go~'],
   newDay: [
-    'A new OwO day! Fresh duties, fresh rewards. Kunikida would want you to start now.',
-    'The clock reset. I\'ve already planned your day, it\'s on the list below.',
+    'A brand new OwO day! Kunikida-kun would want you to start right now. I\'d want you to nap first.',
+    'The clock reset. I planned your whole day already, it\'s right below.',
   ],
   lastCall: [
-    'Two hours until the reset and these are still open. I\'d hurry, I wouldn\'t, but you should.',
+    'Two hours until the reset and these are still open. I wouldn\'t hurry. You should.',
     'Last call, partner. These slip away at the reset:',
   ],
-  custom: ['You asked me to remind you, so here I am, as promised:'],
-  captcha: [
-    'Urgent! OwO wants proof you\'re human in {where}. Solve it now, ignoring it gets you banned from the bot.',
-  ],
+  custom: ['You asked me to remind you, so here I am, as promised~'],
+  captcha: ['Urgent! OwO wants proof you\'re human in {where}. Answer it now, ignoring it gets you banned from the bot.'],
 };
 
 export type Kind = keyof typeof bank;
@@ -205,7 +205,9 @@ export function card(o: CardOptions): EmbedBuilder {
   for (const f of (o.fields ?? []).slice(0, 25)) {
     if (f.value) e.addFields({ name: f.name.slice(0, 256), value: f.value.slice(0, 1024), inline: f.inline });
   }
-  if (o.gif) e.setImage(o.gif);
+  // a server's own pick wins, "off" hides it, otherwise the default for that moment
+  const gif = o.gif === 'off' ? null : cached(o.gif ?? null) ?? (o.gif === undefined || o.gif === null ? cached(pickDefault(momentOf[o.kind] ?? '')) : null);
+  if (gif) e.setImage(gif);
   return e;
 }
 

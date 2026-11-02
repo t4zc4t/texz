@@ -1,7 +1,8 @@
-import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { ActionRowBuilder, ChannelType, PermissionFlagsBits, SlashCommandBuilder, StringSelectMenuBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
 import { defaultRules, type Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { card, say } from '../theme.js';
+import { isGifLink, resolve } from '../gifs.js';
 
 // filled in by the registry so help and config can list every module
 export const allModules: Module[] = [];
@@ -9,7 +10,7 @@ export const allModules: Module[] = [];
 const switchable = () => allModules.filter((m) => !m.locked);
 
 // moments an admin can attach a gif to
-export const gifMoments = ['help', 'ping', 'status', 'huntbot', 'leaderboard', 'ask', 'levelup', 'welcome', 'goodbye', 'ban', 'kick', 'timeout', 'warn', 'giveaway'];
+export const gifMoments = ['help', 'ping', 'status', 'error', 'huntbot', 'leaderboard', 'ask', 'levelup', 'welcome', 'goodbye', 'ban', 'kick', 'timeout', 'warn', 'giveaway'];
 
 function rulesText(store: Store, guildId: string) {
   const g = store.guild(guildId);
@@ -80,7 +81,11 @@ const help: Command = {
         })),
       }));
     }
-    return ctx.reply(card({
+    const menu = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      new StringSelectMenuBuilder().setCustomId('nav|help|as=feature').setPlaceholder('📂 Open a feature')
+        .addOptions(mods.map((m) => ({ label: m.label, value: m.name, emoji: icons[m.name] ?? '📁', description: m.about.slice(0, 100) }))),
+    );
+    return ctx.reply({ components: [menu], embeds: [card({
       kind: 'help', title: 'At your service', emoji: '🕵️', gif,
       body: `Slash commands work, and so does the lazy way: \`${prefix} <command>\`.\nAsk \`${prefix} help <feature>\` and I'll walk you through one.`,
       fields: mods.map((m) => ({
@@ -88,7 +93,7 @@ const help: Command = {
         value: `${m.about}\n${m.commands.map((c) => `\`${c.name}\``).join(' ')}`,
         inline: false,
       })),
-    }));
+    })] });
   },
 };
 
@@ -114,7 +119,7 @@ const config: Command = {
     .addSubcommand((s) => s.setName('gif').setDescription('Pick a gif for a moment, like help or levelup')
       .addStringOption((o) => o.setName('moment').setDescription('Which moment').setRequired(true)
         .addChoices(...gifMoments.map((m) => ({ name: m, value: m }))))
-      .addStringOption((o) => o.setName('url').setDescription('Direct gif link, or "clear"').setRequired(true)))
+      .addStringOption((o) => o.setName('url').setDescription('Tenor share link or .gif link, "default" or "off"').setRequired(true)))
     .addSubcommand((s) => s.setName('prefix').setDescription('Change the short text prefix')
       .addStringOption((o) => o.setName('prefix').setDescription('Like tz').setRequired(true).setMaxLength(5)))
     .toJSON(),
@@ -123,7 +128,7 @@ const config: Command = {
     sub: true,
     subArgs: { feature: ['name', 'on'], channel: ['name', 'action', 'channel'], role: ['name', 'action', 'role'], prefix: ['prefix'], gif: ['moment', 'url'] },
   },
-  run: (ctx, store) => {
+  run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Server settings only make sense inside a server.');
     const g = store.guild(ctx.guildId);
     const sub = ctx.sub() ?? 'view';
@@ -159,10 +164,12 @@ const config: Command = {
       const moment = ctx.str('moment')?.toLowerCase() ?? '';
       const url = ctx.str('url')?.trim() ?? '';
       if (!gifMoments.includes(moment)) return ctx.reply(`Moments: ${gifMoments.map((m) => `\`${m}\``).join(', ')}`);
-      if (url === 'clear') delete g.gifs[moment];
-      // embeds only play direct media links, not the tenor or giphy page
-      else if (/^https:\/\/\S+\.(gif|png|jpe?g|webp)(\?\S*)?$/i.test(url) || /^https:\/\/(media\d*\.giphy\.com|media\.tenor\.com|c\.tenor\.com|i\.imgur\.com|cdn\.discordapp\.com|media\.discordapp\.net)\//i.test(url)) g.gifs[moment] = url;
-      else return ctx.reply('That needs to be a direct gif link, like one ending in `.gif`. On Tenor or Giphy, open the gif and copy its media link, not the page.');
+      if (url === 'clear' || url === 'default') delete g.gifs[moment];
+      else if (url === 'off') g.gifs[moment] = 'off';
+      else if (isGifLink(url)) {
+        if (!(await resolve(url))) return ctx.reply('I couldn\'t open that gif. Use a Tenor share link or a direct link ending in `.gif`.');
+        g.gifs[moment] = url;
+      } else return ctx.reply('Send a Tenor share link (tenor.com/view/...) or a direct `.gif` link. `default` puts mine back, `off` hides it.');
     }
     if (mod && rules) g.modules[mod.name] = rules;
     if (sub !== 'view') store.saveGuild(ctx.guildId, g);

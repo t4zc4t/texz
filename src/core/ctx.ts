@@ -1,6 +1,6 @@
 import {
   EmbedBuilder, MessageFlags, PermissionFlagsBits, type ActionRowBuilder, type MessageActionRowComponentBuilder,
-  type ChatInputCommandInteraction, type Guild, type GuildMember, type Message,
+  type ButtonInteraction, type ChatInputCommandInteraction, type Guild, type GuildMember, type Message, type StringSelectMenuInteraction,
 } from 'discord.js';
 
 export type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
@@ -56,6 +56,32 @@ export function fromSlash(i: ChatInputCommandInteraction): Ctx {
         ? { content: n.content, embeds: n.embeds, components: n.components, flags: MessageFlags.Ephemeral as const, allowedMentions: { parse: [] } }
         : { content: n.content, embeds: n.embeds, components: n.components, allowedMentions: { parse: [], users: n.ping } };
       return i.replied || i.deferred ? i.followUp(payload) : i.reply(payload);
+    },
+  };
+}
+
+// a button or menu press that runs a command, with optional fixed option values
+export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction, opts: Record<string, string> = {}): Ctx {
+  const member = (i.member && 'permissions' in i.member && typeof i.member.permissions !== 'string') ? (i.member as GuildMember) : null;
+  return {
+    userId: i.user.id,
+    guildId: i.guildId,
+    guild: i.guild,
+    channelId: i.channelId,
+    member,
+    isAdmin: !!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild),
+    viaText: true,
+    latency: () => i.client.ws.ping,
+    sub: () => opts.sub ?? null,
+    str: (n) => opts[n] ?? null,
+    int: (n) => (opts[n] ? Number.parseInt(opts[n], 10) : null),
+    bool: () => null,
+    user: () => null,
+    channel: () => null,
+    role: () => null,
+    reply: (r) => {
+      const n = normalise(r);
+      return i.reply({ content: n.content, embeds: n.embeds, components: n.components, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     },
   };
 }

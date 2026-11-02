@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
 import type { Settings, Store } from '../db.js';
 import type { Ctx } from '../core/ctx.js';
 import type { Command, Module } from '../core/module.js';
@@ -10,6 +10,7 @@ import { damageOn, teamCheck } from '../features/weapons.js';
 import { planZoo, values } from '../features/zoo.js';
 import { refresh, traits, weaponType, type Huntbot, type ListedWeapon, type Pet, type Weapon, type ZooRank } from '../owo/parse.js';
 import { scheduleDailies } from '../reminders.js';
+import { momentOf } from '../gifs.js';
 import { panel } from '../features/panel.js';
 import { RED, bar, card, say, type CardOptions } from '../theme.js';
 import { fmtLeft, nextReset, owoDay, unix } from '../time.js';
@@ -17,7 +18,7 @@ import { fmtLeft, nextReset, owoDay, unix } from '../time.js';
 const toggles = ['huntbot', 'pray', 'daily', 'vote', 'minigames', 'huntbattle', 'lastcall'] as const;
 
 // a gif an admin picked for this moment, if any
-const gifFor = (store: Store, ctx: Ctx, kind: string) => (ctx.guildId ? store.guild(ctx.guildId).gifs[kind] : undefined) ?? null;
+const gifFor = (store: Store, ctx: Ctx, kind: string) => (ctx.guildId ? store.guild(ctx.guildId).gifs[momentOf[kind] ?? kind] : undefined) ?? null;
 
 const show = (ctx: Ctx, store: Store, o: CardOptions) => ctx.reply(card({ ...o, gif: o.gif ?? gifFor(store, ctx, o.kind) }));
 
@@ -62,7 +63,11 @@ const status: Command = {
       const e = hb.traits.efficiency;
       fields.push({ name: '🤖 Huntbot', value: [g ? `Gain **${g.level}**` : null, e ? `Efficiency **${e.level}**` : null, a.pick ? `next up: **${a.pick}**` : null].filter(Boolean).join(' · '), inline: false });
     }
-    return show(ctx, store, { kind: 'status', title: 'Case file', emoji: '🗂️', fields });
+    const nav = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      ...[['huntbot', '🤖', 'Huntbot'], ['gems', '💎', 'Gems'], ['zoo', '🦁', 'Zoo'], ['armoury', '⚔️', 'Armoury'], ['settings', '🎛️', 'Reminders']]
+        .map(([cmd, emoji, label]) => new ButtonBuilder().setCustomId(`nav|${cmd}`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary)),
+    );
+    return ctx.reply({ embeds: [card({ kind: 'status', title: 'Case file', emoji: '🗂️', fields, gif: gifFor(store, ctx, 'status') })], components: [nav] });
   },
 };
 

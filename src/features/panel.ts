@@ -22,6 +22,20 @@ const names: Record<Toggle, { label: string; emoji: string; about: string }> = {
   huntbattle: { label: 'Hunt 15s', emoji: '🏹', about: 'every hunt and battle cooldown (noisy)' },
 };
 
+// reminder types that can each go to DM or a channel
+export const routable = ['huntbot', 'pray', 'vote', 'daily', 'lastcall', 'huntbattle', 'custom'] as const;
+const customName = { label: 'My own', emoji: '📝', about: 'reminders you set yourself' };
+const nameOf = (k: string) => (k === 'custom' ? customName : names[k as Toggle]);
+
+export const autodeleteChoices = [
+  { label: 'Keep them', value: 0 },
+  { label: 'After 30 seconds', value: 30 },
+  { label: 'After 1 minute', value: 60 },
+  { label: 'After 5 minutes', value: 300 },
+  { label: 'After 15 minutes', value: 900 },
+  { label: 'After 1 hour', value: 3600 },
+];
+
 const kindLabel: Record<string, string> = {
   huntbot: '🤖 huntbot home', pray: '🙏 pray ready', vote: '🗳️ vote open', hunt: '🏹 hunt ready',
   reset: '🌅 new OwO day', lastcall: '⏳ last call', custom: '📝',
@@ -38,25 +52,44 @@ export function parseRp(id: string) {
 
 function settingsPanel(store: Store, userId: string) {
   const s = store.settings(userId);
+  const where = (k: string) => s.routes[k] ?? s.delivery;
+  const tag = (k: string) => (where(k) === 'dm' ? '📬 DM' : '📢 channel');
+  const del = autodeleteChoices.find((c) => c.value === s.autodelete)?.label ?? `${s.autodelete}s`;
   const embed = card({
     kind: 'settings', title: 'Reminder control room', emoji: '🎛️',
-    body: 'Press a button to switch a reminder on or off. Green means I\'ll ping you.',
+    body: 'Buttons switch a reminder on or off, green means I\'ll come find you. The first menu picks where each one lands.',
     fields: [
-      { name: '🔔 Reminders', value: toggles.map((t) => `${s[t] ? '🟢' : '⚫'} ${names[t].emoji} **${names[t].label}** · ${names[t].about}`).join('\n'), inline: false },
-      { name: '📬 Delivery', value: s.delivery === 'dm' ? 'DM' : 'ping in channel', inline: true },
+      {
+        name: '🔔 What I remind you about',
+        value: toggles.map((t) => `${s[t] ? '🟢' : '⚫'} ${names[t].emoji} **${names[t].label}** · ${names[t].about}${t === 'minigames' ? '' : ` · ${tag(t)}`}`).join('\n')
+          + `\n🟢 ${customName.emoji} **${customName.label}** · ${customName.about} · ${tag('custom')}`,
+        inline: false,
+      },
+      { name: '🧹 Channel pings', value: del, inline: true },
       { name: '🌙 Quiet hours', value: s.quiet ?? 'off', inline: true },
       { name: '🌏 Timezone', value: s.timezone, inline: true },
     ],
   });
   const btn = (t: Toggle) => new ButtonBuilder().setCustomId(rpId(userId, 'toggle', t)).setLabel(names[t].label).setEmoji(names[t].emoji)
     .setStyle(s[t] ? ButtonStyle.Success : ButtonStyle.Secondary);
+  const routeMenu = new StringSelectMenuBuilder().setCustomId(rpId(userId, 'route')).setPlaceholder('📬 Switch where a reminder lands (DM / channel)')
+    .addOptions(routable.map((k) => ({
+      label: `${nameOf(k).label}: ${where(k) === 'dm' ? 'DM' : 'channel'} → ${where(k) === 'dm' ? 'channel' : 'DM'}`,
+      value: k,
+      emoji: nameOf(k).emoji,
+    })));
+  const deleteMenu = new StringSelectMenuBuilder().setCustomId(rpId(userId, 'autodelete')).setPlaceholder(`🧹 Delete channel pings: ${del}`)
+    .addOptions(autodeleteChoices.map((c) => ({ label: c.label, value: String(c.value), default: c.value === s.autodelete })));
   const components: Row[] = [
     row(...toggles.slice(0, 4).map(btn)),
     row(...toggles.slice(4).map(btn)),
+    row(routeMenu),
+    row(deleteMenu),
     row(
-      new ButtonBuilder().setCustomId(rpId(userId, 'delivery')).setLabel(s.delivery === 'dm' ? 'DM' : 'Channel').setEmoji(s.delivery === 'dm' ? '📬' : '📢').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(rpId(userId, 'quiet')).setLabel('Quiet hours').setEmoji('🌙').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(rpId(userId, 'tz')).setLabel('Timezone').setEmoji('🌏').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(rpId(userId, 'alldm')).setLabel('All to DM').setEmoji('📬').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(rpId(userId, 'allchannel')).setLabel('All to channel').setEmoji('📢').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(rpId(userId, 'view', 'list')).setLabel('My reminders').setEmoji('📝').setStyle(ButtonStyle.Secondary),
     ),
   ];
@@ -125,6 +158,15 @@ export function apply(store: Store, userId: string, action: string, arg: string,
     }
   } else if (action === 'delivery') {
     s.delivery = s.delivery === 'dm' ? 'channel' : 'dm';
+  } else if (action === 'route' && (routable as readonly string[]).includes(arg)) {
+    const now = s.routes[arg] ?? s.delivery;
+    s.routes[arg] = now === 'dm' ? 'channel' : 'dm';
+  } else if (action === 'alldm' || action === 'allchannel') {
+    s.delivery = action === 'alldm' ? 'dm' : 'channel';
+    s.routes = {};
+  } else if (action === 'autodelete') {
+    const v = Number(arg);
+    if (autodeleteChoices.some((c) => c.value === v)) s.autodelete = v;
   } else if (action === 'quiet') {
     const h = (fields.hours ?? '').trim().toLowerCase();
     if (h === 'off' || h === '') s.quiet = null;

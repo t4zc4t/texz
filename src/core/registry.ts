@@ -5,7 +5,7 @@ import type { Store } from '../db.js';
 import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
 import { RED, card, type Kind } from '../theme.js';
-import { fromSlash, fromText, type Ctx } from './ctx.js';
+import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import type { Command, Module } from './module.js';
 
 export const modules: Module[] = [core, owo];
@@ -82,6 +82,16 @@ export async function onComponent(store: Store, i: Interaction) {
     if (rp) return onPanel(store, i, rp).catch((e) => console.error('panel', e));
   }
   if (!i.isButton() && !i.isStringSelectMenu()) return;
+  // "nav|command|option=value" buttons open another screen, just for whoever pressed it
+  if (i.customId.startsWith('nav|')) {
+    const [, name, extra] = i.customId.split('|');
+    const opts: Record<string, string> = {};
+    if (extra) for (const pair of extra.split(',')) { const [k, v] = pair.split('='); opts[k] = v; }
+    if (i.isStringSelectMenu()) opts[opts.as ?? 'value'] = i.values[0];
+    const hit = bySlash.get(name);
+    if (hit) return run(store, fromComponent(i, opts), hit.mod, hit.cmd);
+    return;
+  }
   const arm = parseArmId(i.customId);
   if (!arm) return;
   if (i.user.id !== arm.userId) {

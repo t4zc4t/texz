@@ -16,7 +16,7 @@ It reads a few more screens too. `owo zoo` feeds `/zoo`, which works out what to
 
 Some quests need other people, so there are quest buddies: `tz buddy join` to opt in, and `tz ask pray` pings the buddies in the server when you need a pray, curse, cookie or battle. `/leaderboard` ranks the week's hunters and battlers in the server.
 
-`/status` shows the timers and today's list in one place, `/stats` counts my hunts and battles for the week, and `/remind` is for my own reminders. `tz settings` opens a control panel where each reminder type is a button to switch on or off, next to buttons for DM or channel, quiet hours and timezone. `tz remind` shows everything queued, with a menu to cancel one and a button to add a new one. The hunt/battle one is off by default because every 15 seconds gets annoying.
+`/status` shows the timers and today's list in one place, `/stats` counts my hunts and battles for the week, and `/remind` is for my own reminders. `tz settings` opens a control panel where each reminder type is a button to switch on or off. Each one can go to DM or the channel on its own, channel reminders are a short ping instead of a card, and they can delete themselves after a while so the channel stays clean. `tz remind` shows everything queued, with a menu to cancel one and a button to add a new one. The hunt/battle one is off by default because every 15 seconds gets annoying.
 
 ## Using it
 
@@ -33,7 +33,7 @@ tz config prefix d
 tz config gif help https://media.tenor.com/.../dance.gif
 ```
 
-The gif slots let a server pick its own gif for moments like help, ping, level-ups, welcomes and bans. It has to be a direct media link, since embeds can't play a Tenor or Giphy page.
+Texz comes with default Dazai gifs for some moments, and the gif slots let a server swap them for moments like help, ping, level-ups, welcomes and bans. A Tenor share link works, Texz finds the gif file behind it. `default` puts the built-in one back and `off` hides it.
 
 Channel and role limits stack, and admins can always use everything so nobody locks themselves out.
 

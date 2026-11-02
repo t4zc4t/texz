@@ -137,3 +137,18 @@ test('reminder panel buttons', async () => {
   assert.equal(store.userReminders('123456789012345678').filter((r) => r.kind === 'custom').length, 0);
   assert.deepEqual(parseRp('rp|1|toggle|vote'), { modal: false, userId: '1', action: 'toggle', arg: 'vote' });
 });
+
+test('per reminder routes and auto delete', async () => {
+  const { apply } = await import('../src/features/panel.ts');
+  const store = new Store(':memory:');
+  const u = '123456789012345678';
+  apply(store, u, 'route', 'pray', {}, 'c');
+  assert.equal(store.settings(u).routes.pray, 'channel');
+  assert.equal(store.settings(u).routes.huntbot, undefined);
+  apply(store, u, 'autodelete', '300', {}, 'c');
+  assert.equal(store.settings(u).autodelete, 300);
+  apply(store, u, 'autodelete', '7', {}, 'c');
+  assert.equal(store.settings(u).autodelete, 300);
+  apply(store, u, 'alldm', '', {}, 'c');
+  assert.deepEqual(store.settings(u).routes, {});
+});
