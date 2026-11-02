@@ -57,7 +57,7 @@ const help: Command = {
           }).join('\n')
         : `\`${prefix} ${c.name}${(t.args ?? []).map((a) => ` [${a}]`).join('')}\``;
       return ctx.reply(card({
-        kind: 'help', title: `${prefix} ${c.name}`, emoji: icons[m.name] ?? '📁', gif,
+        kind: 'help', title: `${prefix} ${c.name}`, emoji: icons[m.name] ?? '📁', gif: gif ?? 'off',
         body: c.data.description,
         fields: [
           { name: '⌨️ How to use it', value: usage, inline: false },
@@ -73,7 +73,7 @@ const help: Command = {
     }
     if (want && pickMod) {
       return ctx.reply(card({
-        kind: 'help', title: pickMod.label, emoji: icons[pickMod.name] ?? '📁', body: pickMod.about, gif,
+        kind: 'help', title: pickMod.label, emoji: icons[pickMod.name] ?? '📁', body: pickMod.about, gif: gif ?? 'off',
         fields: pickMod.commands.filter((c) => !c.hidden).map((c) => ({
           name: `/${c.name}`,
           value: `${c.data.description}\n\`${prefix} ${c.name}\`${c.text?.aliases?.length ? ` · \`${prefix} ${c.text.aliases[0]}\`` : ''}`,

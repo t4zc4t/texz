@@ -18,11 +18,19 @@ const cache = new Map<string, string>();
 
 // defaults per moment, servers can swap any of them with tz config gif
 // one hand-picked gif per moment, only where a gif actually adds something
-export const defaults: Record<string, string[]> = {};
+export const defaults: Record<string, string[]> = {
+  // chibi Dazai reading, he's opening the case file for you
+  help: [giphy('vcj7xtGMjwr6Kxngl3')],
+  // flat on the floor with dizzy eyes, you woke him up
+  ping: [giphy('bILqpu1iGcUYlKogLX')],
+  // chibi Dazai dancing, saved for welcomes and level ups
+  welcome: [giphy('UzGnrtOUKXmdrtja0V')],
+  levelup: [giphy('UzGnrtOUKXmdrtja0V')],
+};
 
 // which card kinds show which moment's gif
 export const momentOf: Record<string, string> = {
-  help: 'help', ping: 'ping', status: 'status', leaderboard: 'leaderboard', ask: 'ask',
+  help: 'help', ping: 'ping', status: 'status', leaderboard: 'leaderboard', ask: 'ask', welcome: 'welcome', levelup: 'levelup',
 };
 
 export const isGifLink = (url: string) => direct.test(url) || tenorPage.test(url) || giphyPage.test(url);
