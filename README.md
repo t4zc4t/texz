@@ -12,6 +12,10 @@ It also reads a few OwO screens when I open them and turns them into advice:
 - `owo inv` goes into `/gems`, which groups my gems into same-tier sets so they run out together
 - `owo team` and `owo weapon <id>` go into `/weapon` and `/team`, which work out how much damage a weapon does on each of my pets and flag a pet holding a weapon that uses its weaker stat
 
+It reads a few more screens too. `owo zoo` feeds `/zoo`, which works out what to sacrifice or sell and how much essence or cowoncy that gives (the pets themselves always stay). Flipping through `owo weapon` feeds `/armoury`, which picks the best damage weapon for each pet by its stronger stat and lists the weaker rare duplicates that are safe to dismantle, never touching anything equipped, empowered or epic and up. `owo quest`, `owo cl`, `owo daily`, `owo vote` and `owo cookie` tick off today's list on their own, and `owo cash` and `owo ws` show up in `/status`.
+
+Some quests need other people, so there are quest buddies: `tz buddy join` to opt in, and `tz ask pray` pings the buddies in the server when you need a pray, curse, cookie or battle. `/leaderboard` ranks the week's hunters and battlers in the server.
+
 `/status` shows the timers and today's list in one place, `/stats` counts my hunts and battles for the week, and `/remind` is for my own reminders. With `/settings` I pick DM or a ping in the channel, set quiet hours (reminders wait until they end), and switch each reminder type on or off. The hunt/battle one is off by default because every 15 seconds gets annoying.
 
 ## Using it

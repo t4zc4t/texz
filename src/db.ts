@@ -93,6 +93,16 @@ export class Store {
         n INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (user_id, day, what)
       );
+      CREATE TABLE IF NOT EXISTS members (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        PRIMARY KEY (guild_id, user_id)
+      );
+      CREATE TABLE IF NOT EXISTS buddies (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        PRIMARY KEY (guild_id, user_id)
+      );
       CREATE TABLE IF NOT EXISTS guilds (
         id TEXT PRIMARY KEY,
         settings TEXT NOT NULL
@@ -136,6 +146,32 @@ export class Store {
     this.db
       .prepare('INSERT INTO guilds (id, settings) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET settings = excluded.settings')
       .run(guildId, JSON.stringify(s));
+  }
+
+  seenIn(guildId: string, userId: string) {
+    this.db.prepare('INSERT OR IGNORE INTO members (guild_id, user_id) VALUES (?, ?)').run(guildId, userId);
+  }
+
+  // hunts and battles per member of a server since a day
+  board(guildId: string, fromDay: string): { user_id: string; hunts: number; battles: number }[] {
+    return this.db.prepare(`
+      SELECT m.user_id,
+        COALESCE(SUM(CASE WHEN c.what = 'hunt' THEN c.n END), 0) AS hunts,
+        COALESCE(SUM(CASE WHEN c.what = 'battle' THEN c.n END), 0) AS battles
+      FROM members m JOIN counts c ON c.user_id = m.user_id AND c.day >= ?
+      WHERE m.guild_id = ?
+      GROUP BY m.user_id
+      ORDER BY hunts + battles DESC
+      LIMIT 10`).all(fromDay, guildId) as { user_id: string; hunts: number; battles: number }[];
+  }
+
+  setBuddy(guildId: string, userId: string, on: boolean) {
+    if (on) this.db.prepare('INSERT OR IGNORE INTO buddies (guild_id, user_id) VALUES (?, ?)').run(guildId, userId);
+    else this.db.prepare('DELETE FROM buddies WHERE guild_id = ? AND user_id = ?').run(guildId, userId);
+  }
+
+  buddies(guildId: string): string[] {
+    return (this.db.prepare('SELECT user_id FROM buddies WHERE guild_id = ?').all(guildId) as { user_id: string }[]).map((r) => r.user_id);
   }
 
   touch(userId: string, channelId: string) {

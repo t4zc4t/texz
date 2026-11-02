@@ -3,8 +3,9 @@ import type { Client, Message, PartialMessage } from 'discord.js';
 import type { Store } from './db.js';
 import { minigames, parseCommand } from './owo/commands.js';
 import {
-  OWO_BOT_ID, flatten, isCaptcha, parseDuration, parseHuntbot, parseInventory, parseTeam, parseWeapon,
-  type Embedish, type Huntbot, type Weapon,
+  OWO_BOT_ID, flatten, isCaptcha, numberAfter, parseDuration, parseHuntbot, parseInventory, parseQuestLog,
+  parseTeam, parseWeapon, parseWeaponList, parseZoo,
+  type Embedish, type Huntbot, type ListedWeapon, type Weapon,
 } from './owo/parse.js';
 import { scheduleDailies, urgent } from './reminders.js';
 import { HOUR, owoDay } from './time.js';
@@ -85,6 +86,7 @@ function onCommand(store: Store, m: Message) {
   if (!cmd) return;
   const userId = m.author.id;
   store.touch(userId, m.channelId);
+  if (m.guildId) store.seenIn(m.guildId, userId);
   scheduleDailies(store, userId);
   const queue = pending.get(m.channelId) ?? [];
   queue.push({ userId, cmd: cmd.name, args: cmd.args.split(/\s+/)[0] || undefined, at: Date.now() });
@@ -122,10 +124,52 @@ function onReply(store: Store, m: Message | PartialMessage, p: Pending) {
       break;
     }
     case 'vote': {
+      // "your daily vote is available" means it hasn't been done yet
+      if (/vote is available/i.test(text)) {
+        store.setCooldown(p.userId, 'vote', new Date(now));
+        break;
+      }
       store.markDone(p.userId, day, 'vote');
       const ms = (wait && parseDuration(wait[1])) || 12 * HOUR;
       store.setCooldown(p.userId, 'vote', new Date(now + ms));
       if (s.vote) store.setReminder(p.userId, 'vote', new Date(now + ms), '', m.channelId);
+      break;
+    }
+    case 'daily':
+    case 'cookie': {
+      // both answer with a wait time once they're used up for the day
+      const ms = wait ? parseDuration(wait[1]) : null;
+      const sentOrClaimed = !!ms || /you got|received|sent|claimed|gave|here is your daily|daily streak/i.test(text);
+      if (sentOrClaimed) store.markDone(p.userId, day, p.cmd);
+      if (p.cmd === 'cookie') {
+        const n = numberAfter(text, /have\s+([\d,]+)\s+cookies?/i);
+        if (n !== null) store.saveSnapshot(p.userId, 'cookies', n);
+      }
+      break;
+    }
+    case 'checklist':
+      if (/already claimed|Claimed!/i.test(text)) store.markDone(p.userId, day, 'checklist');
+      break;
+    case 'quest': {
+      const log = parseQuestLog(text);
+      if (!log) break;
+      store.markDone(p.userId, day, 'quest');
+      store.saveSnapshot(p.userId, 'quests', log);
+      break;
+    }
+    case 'zoo': {
+      const zoo = parseZoo(text);
+      if (zoo) store.saveSnapshot(p.userId, 'zoo', zoo);
+      break;
+    }
+    case 'cash': {
+      const n = numberAfter(text, /have\s+([\d,]+)\s+cowoncy/i);
+      if (n !== null) store.saveSnapshot(p.userId, 'cash', n);
+      break;
+    }
+    case 'ws': {
+      const n = numberAfter(text, /have\s+([\d,]+)\s+Weapon Shards/i);
+      if (n !== null) store.saveSnapshot(p.userId, 'shards', n);
       break;
     }
     case 'huntbot': {
@@ -152,6 +196,14 @@ function onReply(store: Store, m: Message | PartialMessage, p: Pending) {
       break;
     }
     case 'weapon': {
+      // the list view pages through edits of one message, collect every page we see
+      const listed = parseWeaponList(text);
+      if (listed.length) {
+        const all = new Map(store.snapshot<[string, ListedWeapon][]>(p.userId, 'armoury')?.data ?? []);
+        for (const w of listed) all.set(w.id, w);
+        store.saveSnapshot(p.userId, 'armoury', [...all].slice(-300));
+        break;
+      }
       const w = parseWeapon(text);
       if (!w) break;
       const all = new Map(store.snapshot<[string, Weapon][]>(p.userId, 'weapons')?.data ?? []);

@@ -3,7 +3,7 @@ import {
   type ChatInputCommandInteraction, type Guild, type GuildMember, type Message,
 } from 'discord.js';
 
-export type Reply = string | EmbedBuilder | { content?: string; embeds?: EmbedBuilder[]; private?: boolean };
+export type Reply = string | EmbedBuilder | { content?: string; embeds?: EmbedBuilder[]; private?: boolean; ping?: string[] };
 
 // one shape for both slash commands and "tz" text commands, so each command is written once
 export interface Ctx {
@@ -25,9 +25,9 @@ export interface Ctx {
 }
 
 function normalise(r: Reply) {
-  if (typeof r === 'string') return { content: r, embeds: [] as EmbedBuilder[], private: true };
-  if (r instanceof EmbedBuilder) return { content: undefined, embeds: [r], private: true };
-  return { content: r.content, embeds: r.embeds ?? [], private: r.private ?? true };
+  if (typeof r === 'string') return { content: r, embeds: [] as EmbedBuilder[], private: true, ping: [] as string[] };
+  if (r instanceof EmbedBuilder) return { content: undefined, embeds: [r], private: true, ping: [] as string[] };
+  return { content: r.content, embeds: r.embeds ?? [], private: r.private ?? true, ping: r.ping ?? [] };
 }
 
 export function fromSlash(i: ChatInputCommandInteraction): Ctx {
@@ -51,7 +51,7 @@ export function fromSlash(i: ChatInputCommandInteraction): Ctx {
       const n = normalise(r);
       const payload = n.private
         ? { content: n.content, embeds: n.embeds, flags: MessageFlags.Ephemeral as const, allowedMentions: { parse: [] } }
-        : { content: n.content, embeds: n.embeds, allowedMentions: { parse: [] } };
+        : { content: n.content, embeds: n.embeds, allowedMentions: { parse: [], users: n.ping } };
       return i.replied || i.deferred ? i.followUp(payload) : i.reply(payload);
     },
   };
@@ -91,7 +91,7 @@ export function fromText(m: Message, tokens: string[], argNames: string[], hasSu
     role: (n) => id(n, /^<@&(\d+)>$/) ?? values.get(n)?.match(/^(\d{15,})$/)?.[1] ?? null,
     reply: (r) => {
       const n = normalise(r);
-      return m.reply({ content: n.content, embeds: n.embeds, allowedMentions: { repliedUser: false, parse: [] } });
+      return m.reply({ content: n.content, embeds: n.embeds, allowedMentions: { repliedUser: false, parse: [], users: n.ping } });
     },
   };
 }

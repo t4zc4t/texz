@@ -189,3 +189,78 @@ export function parseWeapon(raw: string): Weapon | null {
 export function isCaptcha(raw: string): boolean {
   return /real human|captcha|verify that you are human|link below to verify/i.test(raw);
 }
+
+// ---------- zoo ----------
+
+// OwO's rank emoji names, in zoo order
+export const zooRanks = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'special', 'gem', 'legendary', 'fabled', 'bot', 'distorted', 'patreon', 'cpatreon', 'hidden'] as const;
+export type ZooRank = (typeof zooRanks)[number];
+
+export function parseZoo(raw: string): Partial<Record<ZooRank, number>> | null {
+  if (!/zoo/i.test(raw) || !/Zoo Points/i.test(raw)) return null;
+  const out: Partial<Record<ZooRank, number>> = {};
+  for (const line of raw.split('\n')) {
+    const head = line.match(/^\s*<a?:(\w+):\d+>/);
+    if (!head) continue;
+    const rank = head[1].toLowerCase() as ZooRank;
+    if (!zooRanks.includes(rank)) continue;
+    const rest = line.slice(head[0].length);
+    let total = 0;
+    for (const m of rest.matchAll(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g)) total += Number(unsuper(m[0]));
+    out[rank] = (out[rank] ?? 0) + total;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+// ---------- weapon list ----------
+
+export interface ListedWeapon {
+  id: string;
+  rarity: string;
+  name: string;
+  quality: number;
+  equippedOn: string | null;
+  empowered: boolean;
+}
+
+export function parseWeaponList(raw: string): ListedWeapon[] {
+  const out: ListedWeapon[] = [];
+  const re = /`([A-Z0-9]{6})`\s*<a?:(\w+):\d+>[^*\n]*\*\*([^*]+)\*\*\s*([\d.]+)%(?:\s*➤\s*(?:<a?:\w+:\d+>|:\w+:)?\s*(\S+))?/g;
+  for (const m of raw.matchAll(re)) {
+    const name = m[3].trim();
+    out.push({
+      id: m[1],
+      rarity: m[2].toLowerCase(),
+      name,
+      quality: Number(m[4]),
+      equippedOn: m[5] ?? null,
+      empowered: /empowered/i.test(name),
+    });
+  }
+  return out;
+}
+
+// "Great Sword [12]" and "Fine Resurrection Staff" both mean the same weapon type
+export function weaponType(name: string): string {
+  return name
+    .replace(/\[\d+\]/g, '')
+    .replace(/\b(Worn|Decent|Fine|Pristine|Empowered)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// ---------- plain replies ----------
+
+export const numberAfter = (raw: string, re: RegExp): number | null => {
+  const m = raw.replace(/[*_]/g, '').match(re);
+  return m ? Number(m[1].replace(/,/g, '')) : null;
+};
+
+export function parseQuestLog(raw: string): { allDone: boolean; lines: string[] } | null {
+  if (!/Quest Log/i.test(raw)) return null;
+  if (/finished all of your quests/i.test(raw)) return { allDone: true, lines: [] };
+  const lines = raw.split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !/Quest Log|Complete quests|Balance:|Next quest|^#|^-#/.test(l) && !/^(Daily|Weekly|Quests|Claim)$/i.test(l));
+  return { allDone: false, lines };
+}

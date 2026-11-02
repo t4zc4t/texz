@@ -5,7 +5,9 @@ import { dayStatus } from '../features/daily.js';
 import { planGems } from '../features/gems.js';
 import { advise } from '../features/huntbot.js';
 import { teamCheck, weaponReport } from '../features/weapons.js';
-import type { Huntbot, Pet, Weapon } from '../owo/parse.js';
+import { armouryReport } from '../features/armoury.js';
+import { planZoo } from '../features/zoo.js';
+import type { Huntbot, ListedWeapon, Pet, Weapon, ZooRank } from '../owo/parse.js';
 import { scheduleDailies } from '../reminders.js';
 import { embed } from '../theme.js';
 import { fmtLeft, nextReset, owoDay, unix } from '../time.js';
@@ -30,6 +32,13 @@ function statusEmbed(store: Store, userId: string) {
   });
   const items = dayStatus(store, userId);
   e.addFields({ name: 'Today', value: items.map((i) => `${i.done ? '✅' : '⬜'} ${i.label}`).join('\n') });
+  const money = [
+    ['cash', 'cowoncy'], ['shards', 'shards'], ['cookies', 'cookies'],
+  ].map(([k, label]) => {
+    const v = store.snapshot<number>(userId, k)?.data;
+    return v === undefined ? null : `${v.toLocaleString()} ${label}`;
+  }).filter(Boolean);
+  if (money.length) e.addFields({ name: 'Wallet', value: money.join(' · ') });
   const hb = store.snapshot<Huntbot>(userId, 'huntbot');
   if (hb) {
     const a = advise(hb.data);
@@ -51,6 +60,98 @@ function settingsText(s: Settings) {
 }
 
 const commands: Command[] = [
+  {
+    name: 'zoo',
+    data: new SlashCommandBuilder().setName('zoo').setDescription('What to sacrifice or sell from your zoo, from your last owo zoo').toJSON(),
+    text: { aliases: ['z'] },
+    run: (ctx, store) => {
+      const zoo = store.snapshot<Partial<Record<ZooRank, number>>>(ctx.userId, 'zoo');
+      if (!zoo) return ctx.reply(missing('owo zoo'));
+      const hb = store.snapshot<Huntbot>(ctx.userId, 'huntbot')?.data ?? null;
+      return ctx.reply(embed('Zoo planner').setDescription(planZoo(zoo.data, hb).join('\n')).setFooter({ text: 'From your owo zoo' }).setTimestamp(zoo.at));
+    },
+  },
+  {
+    name: 'armoury',
+    data: new SlashCommandBuilder().setName('armoury').setDescription('All your weapons: best per pet and what is safe to dismantle').toJSON(),
+    text: { aliases: ['armory', 'arm', 'a'] },
+    run: (ctx, store) => {
+      const list = store.snapshot<[string, ListedWeapon][]>(ctx.userId, 'armoury');
+      if (!list) return ctx.reply('I haven\'t seen your weapon list yet. Run `owo weapon` and flip through every page once.');
+      const team = store.snapshot<Pet[]>(ctx.userId, 'team')?.data ?? null;
+      const seen = new Map(store.snapshot<[string, Weapon][]>(ctx.userId, 'weapons')?.data ?? []);
+      const shards = store.snapshot<number>(ctx.userId, 'shards')?.data ?? null;
+      const report = armouryReport(list.data.map(([, w]) => w), team, seen, shards).join('\n');
+      return ctx.reply(embed('Armoury').setDescription(report.slice(0, 4000)).setFooter({ text: 'Flip through every page of owo weapon so I see them all' }).setTimestamp(list.at));
+    },
+  },
+  {
+    name: 'quests',
+    data: new SlashCommandBuilder().setName('quests').setDescription('Your OwO quests from the last owo quest').toJSON(),
+    text: { aliases: ['q'] },
+    run: (ctx, store) => {
+      const q = store.snapshot<{ allDone: boolean; lines: string[] }>(ctx.userId, 'quests');
+      if (!q) return ctx.reply(missing('owo quest'));
+      const body = q.data.allDone ? 'All done for today. Even I\'m impressed, a little.' : q.data.lines.join('\n') || 'Nothing readable in it.';
+      const social = /cookie|pray|curse|battle/i.test(body) && !q.data.allDone;
+      return ctx.reply(embed('Quests').setDescription(body + (social ? '\n\nSome of these need other people, `tz ask` pings the quest buddies here.' : '')).setTimestamp(q.at));
+    },
+  },
+  {
+    name: 'leaderboard',
+    data: new SlashCommandBuilder().setName('leaderboard').setDescription('Top hunters and battlers in this server this week').toJSON(),
+    text: { aliases: ['lb', 'top'] },
+    run: (ctx, store) => {
+      if (!ctx.guildId) return ctx.reply('Leaderboards live in servers.');
+      const rows = store.board(ctx.guildId, owoDay(new Date(Date.now() - 6 * 86_400_000)));
+      if (!rows.length) return ctx.reply('Nobody has hunted where I could see it this week. Peaceful, honestly.');
+      const medal = ['🥇', '🥈', '🥉'];
+      return ctx.reply({
+        embeds: [embed('This week\'s hunters').setDescription(rows.map((r, i) =>
+          `${medal[i] ?? `**${i + 1}.**`} <@${r.user_id}> · ${r.hunts} hunts · ${r.battles} battles`).join('\n'))],
+        private: false,
+      });
+    },
+  },
+  {
+    name: 'buddy',
+    data: new SlashCommandBuilder().setName('buddy').setDescription('Quest buddies trade cookies, prays and curses')
+      .addSubcommand((s) => s.setName('join').setDescription('Get pinged when someone needs a cookie, pray or curse'))
+      .addSubcommand((s) => s.setName('leave').setDescription('Stop getting pinged'))
+      .addSubcommand((s) => s.setName('list').setDescription('Who is in')).toJSON(),
+    text: { aliases: ['buddies'], sub: true },
+    run: (ctx, store) => {
+      if (!ctx.guildId) return ctx.reply('Buddies live in servers.');
+      const sub = ctx.sub() ?? 'list';
+      if (sub === 'join') { store.setBuddy(ctx.guildId, ctx.userId, true); return ctx.reply('You\'re a quest buddy now. Be nice when I ping you.'); }
+      if (sub === 'leave') { store.setBuddy(ctx.guildId, ctx.userId, false); return ctx.reply('Out you go, no more pings.'); }
+      const list = store.buddies(ctx.guildId);
+      return ctx.reply(list.length ? `Quest buddies: ${list.map((u) => `<@${u}>`).join(' ')}` : 'No buddies yet, `tz buddy join` to start.');
+    },
+  },
+  {
+    name: 'ask',
+    data: new SlashCommandBuilder().setName('ask').setDescription('Ask the quest buddies for a cookie, pray or curse')
+      .addStringOption((o) => o.setName('what').setDescription('What you need').setRequired(true)
+        .addChoices({ name: 'cookie', value: 'cookie' }, { name: 'pray', value: 'pray' }, { name: 'curse', value: 'curse' }, { name: 'battle', value: 'battle' })).toJSON(),
+    text: { args: ['what'] },
+    run: (ctx, store) => {
+      if (!ctx.guildId) return ctx.reply('Ask inside a server.');
+      const what = ctx.str('what')?.toLowerCase();
+      const cmd: Record<string, string> = { cookie: 'owo cookie', pray: 'owo pray', curse: 'owo curse', battle: 'owo battle' };
+      if (!what || !cmd[what]) return ctx.reply('Ask for `cookie`, `pray`, `curse` or `battle`.');
+      const last = store.cooldowns(ctx.userId).get('ask') ?? 0;
+      if (Date.now() - last < 30 * 60_000) return ctx.reply('You asked recently, give them a little time.');
+      const others = store.buddies(ctx.guildId).filter((u) => u !== ctx.userId);
+      if (!others.length) return ctx.reply('No other quest buddies here yet. Get a friend to run `tz buddy join`.');
+      store.setCooldown(ctx.userId, 'ask', new Date());
+      return ctx.reply({
+        content: `${others.map((u) => `<@${u}>`).join(' ')} <@${ctx.userId}> needs a ${what} for a quest: \`${cmd[what]} @them\``,
+        private: false,
+        ping: others,
+      });
+    },
+  },
   {
     name: 'status',
     data: new SlashCommandBuilder().setName('status').setDescription('Timers, today\'s list and your huntbot at a glance').toJSON(),

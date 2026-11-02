@@ -18,6 +18,7 @@ const aliases: Record<string, string> = {
   lootbox: 'lootbox', lb: 'lootbox',
   crate: 'crate', wc: 'crate',
   ws: 'ws', weaponshard: 'ws',
+  shop: 'shop',
   sacrifice: 'sacrifice', sac: 'sacrifice',
   upgrade: 'upgrade', up: 'upgrade',
   alastor: 'alastor',
