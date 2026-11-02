@@ -8,7 +8,7 @@ import {
   type Embedish, type Huntbot, type ListedWeapon, type Weapon,
 } from './owo/parse.js';
 import { scheduleDailies, urgent } from './reminders.js';
-import { say } from './theme.js';
+import { RED, card } from './theme.js';
 import { HOUR, owoDay } from './time.js';
 
 interface Pending {
@@ -231,7 +231,7 @@ export function watch(client: Client, store: Store) {
       const ids = new Set([...m.mentions.users.keys()]);
       for (const id of ids) {
         await urgent(client, store, id, m.channelId,
-          say('captcha', { where: `<#${m.channelId}>` })).catch(() => {});
+          card({ kind: 'captcha', vars: { where: `<#${m.channelId}>` }, title: 'Captcha, right now', emoji: '🚨', color: RED })).catch(() => {});
       }
     }
 

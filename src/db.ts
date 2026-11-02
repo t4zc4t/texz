@@ -47,6 +47,8 @@ export interface ModuleRules {
 export interface GuildSettings {
   prefix: string;
   modules: Record<string, ModuleRules>;
+  // gif links admins picked for moments like help, levelup or welcome
+  gifs: Record<string, string>;
 }
 
 export const defaultRules = (): ModuleRules => ({ enabled: true, channels: [], roles: [] });
@@ -134,7 +136,7 @@ export class Store {
   guild(guildId: string): GuildSettings {
     const row = this.db.prepare('SELECT settings FROM guilds WHERE id = ?').get(guildId) as { settings: string } | undefined;
     const saved = row ? (JSON.parse(row.settings) as Partial<GuildSettings>) : {};
-    return { prefix: saved.prefix ?? 'tz', modules: saved.modules ?? {} };
+    return { prefix: saved.prefix ?? 'tz', modules: saved.modules ?? {}, gifs: saved.gifs ?? {} };
   }
 
   rules(guildId: string | null, module: string): ModuleRules {

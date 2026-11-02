@@ -1,12 +1,15 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { defaultRules, type Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
-import { agency, embed, say } from '../theme.js';
+import { card, say } from '../theme.js';
 
 // filled in by the registry so help and config can list every module
 export const allModules: Module[] = [];
 
 const switchable = () => allModules.filter((m) => !m.locked);
+
+// moments an admin can attach a gif to
+export const gifMoments = ['help', 'ping', 'status', 'huntbot', 'leaderboard', 'ask', 'levelup', 'welcome', 'goodbye', 'ban', 'kick', 'timeout', 'warn', 'giveaway'];
 
 function rulesText(store: Store, guildId: string) {
   const g = store.guild(guildId);
@@ -17,8 +20,12 @@ function rulesText(store: Store, guildId: string) {
     const who = r.roles.length ? r.roles.map((x) => `<@&${x}>`).join(' ') : 'everyone';
     out.push(`${r.enabled ? '✅' : '⬜'} **${m.label}** (\`${m.name}\`): ${where}, ${who}`);
   }
+  const gifs = Object.keys(g.gifs);
+  if (gifs.length) out.push('', `🎞️ gifs set for: ${gifs.map((x) => `\`${x}\``).join(', ')}`);
   return out.join('\n');
 }
+
+const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '📈', fun: '🎲', anime: '📺' };
 
 const help: Command = {
   name: 'help',
@@ -27,26 +34,29 @@ const help: Command = {
   text: { aliases: ['h', 'commands'], args: ['feature'] },
   run: (ctx, store) => {
     const prefix = ctx.guildId ? store.guild(ctx.guildId).prefix : 'tz';
+    const gif = ctx.guildId ? store.guild(ctx.guildId).gifs.help ?? null : null;
     const want = ctx.str('feature')?.toLowerCase();
     const mods = allModules.filter((m) => m.locked || store.rules(ctx.guildId, m.name).enabled);
     const pickMod = want ? mods.find((m) => m.name === want || m.label.toLowerCase().includes(want)) : undefined;
     if (want && pickMod) {
-      const e = embed(pickMod.label).setDescription(pickMod.about);
-      e.addFields({
-        name: 'Commands',
-        value: pickMod.commands.map((c) => {
-          const alias = c.text?.aliases?.length ? ` · \`${prefix} ${c.text.aliases[0]}\`` : '';
-          return `\`/${c.name}\` · \`${prefix} ${c.name}\`${alias} — ${c.data.description}`;
-        }).join('\n'),
-      });
-      return ctx.reply(e);
+      return ctx.reply(card({
+        kind: 'help', title: pickMod.label, emoji: icons[pickMod.name] ?? '📁', body: pickMod.about, gif,
+        fields: pickMod.commands.map((c) => ({
+          name: `/${c.name}`,
+          value: `${c.data.description}\n\`${prefix} ${c.name}\`${c.text?.aliases?.length ? ` · \`${prefix} ${c.text.aliases[0]}\`` : ''}`,
+          inline: true,
+        })),
+      }));
     }
-    const e = agency('Texz · Armed Detective Agency', 'help', [
-      `Slash commands work, and so does the lazy way: \`${prefix} <command>\`.`,
-      `Ask \`${prefix} help <feature>\` and I'll explain one properly.`,
-    ].join('\n'));
-    for (const m of mods) e.addFields({ name: m.label, value: `${m.about}\n${m.commands.map((c) => `\`${c.name}\``).join(' ')}` });
-    return ctx.reply(e);
+    return ctx.reply(card({
+      kind: 'help', title: 'At your service', emoji: '🕵️', gif,
+      body: `Slash commands work, and so does the lazy way: \`${prefix} <command>\`.\nAsk \`${prefix} help <feature>\` and I'll walk you through one.`,
+      fields: mods.map((m) => ({
+        name: `${icons[m.name] ?? '📁'} ${m.label}`,
+        value: `${m.about}\n${m.commands.map((c) => `\`${c.name}\``).join(' ')}`,
+        inline: false,
+      })),
+    }));
   },
 };
 
@@ -69,13 +79,17 @@ const config: Command = {
       .addStringOption((o) => o.setName('action').setDescription('add, remove or clear').setRequired(true)
         .addChoices({ name: 'add', value: 'add' }, { name: 'remove', value: 'remove' }, { name: 'clear', value: 'clear' }))
       .addRoleOption((o) => o.setName('role').setDescription('Role')))
+    .addSubcommand((s) => s.setName('gif').setDescription('Pick a gif for a moment, like help or levelup')
+      .addStringOption((o) => o.setName('moment').setDescription('Which moment').setRequired(true)
+        .addChoices(...gifMoments.map((m) => ({ name: m, value: m }))))
+      .addStringOption((o) => o.setName('url').setDescription('Direct gif link, or "clear"').setRequired(true)))
     .addSubcommand((s) => s.setName('prefix').setDescription('Change the short text prefix')
       .addStringOption((o) => o.setName('prefix').setDescription('Like tz').setRequired(true).setMaxLength(5)))
     .toJSON(),
   text: {
     aliases: ['cfg'],
     sub: true,
-    subArgs: { feature: ['name', 'on'], channel: ['name', 'action', 'channel'], role: ['name', 'action', 'role'], prefix: ['prefix'] },
+    subArgs: { feature: ['name', 'on'], channel: ['name', 'action', 'channel'], role: ['name', 'action', 'role'], prefix: ['prefix'], gif: ['moment', 'url'] },
   },
   run: (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Server settings only make sense inside a server.');
@@ -109,16 +123,25 @@ const config: Command = {
       if (!p || /\s/.test(p) || p === 'owo' || p === 'w') return ctx.reply('Pick a short prefix without spaces, and not `owo` or `w`, those are taken.');
       g.prefix = p;
     }
+    if (sub === 'gif') {
+      const moment = ctx.str('moment')?.toLowerCase() ?? '';
+      const url = ctx.str('url')?.trim() ?? '';
+      if (!gifMoments.includes(moment)) return ctx.reply(`Moments: ${gifMoments.map((m) => `\`${m}\``).join(', ')}`);
+      if (url === 'clear') delete g.gifs[moment];
+      // embeds only play direct media links, not the tenor or giphy page
+      else if (/^https:\/\/\S+\.(gif|png|jpe?g|webp)(\?\S*)?$/i.test(url) || /^https:\/\/(media\d*\.giphy\.com|media\.tenor\.com|c\.tenor\.com|i\.imgur\.com|cdn\.discordapp\.com|media\.discordapp\.net)\//i.test(url)) g.gifs[moment] = url;
+      else return ctx.reply('That needs to be a direct gif link, like one ending in `.gif`. On Tenor or Giphy, open the gif and copy its media link, not the page.');
+    }
     if (mod && rules) g.modules[mod.name] = rules;
     if (sub !== 'view') store.saveGuild(ctx.guildId, g);
-    return ctx.reply(agency('Server settings', 'settings', rulesText(store, ctx.guildId)));
+    return ctx.reply(card({ kind: 'settings', title: 'Server settings', emoji: '🏛️', body: rulesText(store, ctx.guildId) }));
   },
 };
 
 const ping: Command = {
   name: 'ping',
   data: new SlashCommandBuilder().setName('ping').setDescription('Check that Texz is awake').toJSON(),
-  run: (ctx) => ctx.reply(say('ping')),
+  run: (ctx, store) => ctx.reply(card({ kind: 'ping', title: 'Pong', emoji: '🏓', gif: ctx.guildId ? store.guild(ctx.guildId).gifs.ping ?? null : null, body: `💓 heartbeat · **${Math.round(ctx.latency())} ms**` })),
 };
 
 export const core: Module = {

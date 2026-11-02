@@ -22,6 +22,9 @@ function fake(content: string, opts: { admin?: boolean; channel?: string; roles?
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 10));
+// everything a reply says, content and embed together
+const said = (r: { content?: string; embeds?: { data: { title?: string; description?: string } }[] }) =>
+  [r.content ?? '', ...(r.embeds ?? []).map((e) => `${e.data.title ?? ''}\n${e.data.description ?? ''}`)].join('\n');
 
 test('every slash command has a unique name', () => {
   const names = definitions.map((d) => d.name);
@@ -33,12 +36,12 @@ test('prefix commands and aliases', async () => {
   const a = fake('tz status');
   assert.equal(onText(store, a.m), true);
   await tick();
-  assert.equal(a.replies[0].embeds?.[0].data.title, 'Case file');
+  assert.match(said(a.replies[0]), /Case file/);
 
   const b = fake('TZ hb');
   assert.equal(onText(store, b.m), true);
   await tick();
-  assert.match(b.replies[0].content ?? '', /owo hb/);
+  assert.match(said(b.replies[0]), /owo hb/);
 
   assert.equal(onText(store, fake('tzatziki is great').m), false);
   assert.equal(onText(store, fake('tz nothing').m), false);
@@ -50,7 +53,7 @@ test('features switch off and stay admin only to change', async () => {
   const nope = fake('tz config feature owo off');
   onText(store, nope.m);
   await tick();
-  assert.match(nope.replies[0].content ?? '', /Manage Server|admin/i);
+  assert.match(said(nope.replies[0]), /Manage Server|admin/i);
 
   const yes = fake('tz config feature owo off', { admin: true });
   onText(store, yes.m);
@@ -60,7 +63,7 @@ test('features switch off and stay admin only to change', async () => {
   const blocked = fake('tz status');
   onText(store, blocked.m);
   await tick();
-  assert.match(blocked.replies[0].content ?? '', /locked here|switched it off/);
+  assert.match(said(blocked.replies[0]), /locked here|switched it off|Closed for today/);
 });
 
 test('channel and role limits', async () => {
@@ -72,23 +75,23 @@ test('channel and role limits', async () => {
   const wrong = fake('tz status', { channel: 'c1' });
   onText(store, wrong.m);
   await tick();
-  assert.match(wrong.replies[0].content ?? '', /<#222222222222222222>/);
+  assert.match(said(wrong.replies[0]), /<#222222222222222222>/);
 
   const right = fake('tz status', { channel: '222222222222222222' });
   onText(store, right.m);
   await tick();
-  assert.equal(right.replies[0].embeds?.[0].data.title, 'Case file');
+  assert.match(said(right.replies[0]), /Case file/);
 
   onText(store, fake('tz config role owo add <@&333333333333333333>', { admin: true }).m);
   await tick();
   const noRole = fake('tz status', { channel: '222222222222222222' });
   onText(store, noRole.m);
   await tick();
-  assert.match(noRole.replies[0].content ?? '', /role|select few/);
+  assert.match(said(noRole.replies[0]), /role|select few/);
   const withRole = fake('tz status', { channel: '222222222222222222', roles: ['333333333333333333'] });
   onText(store, withRole.m);
   await tick();
-  assert.equal(withRole.replies[0].embeds?.[0].data.title, 'Case file');
+  assert.match(said(withRole.replies[0]), /Case file/);
 });
 
 test('custom prefix', async () => {

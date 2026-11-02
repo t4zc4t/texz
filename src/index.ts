@@ -1,5 +1,6 @@
 import { ActivityType, Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { Store } from './db.js';
+import { look } from './theme.js';
 import { startScheduler } from './reminders.js';
 import { onSlash, onText } from './core/registry.js';
 import { watch } from './watch.js';
@@ -21,6 +22,7 @@ const client = new Client({
 
 client.once(Events.ClientReady, (c) => {
   console.log(`texz online as ${c.user.tag}`);
+  look.avatar = c.user.displayAvatarURL();
   startScheduler(client, store);
   // rotating status, so the profile looks alive
   const moods = [

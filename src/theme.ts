@@ -18,43 +18,62 @@ const bank = {
     'Agency case notes · do not show Kunikida',
   ],
   help: [
+    'Detective, informant, occasional crab enthusiast. Here is everything I can do for you.',
+    'Ask and the Agency answers. Well, I answer. The others are busy being responsible.',
     'Ah, a client! Sit, sit. I solve OwO problems, server problems, and occasionally my own boredom.',
     'You want to know what I can do? Everything, obviously. But here is the polite version.',
     'Kunikida made me write a list of my duties. I lost it twice, so here is the third one.',
   ],
   ping: [
+    'Alive and well. Disappointingly well, really, I had plans to nap.',
+    'Pong. Kunikida timed that, by the way. He wrote it in his notebook.',
     'Awake. Barely. I was dreaming of a crab buffet.',
     'Present, unfortunately. I had a perfect nap going.',
     'Here! Don\'t tell Kunikida you found me this quickly, he\'ll expect it every time.',
     'Pong. You see? I can be reliable when nobody is watching.',
   ],
   status: [
+    'Your whole life on one page. Mine would mostly say napped.',
+    'Atsushi would read this twice. I only needed a glance.',
+    'Case file opened. The suspect is you, the crime is unfinished dailies.',
     'Let me read your case file. Hmm, hmm, yes, I see everything.',
     'A detective always knows where his client stands. Here is where you stand.',
     'Your timers, your duties, your little OwO empire. Summarised, because I\'m kind.',
   ],
   huntbot: [
+    'A loyal little hunter. If only Kunikida followed my schedule this nicely.',
+    'I could explain the maths slowly. Or you could trust a genius. Both, then.',
     'Your little robot is hunting while you rest. I approve of that philosophy entirely.',
     'I studied your huntbot. Honestly, the answer was obvious, but I\'ll explain anyway.',
     'Essence math. Kunikida would make a spreadsheet, I just know the answer.',
   ],
   gems: [
+    'Ranpo would call this obvious. He\'s right, but I\'m prettier about it.',
+    'Shiny stones, perfectly paired. I\'d make a wonderful jeweller, if jewellers napped more.',
     'Gems are like plans: pair them properly and they all finish at the same moment.',
     'I sorted your gems. Matching sets, nothing wasted, very elegant if I say so myself.',
   ],
   zoo: [
+    'So many spare animals. Don\'t worry, the ones you love stay. The rest pay rent in essence.',
+    'Kyouka asked me to count them nicely. I did. Mostly.',
     'A zoo full of spare animals. The ones you love stay, the extras become essence. Simple.',
     'I counted your animals. Twice. The second time was out of boredom.',
   ],
   armoury: [
+    'Every weapon here, on the table. Some treasures, some scrap, all yours.',
+    'An arsenal fit for the Port Mafia. Don\'t tell them I said that.',
     'An armoury! Let me see which of these are treasures and which are scrap.',
     'Weapons tell you a lot about a person. Yours say "hoarder", fondly.',
   ],
   team: [
+    'Partners are everything. Trust me, I once had a hat-wearing chibi for one.',
+    'Let me see who holds what. A good detective notices a sword in the wrong hands.',
     'Your team, inspected. A detective notices which weapon sits on the wrong hands.',
     'Three partners and their weapons. Partnerships matter, trust me, I\'ve had some terrible ones.',
   ],
   weapon: [
+    'Numbers don\'t lie. People do, constantly, but numbers never.',
+    'Who should wield this? Let the evidence decide.',
     'Let me run the numbers. A genius does it in his head, but I\'ll write them down for you.',
     'Which pet should hold this? I already know. Here\'s the proof, for the sceptics.',
   ],
@@ -70,6 +89,7 @@ const bank = {
     'Your week, in numbers. I counted every hunt while pretending to sleep.',
   ],
   leaderboard: [
+    'The most hardworking people here. I\'m deeply proud and slightly tired just reading it.',
     'The Agency\'s most dedicated hunters this week. I am not on it, by choice.',
     'Rankings! Someone has been working far too hard. Admirable. Exhausting to watch.',
   ],
@@ -85,12 +105,17 @@ const bank = {
     'needs a small kindness. The Agency runs on these.',
   ],
   askCooldown: ['Patience. You asked recently, and pestering informants makes them disappear.'],
-  settings: ['Your preferences, filed neatly. Kunikida would be proud of me for once.'],
+  settings: [
+    'Filed and stamped. Look at me, doing paperwork voluntarily.',
+    'Your preferences, filed neatly. Kunikida would be proud of me for once.',
+  ],
   missing: [
+    'Even I need a clue before I can be brilliant.',
     'I can\'t solve a case without evidence.',
     'No evidence yet, and I refuse to guess. Well, I could guess, but I\'d be right and you\'d learn nothing.',
   ],
   off: [
+    'Closed for today. The Agency needs its rest, and so do I.',
     'That door is locked here. Someone with the keys decided I deserve a holiday.',
     'Not in this server, I\'m afraid. They switched it off, and I\'m happily resting.',
   ],
@@ -107,8 +132,16 @@ const bank = {
     'Admin business. Fetch me an admin and some crab, in that order.',
   ],
   error: [
+    'Well, that didn\'t go as planned. Plans rarely survive me. Try again?',
     'Something slipped. Even a genius trips on his own coat sometimes. Try again?',
     'That broke on my side. How embarrassing. Don\'t tell Chuuya, he\'ll never let it go.',
+  ],
+  armouryAll: [
+    'Every blade, staff and fish you own, lined up for inspection. Yes, fish. I don\'t judge.',
+    'The full arsenal. Kunikida would alphabetise it. I sorted it by shine.',
+  ],
+  gif: [
+    'A moving picture for the moment. Taste matters, even for detectives.',
   ],
   // reminders, sent as DMs
   huntbotBack: [
@@ -139,6 +172,42 @@ const bank = {
 };
 
 export type Kind = keyof typeof bank;
+
+// set once the bot logs in, used as the little icon on every card
+export const look = { avatar: null as string | null };
+
+export const bar = (have: number, need: number, width = 12) => {
+  const n = need > 0 ? Math.max(0, Math.min(width, Math.round((have / need) * width))) : 0;
+  return '▰'.repeat(n) + '▱'.repeat(width - n);
+};
+
+export interface CardOptions {
+  kind: Kind;
+  title: string;
+  emoji?: string;
+  color?: number;
+  body?: string;
+  fields?: { name: string; value: string; inline?: boolean }[];
+  gif?: string | null;
+  at?: number;
+  vars?: Record<string, string>;
+}
+
+// the house style: Agency header, a line in Texz's voice, then the actual content
+export function card(o: CardOptions): EmbedBuilder {
+  const e = new EmbedBuilder()
+    .setColor(o.color ?? COLOR)
+    .setAuthor({ name: 'Texz · Armed Detective Agency', iconURL: look.avatar ?? undefined })
+    .setTitle(`${o.emoji ? `${o.emoji}  ` : ''}${o.title}`)
+    .setDescription(`> *${say(o.kind, o.vars)}*${o.body ? `\n\n${o.body}` : ''}`.slice(0, 4096))
+    .setFooter({ text: say('footer') })
+    .setTimestamp(o.at ?? Date.now());
+  for (const f of (o.fields ?? []).slice(0, 25)) {
+    if (f.value) e.addFields({ name: f.name.slice(0, 256), value: f.value.slice(0, 1024), inline: f.inline });
+  }
+  if (o.gif) e.setImage(o.gif);
+  return e;
+}
 
 export const say = (kind: Kind, vars: Record<string, string> = {}) =>
   pick(bank[kind]).replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? '');

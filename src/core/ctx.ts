@@ -14,6 +14,7 @@ export interface Ctx {
   member: GuildMember | null;
   isAdmin: boolean;
   viaText: boolean;
+  latency(): number;
   sub(): string | null;
   str(name: string): string | null;
   int(name: string): number | null;
@@ -40,6 +41,7 @@ export function fromSlash(i: ChatInputCommandInteraction): Ctx {
     member,
     isAdmin: !!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild),
     viaText: false,
+    latency: () => i.client.ws.ping,
     sub: () => i.options.getSubcommand(false),
     str: (n) => i.options.getString(n),
     int: (n) => i.options.getInteger(n),
@@ -75,6 +77,7 @@ export function fromText(m: Message, tokens: string[], argNames: string[], hasSu
     member: m.member,
     isAdmin: !!m.member?.permissions.has(PermissionFlagsBits.ManageGuild),
     viaText: true,
+    latency: () => m.client.ws.ping,
     sub: () => sub,
     str: (n) => values.get(n) ?? null,
     int: (n) => {

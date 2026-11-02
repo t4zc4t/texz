@@ -2,7 +2,7 @@ import type { ChatInputCommandInteraction, Message } from 'discord.js';
 import type { Store } from '../db.js';
 import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
-import { lines, pick } from '../theme.js';
+import { RED, card, type Kind } from '../theme.js';
 import { fromSlash, fromText, type Ctx } from './ctx.js';
 import type { Command, Module } from './module.js';
 
@@ -19,26 +19,28 @@ for (const mod of modules) for (const cmd of mod.commands) {
 export const definitions = modules.flatMap((m) => m.commands.map((c) => c.data));
 
 // the on/off switch, channel limits and role limits, checked before every command
-function gate(store: Store, ctx: Ctx, mod: Module, cmd: Command): string | null {
-  if (cmd.admin && !ctx.isAdmin) return pick(lines.noPerm);
+type Block = { kind: Kind; vars?: Record<string, string> };
+
+function gate(store: Store, ctx: Ctx, mod: Module, cmd: Command): Block | null {
+  if (cmd.admin && !ctx.isAdmin) return { kind: 'noPerm' };
   if (mod.locked || !ctx.guildId) return null;
   const r = store.rules(ctx.guildId, mod.name);
-  if (!r.enabled) return pick(lines.off);
+  if (!r.enabled) return { kind: 'off' };
   // admins can always use things, so they can't lock themselves out
   if (ctx.isAdmin) return null;
-  if (r.channels.length && !r.channels.includes(ctx.channelId)) return lines.wrongChannel(r.channels.map((c) => `<#${c}>`).join(' or '));
-  if (r.roles.length && !r.roles.some((id) => ctx.member?.roles.cache.has(id))) return pick(lines.noRole);
+  if (r.channels.length && !r.channels.includes(ctx.channelId)) return { kind: 'wrongChannel', vars: { where: r.channels.map((c) => `<#${c}>`).join(' or ') } };
+  if (r.roles.length && !r.roles.some((id) => ctx.member?.roles.cache.has(id))) return { kind: 'noRole' };
   return null;
 }
 
 async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command) {
   const blocked = gate(store, ctx, mod, cmd);
-  if (blocked) return ctx.reply(blocked);
+  if (blocked) return ctx.reply(card({ ...blocked, title: 'Not this time', emoji: '🚫', color: RED }));
   try {
     await cmd.run(ctx, store);
   } catch (e) {
     console.error(`${cmd.name} failed`, e);
-    await ctx.reply(pick(lines.error)).catch(() => {});
+    await ctx.reply(card({ kind: 'error', title: 'Well, that slipped', emoji: '🩹', color: RED })).catch(() => {});
   }
 }
 
