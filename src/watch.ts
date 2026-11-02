@@ -12,11 +12,27 @@ import { HOUR, owoDay } from './time.js';
 interface Pending {
   userId: string;
   cmd: string;
+  args?: string;
   at: number;
 }
 
-// last OwO command per channel, OwO's reply usually lands within a couple of seconds
-const pending = new Map<string, Pending>();
+// recent OwO commands per channel, oldest first, OwO's reply usually lands within a couple of seconds
+const pending = new Map<string, Pending[]>();
+
+// picks which waiting command an OwO reply belongs to, a weapon ID in the reply wins,
+// otherwise the oldest command still waiting
+function claim(channelId: string, text: string): Pending | undefined {
+  const now = Date.now();
+  const queue = (pending.get(channelId) ?? []).filter((p) => now - p.at < 15_000);
+  if (!queue.length) return undefined;
+  // team replies list weapon IDs too, so only a real weapon card counts
+  const weaponId = parseWeapon(text)?.id;
+  let i = weaponId ? queue.findIndex((p) => p.cmd === 'weapon' && p.args?.toUpperCase() === weaponId) : -1;
+  if (i < 0) i = 0;
+  const [picked] = queue.splice(i, 1);
+  pending.set(channelId, queue);
+  return picked;
+}
 // OwO edits its own messages (pages, animations), remember who each one belongs to
 const owners = new Map<string, Pending>();
 
@@ -70,7 +86,9 @@ function onCommand(store: Store, m: Message) {
   const userId = m.author.id;
   store.touch(userId, m.channelId);
   scheduleDailies(store, userId);
-  pending.set(m.channelId, { userId, cmd: cmd.name, at: Date.now() });
+  const queue = pending.get(m.channelId) ?? [];
+  queue.push({ userId, cmd: cmd.name, args: cmd.args.split(/\s+/)[0] || undefined, at: Date.now() });
+  pending.set(m.channelId, queue.slice(-10));
 
   const day = owoDay();
   if (cmd.name === 'hunt' || cmd.name === 'battle' || cmd.name === 'owo') store.bump(userId, day, cmd.name);
@@ -170,13 +188,7 @@ export function watch(client: Client, store: Store) {
       const cmd = parseCommand(`owo ${slashName}`);
       if (cmd) p = { userId: viaSlash, cmd: cmd.name, at: Date.now() };
     }
-    if (!p && !edited) {
-      const last = pending.get(m.channelId);
-      if (last && Date.now() - last.at < 15_000) {
-        p = last;
-        pending.delete(m.channelId);
-      }
-    }
+    if (!p && !edited) p = claim(m.channelId, text);
     if (!p) return;
     remember(m.id, p);
     debug(m, p.cmd);
