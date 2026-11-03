@@ -148,10 +148,10 @@ function onReply(store: Store, m: Message | PartialMessage, p: Pending) {
       }
       break;
     }
+    // checklist and quest log are tabs of one message, so either command can land on either tab
     case 'checklist':
-      if (/already claimed|Claimed!/i.test(text)) store.markDone(p.userId, day, 'checklist');
-      break;
     case 'quest': {
+      if (/Daily Checklist/i.test(text) && /already claimed|Claimed!/i.test(text)) store.markDone(p.userId, day, 'checklist');
       const log = parseQuestLog(text);
       if (!log) break;
       store.markDone(p.userId, day, 'quest');
