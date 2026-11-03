@@ -9,6 +9,7 @@ import type { Module } from '../core/module.js';
 import { card } from '../theme.js';
 import { welcomeCard } from '../modules/welcome.js';
 import { ranks } from '../modules/levels.js';
+import { parseLength } from '../modules/moderation.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
@@ -162,8 +163,50 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       toggle(owner, 'ann', '', 'Posts', g.levels.announce, '📣'),
       new ButtonBuilder().setCustomId(id(owner, 'rwranks')).setLabel('Make rank roles').setEmoji('✨').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(id(owner, 'rwnew')).setLabel('New reward role').setEmoji('➕').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(id(owner, 'page', 'lvxp')).setLabel('Xp and boosts').setEmoji('🔥').setStyle(ButtonStyle.Primary),
       back(owner),
     ));
+  }
+
+  if (page === 'lvxp') {
+    title = 'Xp and boosts';
+    const l = g.levels;
+    const now = Date.now();
+    const t = (ms: number) => `<t:${Math.floor(ms / 1000)}:f>`;
+    const ev = l.boost && l.boost.until > now
+      ? `**${l.boost.x}x** ${l.boost.name ? `· ${l.boost.name} ` : ''}${l.boost.from > now ? `from ${t(l.boost.from)} ` : '**live** '}until ${t(l.boost.until)}`
+      : '*none planned*';
+    const list = (o: Record<string, number>, tag: (x: string) => string) => Object.entries(o).map(([k, x]) => `${tag(k)} ${x}x`).join('\n') || '*none*';
+    body = [
+      'How fast people climb, and when they climb faster. Boosts multiply each other, capped at 10x. Only the best role boost counts.',
+      'Pick a role or channel in the boost menus to give it a multiplier, type `1` there to remove it.',
+    ].join('\n');
+    fields.push(
+      { name: '✨ Per message', value: `${l.min} to ${l.max} xp\nonce every ${l.cooldown}s`, inline: true },
+      { name: '🎉 Event boost', value: ev, inline: true },
+      { name: '📅 Weekends', value: l.weekend > 1 ? `**${l.weekend}x** on Sat and Sun (UTC)` : '*off*', inline: true },
+      { name: '🎭 Role boosts', value: list(l.roleBoosts, (k) => `<@&${k}>`), inline: true },
+      { name: '💬 Channel boosts', value: list(l.channelBoosts, (k) => `<#${k}>`), inline: true },
+      { name: '🎁 Reward roles', value: l.stack ? 'people keep every one they earn' : 'only the highest one is kept', inline: true },
+      { name: '🚫 No xp in', value: [...l.noXpChannels.map((c) => `<#${c}>`), ...l.noXpRoles.map((r) => `<@&${r}>`)].join(' ') || '*nowhere*', inline: false },
+      { name: '📣 Level-up line', value: l.message ? `> ${l.message}` : '*my own lines*', inline: false },
+    );
+    comps.push(
+      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'noxpch')).setPlaceholder('🚫 Channels where chatting gives no xp')
+        .setChannelTypes(ChannelType.GuildText, ChannelType.GuildForum, ChannelType.GuildAnnouncement).setMinValues(0).setMaxValues(25).setDefaultChannels(l.noXpChannels.slice(0, 25))),
+      row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'noxprole')).setPlaceholder('🚫 Roles that earn no xp (muted, bots...)')
+        .setMinValues(0).setMaxValues(25).setDefaultRoles(l.noXpRoles.slice(0, 25))),
+      row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'rboost')).setPlaceholder('🎭 Give a role an xp boost (boosters, vips...)').setMinValues(1).setMaxValues(1)),
+      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'cboost')).setPlaceholder('💬 Give a channel an xp boost')
+        .setChannelTypes(ChannelType.GuildText, ChannelType.GuildForum, ChannelType.GuildAnnouncement).setMinValues(1).setMaxValues(1)),
+      row(
+        new ButtonBuilder().setCustomId(id(owner, 'xprate')).setLabel('Xp rate').setEmoji('✨').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(id(owner, 'event')).setLabel(l.boost && l.boost.until > now ? 'Edit event' : 'Plan a boost').setEmoji('🎉').setStyle(ButtonStyle.Success),
+        toggle(owner, 'stack', '', 'Keep all rewards', l.stack, '🎁'),
+        new ButtonBuilder().setCustomId(id(owner, 'lvmsg')).setLabel('Level-up line').setEmoji('📝').setStyle(ButtonStyle.Secondary),
+        back(owner, 'levels'),
+      ),
+    );
   }
 
   if (page === 'gifs') {
@@ -198,6 +241,20 @@ function rewardModal(owner: string, what: string, arg: string, title: string, na
   );
 }
 
+function formModal(owner: string, what: string, arg: string, title: string, inputs: { id: string; label: string; value: string; required?: boolean; long?: boolean; max?: number; hint?: string }[]) {
+  return new ModalBuilder().setCustomId(modalId(owner, what, arg)).setTitle(title.slice(0, 45)).addComponents(
+    inputs.map((x) => {
+      const input = new TextInputBuilder().setCustomId(x.id).setLabel(x.label).setStyle(x.long ? TextInputStyle.Paragraph : TextInputStyle.Short)
+        .setRequired(x.required ?? false).setMaxLength(x.max ?? 20);
+      if (x.value) input.setValue(x.value);
+      if (x.hint) input.setPlaceholder(x.hint);
+      return new ActionRowBuilder<TextInputBuilder>().addComponents(input);
+    }),
+  );
+}
+
+const num = (raw: string) => (raw.trim() === '' ? null : Number(raw.trim().replace(/x$/i, '')));
+
 const parseColor = (c: string) => (/^#?[0-9a-f]{6}$/i.test(c) ? Number.parseInt(c.replace('#', ''), 16) : undefined);
 
 async function canGive(guild: Guild, roleId: string) {
@@ -210,6 +267,7 @@ const pageOf: Record<string, string> = {
   mod: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome',
   arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', rwrole: 'levels', rwdel: 'levels', ann: 'levels', rw: 'levels',
   rwranks: 'levels', rwnew: 'levels', rwedit: 'levels', gifm: 'gifs', gif: 'gifs', prefix: 'home',
+  noxpch: 'lvxp', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
 export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
@@ -273,6 +331,41 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       await i.followUp({ content: made ? `✨ ${made} rank roles ready. Rename any of them from the edit menu~` : 'Every rank already has a role.', flags: MessageFlags.Ephemeral });
       return true;
     }
+    if (action === 'rboost' || action === 'cboost') {
+      const target = values[0];
+      const now = (action === 'rboost' ? g.levels.roleBoosts : g.levels.channelBoosts)[target];
+      const label = action === 'rboost' ? i.guild.roles.cache.get(target)?.name ?? 'role' : i.guild.channels.cache.get(target)?.name ?? 'channel';
+      await i.showModal(formModal(owner, action === 'rboost' ? 'rb' : 'cb', target, `Boost for ${label}`, [
+        { id: 'x', label: 'Multiplier, like 1.5 or 2 (1 removes it)', value: now ? String(now) : '', required: true, max: 5, hint: '2' },
+      ]));
+      return true;
+    }
+    if (action === 'xprate') {
+      const l = g.levels;
+      await i.showModal(formModal(owner, 'xprate', '', 'Xp rate', [
+        { id: 'min', label: 'Least xp per message', value: String(l.min), required: true, max: 4 },
+        { id: 'max', label: 'Most xp per message', value: String(l.max), required: true, max: 4 },
+        { id: 'cd', label: 'Seconds between counted messages', value: String(l.cooldown), required: true, max: 4 },
+        { id: 'wk', label: 'Weekend multiplier (1 = off)', value: String(l.weekend), required: true, max: 4 },
+      ]));
+      return true;
+    }
+    if (action === 'event') {
+      const b = g.levels.boost && g.levels.boost.until > Date.now() ? g.levels.boost : null;
+      await i.showModal(formModal(owner, 'event', '', 'Boost event', [
+        { id: 'x', label: 'Multiplier (1 or empty cancels the event)', value: b ? String(b.x) : '2', max: 5 },
+        { id: 'for', label: 'How long, like 3h, 2d or 1d12h', value: '', hint: b ? 'leave empty to keep the current end' : '24h', max: 20 },
+        { id: 'in', label: 'Starts in (30m, 2h) or a <t:unix> stamp', value: '', hint: 'empty = right now', max: 20 },
+        { id: 'name', label: 'Name, shows on rank cards (optional)', value: b?.name ?? '', hint: 'Anniversary week', max: 40 },
+      ]));
+      return true;
+    }
+    if (action === 'lvmsg') {
+      await i.showModal(formModal(owner, 'lvmsg', '', 'Level-up line', [
+        { id: 'v', label: 'Use {user} {name} {level} {rank} {server}', value: g.levels.message ?? '', long: true, max: 300, hint: 'Empty brings back my own lines' },
+      ]));
+      return true;
+    }
     if (action === 'preview') {
       const me = i.member as GuildMember;
       await i.reply({ embeds: [welcomeCard(store, me)], flags: MessageFlags.Ephemeral });
@@ -294,6 +387,9 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'lvch') g.levels.channel = values[0] ?? null;
     if (action === 'ann') g.levels.announce = !g.levels.announce;
     if (action === 'rwdel') delete g.levels.rewards[values[0]];
+    if (action === 'noxpch') g.levels.noXpChannels = values;
+    if (action === 'noxprole') g.levels.noXpRoles = values;
+    if (action === 'stack') g.levels.stack = !g.levels.stack;
   } else {
     if (!i.isModalSubmit()) return true;
     if (action === 'wtext') g.welcome.message = text;
@@ -326,6 +422,43 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
         if (lvl && roleId) g.levels.rewards[String(lvl)] = roleId;
       }
     }
+    if (action === 'rb' || action === 'cb') {
+      const x = num(i.fields.getTextInputValue('x'));
+      if (x === null || Number.isNaN(x) || x < 0.1 || x > 5) return fail('Multiplier has to be between 0.1 and 5. Use `1` to remove the boost.');
+      const map = action === 'rb' ? g.levels.roleBoosts : g.levels.channelBoosts;
+      if (x === 1) delete map[arg];
+      else map[arg] = Math.round(x * 100) / 100;
+    }
+    if (action === 'xprate') {
+      const [min, max, cd, wk] = ['min', 'max', 'cd', 'wk'].map((k) => num(i.fields.getTextInputValue(k)));
+      if (!Number.isInteger(min) || !Number.isInteger(max) || min! < 1 || max! < min! || max! > 1000) return fail('Xp per message: whole numbers, at least 1, the most can\'t be below the least, and 1000 tops.');
+      if (!Number.isInteger(cd) || cd! < 0 || cd! > 3600) return fail('The gap is in seconds, from 0 to 3600.');
+      if (wk === null || Number.isNaN(wk) || wk < 1 || wk > 5) return fail('Weekend multiplier goes from 1 (off) to 5.');
+      Object.assign(g.levels, { min, max, cooldown: cd, weekend: Math.round(wk * 100) / 100 });
+    }
+    if (action === 'event') {
+      const x = num(i.fields.getTextInputValue('x'));
+      if (x === null || x === 1) g.levels.boost = null;
+      else {
+        if (Number.isNaN(x) || x < 1.1 || x > 5) return fail('Event multiplier goes from 1.1 to 5, or 1 to cancel.');
+        const forRaw = i.fields.getTextInputValue('for').trim();
+        const inRaw = i.fields.getTextInputValue('in').trim();
+        const old = g.levels.boost && g.levels.boost.until > Date.now() ? g.levels.boost : null;
+        const length = parseLength(forRaw);
+        // a Discord timestamp (<t:1767225600>) or unix seconds pins an exact start, otherwise it's "in 2h"
+        const stamp = inRaw.match(/^(?:<t:)?(\d{10})/)?.[1];
+        const delay = stamp ? Math.max(0, Number(stamp) * 1000 - Date.now()) : inRaw && inRaw.toLowerCase() !== 'now' ? parseLength(inRaw) : 0;
+        if (forRaw && !length) return fail('How long? Something like `3h`, `2d` or `1d12h`.');
+        if (!length && !old) return fail('A new event needs a length, like `24h`.');
+        if (delay === null) return fail('Starts in? Something like `30m` or `2h`, or leave it empty for now.');
+        if ((length ?? 0) > 30 * 86_400_000 || delay > 30 * 86_400_000) return fail('Keep it within 30 days.');
+        const from = inRaw ? Date.now() + delay : old?.from ?? Date.now();
+        const until = length ? from + length : old!.until;
+        if (until <= from) return fail('That would end before it starts. Give it a length too.');
+        g.levels.boost = { x: Math.round(x * 100) / 100, from, until, name: i.fields.getTextInputValue('name').trim() };
+      }
+    }
+    if (action === 'lvmsg') g.levels.message = i.fields.getTextInputValue('v').trim() || null;
     if (action === 'prefix') {
       const p = text.toLowerCase();
       if (!p || /\s/.test(p) || p === 'owo' || p === 'w') return fail('Pick a short prefix without spaces, and not `owo` or `w`, those belong to OwO.');

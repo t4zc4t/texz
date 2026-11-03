@@ -40,6 +40,8 @@ Greetings, goodbyes and the autorole are set in `/setup`: pick the channels and 
 
 One message a minute earns 15 to 25 xp, so chatting counts and spam doesn't. Levels come with Agency ranks, from Stray and Agency Visitor up through Junior Detective, Ability User and Strategist to Living Legend of Yokohama. `tz rank` shows your card, `tz levels` the server's top ten, and `/setup` picks where level-ups get posted (or turns them off) and handles reward roles: one button makes a role for every Agency rank, another makes a single role with your own name, colour and level, an existing role can be used too, and any reward can be renamed or moved to another level from a menu.
 
+The **Xp and boosts** page in `/setup` covers the rest: how much xp a message gives and how often it counts, channels and roles that earn nothing, a multiplier for certain roles (boosters, say) or channels, a standing weekend multiplier, and a timed boost event that can start now, in a few hours or at an exact `<t:unix>` time. Boosts multiply each other up to 10x and show on rank cards while they're live. Reward roles can stack or be swapped so only the highest stays, and the level-up line can be your own with `{user}`, `{level}`, `{rank}` and friends. Admins can also move xp by hand with `/xp give`, `/xp take`, `/xp level` and `/xp reset` (`tz xp give @user 500` works too).
+
 ## Using it
 
 Every command works as a slash command and with the short prefix, so `/status` and `tz status` do the same thing, and most have a shorter alias too (`tz hb`, `tz s`, `tz w <id>`). `tz help` lists everything switched on in the server.

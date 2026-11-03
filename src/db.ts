@@ -57,8 +57,36 @@ export interface GuildSettings {
   gifs: Record<string, string>;
   mod: { logChannel: string | null; invites: boolean; spam: boolean; mentions: boolean };
   welcome: { channel: string | null; message: string | null; goodbyeChannel: string | null; goodbyeMessage: string | null; autorole: string | null };
-  levels: { channel: string | null; announce: boolean; rewards: Record<string, string> };
+  levels: LevelRules;
 }
+
+export interface LevelRules {
+  channel: string | null;
+  announce: boolean;
+  // level → role id
+  rewards: Record<string, string>;
+  // xp per counted message and the gap between counted messages, in seconds
+  min: number;
+  max: number;
+  cooldown: number;
+  // keep every reward role, or only the highest one reached
+  stack: boolean;
+  // custom level-up line, null uses Texz's own
+  message: string | null;
+  // a timed event, like 2x for the weekend of a server anniversary
+  boost: { x: number; from: number; until: number; name: string } | null;
+  // standing multiplier on Saturdays and Sundays (UTC), 1 means off
+  weekend: number;
+  roleBoosts: Record<string, number>;
+  channelBoosts: Record<string, number>;
+  noXpChannels: string[];
+  noXpRoles: string[];
+}
+
+export const defaultLevels = (): LevelRules => ({
+  channel: null, announce: true, rewards: {}, min: 15, max: 25, cooldown: 60, stack: true, message: null,
+  boost: null, weekend: 1, roleBoosts: {}, channelBoosts: {}, noXpChannels: [], noXpRoles: [],
+});
 
 export const defaultRules = (): ModuleRules => ({ enabled: true, channels: [], roles: [] });
 
@@ -197,7 +225,7 @@ export class Store {
       gifs: saved.gifs ?? {},
       mod: { logChannel: null, invites: false, spam: false, mentions: false, ...saved.mod },
       welcome: { channel: null, message: null, goodbyeChannel: null, goodbyeMessage: null, autorole: null, ...saved.welcome },
-      levels: { channel: null, announce: true, rewards: {}, ...saved.levels },
+      levels: { ...defaultLevels(), ...saved.levels },
     };
   }
 
@@ -309,6 +337,11 @@ export class Store {
   setXp(guildId: string, userId: string, xp: number) {
     this.db.prepare(`INSERT INTO xp (guild_id, user_id, xp, last_at) VALUES (?, ?, ?, 0)
       ON CONFLICT(guild_id, user_id) DO UPDATE SET xp = excluded.xp`).run(guildId, userId, Math.max(0, xp));
+  }
+
+  resetXp(guildId: string, userId?: string) {
+    if (userId) this.db.prepare('DELETE FROM xp WHERE guild_id = ? AND user_id = ?').run(guildId, userId);
+    else this.db.prepare('DELETE FROM xp WHERE guild_id = ?').run(guildId);
   }
 
   xpBoard(guildId: string, limit = 10): { user_id: string; xp: number }[] {

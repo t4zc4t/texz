@@ -36,7 +36,7 @@ test('every setup page fits discord limits', async () => {
   g.levels.rewards = { '5': '111111111111111111' };
   store.saveGuild('g1', g);
   const guild = { id: 'g1', roles: { cache: new Map() } } as never;
-  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
+  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'lvxp', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
   for (const p of pages) {
     const v = setupPanel(store, guild, '123456789012345678', p);
     assert.ok(v.components.length >= 1 && v.components.length <= 5, `${p}: rows`);
@@ -50,4 +50,23 @@ test('every setup page fits discord limits', async () => {
     assert.ok(ids.every((x) => x.length <= 100), `${p}: id too long`);
     assert.ok(JSON.stringify(v.embeds[0].toJSON()).length < 6000, `${p}: embed too big`);
   }
+});
+
+test('xp boosts multiply, best role only, capped at 10x', async () => {
+  const { boostsFor } = await import('../src/modules/levels.ts');
+  const { defaultLevels } = await import('../src/db.ts');
+  const l = defaultLevels();
+  const now = Date.UTC(2026, 10, 7, 12); // a Saturday
+  assert.equal(boostsFor(l, null, 'c1', null, now).total, 1);
+  l.weekend = 2;
+  l.boost = { x: 2, from: now - 1000, until: now + 1000, name: 'Party' };
+  l.roleBoosts = { r1: 1.5, r2: 3 };
+  l.channelBoosts = { parent: 2 };
+  const { Collection } = await import('discord.js');
+  const member = { roles: { cache: new Collection([['r1', { id: 'r1' }], ['r2', { id: 'r2' }]]) } } as never;
+  const b = boostsFor(l, member, 'thread', 'parent', now);
+  assert.deepEqual(b.parts.map((p) => p.x), [2, 2, 3, 2]);
+  assert.equal(b.total, 10);
+  l.boost.from = now + 5000;
+  assert.equal(boostsFor(l, null, null, null, now).total, 2);
 });

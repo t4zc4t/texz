@@ -1,5 +1,5 @@
-import { ChannelType, PermissionFlagsBits, SlashCommandBuilder, type Message } from 'discord.js';
-import type { Store } from '../db.js';
+import { SlashCommandBuilder, type GuildMember, type Message } from 'discord.js';
+import type { LevelRules, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { bar, card } from '../theme.js';
 
@@ -30,45 +30,76 @@ export const ranks = [
 ];
 export const rankFor = (level: number) => [...ranks].reverse().find((r) => level >= r.at)!;
 
-const COOLDOWN = 60_000;
+// every multiplier that applies right now, so the rank card and /setup can show the same maths giveXp uses
+export function boostsFor(l: LevelRules, member: GuildMember | null, channelId: string | null, parentId: string | null, now = Date.now()) {
+  const parts: { why: string; x: number }[] = [];
+  if (l.boost && now >= l.boost.from && now < l.boost.until) parts.push({ why: l.boost.name || 'Event', x: l.boost.x });
+  const day = new Date(now).getUTCDay();
+  if (l.weekend > 1 && (day === 0 || day === 6)) parts.push({ why: 'Weekend', x: l.weekend });
+  // only the best role boost counts, stacking five booster roles would get silly fast
+  const roleX = member ? Math.max(0, ...member.roles.cache.map((r) => l.roleBoosts[r.id] ?? 0)) : 0;
+  if (roleX) parts.push({ why: 'Role', x: roleX });
+  const chX = (channelId && l.channelBoosts[channelId]) || (parentId && l.channelBoosts[parentId]) || 0;
+  if (chX) parts.push({ why: 'Channel', x: chX });
+  const total = Math.min(10, parts.reduce((a, p) => a * p.x, 1));
+  return { parts, total };
+}
 
-// one message a minute counts, 15 to 25 xp each, so spam doesn't climb faster than chatting
-export async function giveXp(store: Store, m: Message) {
-  if (!m.guild || m.author.bot || !m.member) return;
-  if (!store.rules(m.guild.id, 'levels').enabled) return;
-  const before = store.xpOf(m.guild.id, m.author.id);
-  if (Date.now() - before.last_at < COOLDOWN) return;
-  const gain = 15 + Math.floor(Math.random() * 11);
-  store.addXp(m.guild.id, m.author.id, gain);
-  const was = levelOf(before.xp).level;
-  const now = levelOf(before.xp + gain).level;
-  if (now <= was) return;
-
-  const g = store.guild(m.guild.id);
-  // reward roles for every level reached so far
-  for (const [lvl, roleId] of Object.entries(g.levels.rewards)) {
-    if (now >= Number(lvl) && !m.member.roles.cache.has(roleId)) await m.member.roles.add(roleId, `level ${lvl}`).catch(() => {});
+// gives earned reward roles and takes away ones above the level, or below the top one when they don't stack
+export async function syncRewards(member: GuildMember, l: LevelRules, level: number) {
+  const earned = Object.entries(l.rewards).map(([lvl, id]) => ({ lvl: Number(lvl), id })).filter((r) => member.guild.roles.cache.has(r.id));
+  const top = Math.max(-1, ...earned.filter((r) => r.lvl <= level).map((r) => r.lvl));
+  for (const r of earned) {
+    const keep = r.lvl <= level && (l.stack || r.lvl === top);
+    const has = member.roles.cache.has(r.id);
+    if (keep && !has) await member.roles.add(r.id, `level ${r.lvl} reward`).catch(() => {});
+    if (!keep && has) await member.roles.remove(r.id, 'level reward no longer earned').catch(() => {});
   }
-  if (!g.levels.announce) return;
+}
+
+export async function announce(store: Store, member: GuildMember, was: number, now: number, fallback: Message['channel'] | null) {
+  const g = store.guild(member.guild.id);
+  if (!g.levels.announce || now <= was) return;
   const oldRank = rankFor(was);
   const newRank = rankFor(now);
   const promoted = oldRank.name !== newRank.name;
-  const vars = { user: `<@${m.author.id}>`, level: String(now), rank: newRank.name };
+  const vars = { user: `<@${member.id}>`, name: member.displayName, level: String(now), rank: newRank.name, server: member.guild.name };
   const e = card({
-    kind: promoted ? 'rankUp' : 'levelUp', vars, title: promoted ? `Promoted · ${newRank.name}` : `Level ${now}`,
+    kind: promoted ? 'rankUp' : 'levelUp', vars, line: g.levels.message ?? undefined,
+    title: promoted ? `Promoted · ${newRank.name}` : `Level ${now}`,
     emoji: promoted ? newRank.emoji : '⬆️',
     // the dancing gif is saved for promotions so it doesn't show up every few minutes
     gif: promoted ? g.gifs.levelup ?? null : 'off',
   });
-  const where = g.levels.channel ? await m.guild.channels.fetch(g.levels.channel).catch(() => null) : m.channel;
-  if (where?.isSendable()) await where.send({ content: `<@${m.author.id}>`, embeds: [e], allowedMentions: { users: [m.author.id] } }).catch(() => {});
+  const where = g.levels.channel ? await member.guild.channels.fetch(g.levels.channel).catch(() => null) : fallback;
+  if (where?.isSendable()) await where.send({ content: `<@${member.id}>`, embeds: [e], allowedMentions: { users: [member.id] } }).catch(() => {});
+}
+
+// one message per cooldown counts, so spam doesn't climb faster than chatting
+export async function giveXp(store: Store, m: Message) {
+  if (!m.guild || m.author.bot || !m.member) return;
+  if (!store.rules(m.guild.id, 'levels').enabled) return;
+  const l = store.guild(m.guild.id).levels;
+  const parentId = m.channel.isThread() ? m.channel.parentId : null;
+  if (l.noXpChannels.includes(m.channelId) || (parentId && l.noXpChannels.includes(parentId))) return;
+  if (m.member.roles.cache.some((r) => l.noXpRoles.includes(r.id))) return;
+  const before = store.xpOf(m.guild.id, m.author.id);
+  if (Date.now() - before.last_at < l.cooldown * 1000) return;
+  const base = l.min + Math.floor(Math.random() * (Math.max(l.min, l.max) - l.min + 1));
+  const gain = Math.max(1, Math.round(base * boostsFor(l, m.member, m.channelId, parentId).total));
+  store.addXp(m.guild.id, m.author.id, gain);
+  const was = levelOf(before.xp).level;
+  const now = levelOf(before.xp + gain).level;
+  if (now <= was) return;
+  await syncRewards(m.member, l, now);
+  await announce(store, m.member, was, now, m.channel);
 }
 
 const rank: Command = {
   name: 'rank',
   data: new SlashCommandBuilder().setName('rank').setDescription('Your level and Agency rank in this server')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
-  text: { aliases: ['level', 'lvl', 'xp'], args: ['user'] },
+  text: { aliases: ['level', 'lvl'], args: ['user'] },
   run: async (ctx, store) => {
     if (!ctx.guild) return ctx.reply('Ranks live in servers.');
     const id = ctx.user('user') ?? ctx.userId;
@@ -84,6 +115,10 @@ const rank: Command = {
         { name: '🏅 Position', value: `#${store.xpPosition(ctx.guild.id, xp)}`, inline: true },
         { name: '✨ Total xp', value: xp.toLocaleString(), inline: true },
         { name: `To level ${l.level + 1}`, value: `${bar(l.into, l.need, 16)}\n${l.into.toLocaleString()} / ${l.need.toLocaleString()} xp`, inline: false },
+        ...(() => {
+          const b = boostsFor(store.guild(ctx.guild!.id).levels, m, ctx.channelId, null);
+          return b.total !== 1 ? [{ name: '🔥 Boost right now', value: `**${+b.total.toFixed(2)}x** · ${b.parts.map((p) => `${p.why} ${p.x}x`).join(' · ')}`, inline: false }] : [];
+        })(),
         { name: '🎖️ Next promotion', value: next ? `${next.emoji} **${next.name}** at level ${next.at}` : 'None left. You\'ve outranked everyone, me included. Well, almost.', inline: false },
       ],
     });
@@ -110,10 +145,72 @@ const levels: Command = {
   },
 };
 
+const xp: Command = {
+  name: 'xp',
+  admin: true,
+  data: new SlashCommandBuilder().setName('xp').setDescription('Hand out, take or reset xp (admins)')
+    .addSubcommand((c) => c.setName('give').setDescription('Add xp to someone')
+      .addUserOption((o) => o.setName('user').setDescription('Who').setRequired(true))
+      .addIntegerOption((o) => o.setName('amount').setDescription('How much').setRequired(true).setMinValue(1).setMaxValue(1_000_000)))
+    .addSubcommand((c) => c.setName('take').setDescription('Take xp away')
+      .addUserOption((o) => o.setName('user').setDescription('Who').setRequired(true))
+      .addIntegerOption((o) => o.setName('amount').setDescription('How much').setRequired(true).setMinValue(1).setMaxValue(1_000_000)))
+    .addSubcommand((c) => c.setName('level').setDescription('Put someone at an exact level')
+      .addUserOption((o) => o.setName('user').setDescription('Who').setRequired(true))
+      .addIntegerOption((o) => o.setName('level').setDescription('Which level').setRequired(true).setMinValue(0).setMaxValue(500)))
+    .addSubcommand((c) => c.setName('reset').setDescription('Wipe one person, or everyone with confirm: wipe')
+      .addUserOption((o) => o.setName('user').setDescription('Who, empty means the whole server'))
+      .addStringOption((o) => o.setName('confirm').setDescription('Type wipe to reset the whole server')))
+    .toJSON(),
+  text: { sub: true, subArgs: { give: ['user', 'amount'], take: ['user', 'amount'], level: ['user', 'level'], reset: ['user', 'confirm'] } },
+  run: async (ctx, store) => {
+    if (!ctx.guild) return ctx.reply('Xp lives in servers.');
+    const sub = ctx.sub();
+    const p = store.guild(ctx.guild.id).prefix;
+    const userId = ctx.user('user');
+    if (sub === 'reset' && !userId) {
+      // the text form can't tell "wipe" from a user, so accept it in either slot
+      if ((ctx.str('confirm') ?? (ctx.viaText ? ctx.str('user') : null))?.toLowerCase() !== 'wipe') return ctx.reply(`That clears everyone's xp. If you mean it: \`/xp reset confirm:wipe\` or \`${p} xp reset wipe\`.`);
+      store.resetXp(ctx.guild.id);
+      return ctx.reply({ embeds: [card({ kind: 'levelSetup', title: 'Fresh start', emoji: '🧹', gif: 'off', body: 'Every file in the roster is blank again. Reward roles stay until people level past them or you remove them.' })], private: false });
+    }
+    if (!sub || !['give', 'take', 'level', 'reset'].includes(sub) || !userId) {
+      return ctx.reply(`Like this: \`${p} xp give @user 500\`, \`${p} xp take @user 200\`, \`${p} xp level @user 10\`, \`${p} xp reset @user\``);
+    }
+    const before = store.xpOf(ctx.guild.id, userId).xp;
+    let after = before;
+    if (sub === 'give' || sub === 'take') {
+      const n = ctx.int('amount');
+      if (!n || n < 1) return ctx.reply('How much? A positive number please.');
+      after = Math.max(0, before + (sub === 'give' ? n : -n));
+    }
+    if (sub === 'level') {
+      const lvl = ctx.int('level');
+      if (lvl === null || lvl < 0 || lvl > 500) return ctx.reply('Pick a level from 0 to 500.');
+      after = totalFor(lvl);
+    }
+    if (sub === 'reset') after = 0;
+    if (after === 0) store.resetXp(ctx.guild.id, userId);
+    else store.setXp(ctx.guild.id, userId, after);
+    const was = levelOf(before).level;
+    const now = levelOf(after).level;
+    const member = await ctx.guild.members.fetch(userId).catch(() => null);
+    if (member) {
+      await syncRewards(member, store.guild(ctx.guild.id).levels, now);
+      if (now > was) await announce(store, member, was, now, null);
+    }
+    const diff = after - before;
+    return ctx.reply({ embeds: [card({
+      kind: 'levelSetup', title: 'File amended', emoji: '🖋️', gif: 'off',
+      body: `<@${userId}> · ${before.toLocaleString()} → **${after.toLocaleString()} xp** (${diff >= 0 ? '+' : ''}${diff.toLocaleString()})\nLevel ${was} → **${now}** · ${rankFor(now).emoji} ${rankFor(now).name}`,
+    })], private: false });
+  },
+};
+
 export const levelsModule: Module = {
   name: 'levels',
   label: 'Levels and ranks',
-  about: 'Chat xp and Agency ranks from Stray to Living Legend. Reward roles and the level-up channel are in /setup',
-  commands: [rank, levels],
+  about: 'Chat xp and Agency ranks from Stray to Living Legend. Reward roles, xp rates, boosts and no-xp zones are in /setup, admins move xp with /xp',
+  commands: [rank, levels, xp],
 };
 

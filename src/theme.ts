@@ -313,15 +313,19 @@ export interface CardOptions {
   gif?: string | null;
   at?: number;
   vars?: Record<string, string>;
+  // a server's own line instead of one of Texz's
+  line?: string;
 }
 
 // the house style: Agency header, a line in Texz's voice, then the actual content
+const fillVars = (t: string, vars: Record<string, string> = {}) => t.replace(/\{(\w+)\}/g, (all, k: string) => vars[k] ?? all);
+
 export function card(o: CardOptions): EmbedBuilder {
   const e = new EmbedBuilder()
     .setColor(o.color ?? COLOR)
     .setAuthor({ name: 'Texz · Armed Detective Agency', iconURL: look.avatar ?? undefined })
     .setTitle(`${o.emoji ? `${o.emoji}  ` : ''}${o.title}`)
-    .setDescription(`> *${say(o.kind, o.vars)}*${o.body ? `\n\n${o.body}` : ''}`.slice(0, 4096))
+    .setDescription(`> *${o.line ? fillVars(o.line, o.vars) : say(o.kind, o.vars)}*${o.body ? `\n\n${o.body}` : ''}`.slice(0, 4096))
     .setFooter({ text: say('footer') })
     .setTimestamp(o.at ?? Date.now());
   for (const f of (o.fields ?? []).slice(0, 25)) {
