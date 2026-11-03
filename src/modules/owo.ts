@@ -3,12 +3,13 @@ import type { Store } from '../db.js';
 import type { Ctx } from '../core/ctx.js';
 import type { Command, Module } from '../core/module.js';
 import { armouryPage, filters, type Filter } from '../features/armoury-pages.js';
+import { shopDeals } from '../features/armoury.js';
 import { dayStatus } from '../features/daily.js';
 import { durability, planGems } from '../features/gems.js';
 import { advise, maxLevel } from '../features/huntbot.js';
 import { damageOn, teamCheck } from '../features/weapons.js';
 import { planZoo, values } from '../features/zoo.js';
-import { refresh, traits, weaponType, type Huntbot, type ListedWeapon, type Pet, type Weapon, type ZooRank } from '../owo/parse.js';
+import { refresh, traits, weaponType, type Huntbot, type ListedWeapon, type Pet, type ShopWeapon, type Weapon, type ZooRank } from '../owo/parse.js';
 import { momentOf } from '../gifs.js';
 import { panel } from '../features/panel.js';
 import { RED, bar, card, say, type CardOptions } from '../theme.js';
@@ -228,6 +229,29 @@ const quests: Command = {
   },
 };
 
+const shop: Command = {
+  name: 'shop',
+  data: new SlashCommandBuilder().setName('shop').setDescription('Today\'s OwO weapon shop, checked against your armoury').toJSON(),
+  text: { aliases: ['deals'] },
+  run: (ctx, store) => {
+    const snap = store.snapshot<{ items: ShopWeapon[]; until: number | null }>('*', 'shop');
+    // the shop rerolls every day, yesterday's page is no use
+    const stale = !snap || (snap.data.until ? Date.now() > snap.data.until : Date.now() - snap.at > 24 * 3_600_000);
+    if (!snap || stale) return missing(ctx, store, 'owo shop weapon', 'Weapon shop');
+    const list = [...new Map(store.snapshot<[string, ListedWeapon][]>(ctx.userId, 'armoury')?.data ?? []).values()];
+    const deals = shopDeals(snap.data.items, list, store.snapshot<Pet[]>(ctx.userId, 'team')?.data ?? null);
+    const icon = { upgrade: '⬆️', new: '🆕', have: '▫️' };
+    const body = deals.map((d) => `${icon[d.verdict]} \`${d.item.id}\` **${d.item.name}** · ${d.item.price.toLocaleString()} shards\n-# ${d.note}`).join('\n');
+    const shards = store.snapshot<number>(ctx.userId, 'shards')?.data;
+    const fields = [
+      { name: '💎 Your shards', value: shards !== undefined ? shards.toLocaleString() : '*run `owo ws` and I\'ll know*', inline: true },
+      ...(snap.data.until ? [{ name: '🔄 New stock', value: `<t:${Math.floor(snap.data.until / 1000)}:R>`, inline: true }] : []),
+    ];
+    if (!list.length) fields.push({ name: '📦 Armoury', value: 'I haven\'t seen your weapons, so everything looks new. `owo weapon` fixes that.', inline: false });
+    return show(ctx, store, { kind: 'shop', title: 'Weapon shop', emoji: '🛒', body, fields, at: snap.at, gif: 'off' });
+  },
+};
+
 const stats: Command = {
   name: 'stats',
   hidden: true,
@@ -338,6 +362,6 @@ export const owo: Module = {
   name: 'owo',
   label: 'OwO helper',
   about: 'Reminders, huntbot, gems, zoo, weapons, quests and the weekly board',
-  commands: [status, huntbot, gems, zoo, armoury, team, weapon, quests, stats, leaderboard, remind, settings, buddy, ask],
+  commands: [status, huntbot, gems, zoo, armoury, shop, team, weapon, quests, stats, leaderboard, remind, settings, buddy, ask],
 };
 

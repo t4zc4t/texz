@@ -1,4 +1,4 @@
-import { weaponType, type ListedWeapon, type Pet, type Weapon } from '../owo/parse.js';
+import { weaponType, type ListedWeapon, type Pet, type ShopWeapon, type Weapon } from '../owo/parse.js';
 import { damageOn } from './weapons.js';
 
 // what each weapon type is for, filled in from playing and the wiki, unknown ones are left out
@@ -91,4 +91,26 @@ export function armouryReport(list: ListedWeapon[], team: Pet[] | null, seen: Ma
   }
   lines.push('', 'I keep anything equipped, empowered, epic or better, and the best copy of each type.');
   return lines;
+}
+
+export interface Deal { item: ShopWeapon; verdict: 'new' | 'upgrade' | 'have'; note: string }
+
+// how today's shop compares to what you own: a type you don't have, a better rarity than your best copy, or nothing new
+export function shopDeals(items: ShopWeapon[], list: ListedWeapon[], team: Pet[] | null): Deal[] {
+  const best = new Map<string, number>();
+  for (const w of list) {
+    const t = weaponType(w.name);
+    best.set(t, Math.max(best.get(t) ?? -1, rarityRank[w.rarity] ?? 0));
+  }
+  const wants = new Set((team ?? []).map((p) => (p.str >= p.mag ? 'STR' : 'MAG')));
+  const order = { upgrade: 0, new: 1, have: 2 };
+  return items.map((item): Deal => {
+    const mine = best.get(item.type);
+    const r = rarityRank[item.rarity] ?? 0;
+    const role = roles[item.type];
+    const fit = role?.stat && wants.has(role.stat) ? ` · suits your ${role.stat} pets` : role ? ` · ${role.role}` : '';
+    if (mine === undefined) return { item, verdict: 'new', note: `you don't own one${fit}` };
+    if (r > mine) return { item, verdict: 'upgrade', note: `beats your best ${Object.keys(rarityRank)[mine]}${fit}` };
+    return { item, verdict: 'have', note: 'you already have one as good' };
+  }).sort((a, b) => order[a.verdict] - order[b.verdict] || (rarityRank[b.item.rarity] ?? 0) - (rarityRank[a.item.rarity] ?? 0));
 }

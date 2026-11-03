@@ -133,3 +133,20 @@ test('welcome text placeholders', async () => {
   const m = { id: '1', displayName: 'Atsushi', user: { username: 'tiger' }, guild: { name: 'Agency', memberCount: 42 } };
   assert.equal(fill('Hi {user}, welcome to {server}, you are #{count}, {name}!', m as never), 'Hi <@1>, welcome to Agency, you are #42, Atsushi!');
 });
+
+test('weapon shop page from a real sample', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { flatten, parseShopWeapons } = await import('../src/owo/parse.ts');
+  const { shopDeals } = await import('../src/features/armoury.ts');
+  const e = JSON.parse(readFileSync(new URL('./samples/shop-weapons.json', import.meta.url), 'utf8'));
+  const shop = parseShopWeapons(flatten('', [e]));
+  assert.ok(shop);
+  assert.equal(shop.items.length, 10);
+  const tithe = shop.items.find((w) => w.id === '102')!;
+  assert.deepEqual([tithe.type, tithe.rarity, tithe.price, tithe.tagged], ['Soul Tithe', 'epic', 63, true]);
+  assert.equal(shop.items.find((w) => w.id === '104')!.rarity, 'mythic');
+  assert.ok(shop.resetsInMs! > 2 * 3_600_000);
+  const deals = shopDeals(shop.items, [{ id: 'AAAAAA', rarity: 'rare', name: 'Soul Tithe', quality: 50, equippedOn: null, empowered: false }], null);
+  assert.equal(deals.find((d) => d.item.id === '102')!.verdict, 'upgrade');
+  assert.equal(deals.find((d) => d.item.id === '110')!.verdict, 'new');
+});

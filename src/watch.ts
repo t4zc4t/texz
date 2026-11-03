@@ -4,7 +4,7 @@ import type { Store } from './db.js';
 import { minigames, parseCommand } from './owo/commands.js';
 import {
   OWO_BOT_ID, flatten, isCaptcha, numberAfter, parseDuration, parseHuntbot, parseInventory, parseQuestLog,
-  parseTeam, parseWeapon, parseWeaponList, parseZoo,
+  parseTeam, parseWeapon, parseWeaponList, parseShopWeapons, parseZoo,
   type Embedish, type Huntbot, type ListedWeapon, type Weapon,
 } from './owo/parse.js';
 import { scheduleDailies, urgent } from './reminders.js';
@@ -156,6 +156,12 @@ function onReply(store: Store, m: Message | PartialMessage, p: Pending) {
       if (!log) break;
       store.markDone(p.userId, day, 'quest');
       store.saveSnapshot(p.userId, 'quests', log);
+      break;
+    }
+    case 'shop': {
+      // the weapon shop is the same for everyone and changes once a day
+      const shop = parseShopWeapons(text);
+      if (shop?.items.length) store.saveSnapshot('*', 'shop', { ...shop, until: shop.resetsInMs ? now + shop.resetsInMs : null });
       break;
     }
     case 'zoo': {

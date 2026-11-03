@@ -254,6 +254,38 @@ export function weaponType(name: string): string {
     .trim();
 }
 
+// ---------- weapon shop ----------
+
+export interface ShopWeapon {
+  id: string;
+  name: string;
+  type: string;
+  rarity: string;
+  price: number;
+  // [D] in the shop name, OwO's own tag
+  tagged: boolean;
+}
+
+const rarityWords: Record<string, string> = { common: 'common', uncommon: 'uncommon', rare: 'rare', epic: 'epic', mythical: 'mythic', mythic: 'mythic', legendary: 'legendary', fabled: 'fabled' };
+
+// the weapon page of owo shop, `101` <emoji><emoji> **`[D] Epic Staff of Purity`**`----- 63` <weaponshard>
+export function parseShopWeapons(raw: string): { items: ShopWeapon[]; resetsInMs: number | null } | null {
+  if (!/OwO Shop: Weapons/i.test(raw)) return null;
+  const items: ShopWeapon[] = [];
+  for (const m of raw.matchAll(/`(\d{3})`[^*\n]*\*\*`([^`]+)`\*\*`[-\s]*([\d.,]+[KM]?)`/g)) {
+    const name = m[2].replace(/^\*/, '').trim();
+    if (/crate/i.test(name)) continue;
+    const words = name.replace(/\[D\]\s*/, '').split(' ');
+    const rarity = rarityWords[words[0].toLowerCase()];
+    if (!rarity) continue;
+    const n = m[3].replace(/,/g, '');
+    const price = Number.parseFloat(n) * (n.endsWith('K') ? 1_000 : n.endsWith('M') ? 1_000_000 : 1);
+    items.push({ id: m[1], name, type: words.slice(1).join(' '), rarity, price, tagged: /\[D\]/.test(name) });
+  }
+  const reset = raw.match(/Resets in:\s*([\dHMS ]+)/i);
+  return { items, resetsInMs: reset ? parseDuration(reset[1]) : null };
+}
+
 // ---------- plain replies ----------
 
 export const numberAfter = (raw: string, re: RegExp): number | null => {

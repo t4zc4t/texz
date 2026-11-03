@@ -85,6 +85,41 @@ const bank = {
     'Little mysteries, little rewards. Here\'s what\'s still open on your board.',
     'Some of these need friends. Lucky you, you know a very charming detective.',
   ],
+  shop: [
+    'Window shopping with a detective. I point at things, you pay for them. Fair, no?',
+    'Today\'s stock, already sorted by what actually helps you. You\'re welcome~',
+  ],
+  caseFile: [
+    'Every case gets a number. Kunikida-kun insists, and he keeps the binder.',
+    'The record never forgets. Neither does Kunikida-kun, sadly for everyone.',
+  ],
+  caseList: [
+    'The archive. Dusty, thorough, mildly incriminating.',
+    'Here\'s everything on file. Read carefully, the details are where people slip.',
+  ],
+  tempban: [
+    'A little holiday from the Agency, with a return ticket. How generous of us.',
+    'Banned, but only for a while. Think of it as a very long time-out with no snacks.',
+  ],
+  giveaway: [
+    'Free things! Press the button. Luck favours the bold, and occasionally the lazy.',
+    'A prize up for grabs. I\'d enter myself, but it seems unfair to everyone else.',
+  ],
+  giveawayEnd: [
+    'The draw is done. Fate picked, I just read the names out loud.',
+    'And the lucky ones are... drumroll... no, I\'m not doing the drumroll, it\'s tiring.',
+  ],
+  giveawayNone: ['Nobody entered? A prize with no takers. How tragic. How poetic.'],
+  watchlist: [
+    'Your watch list. A detective respects a well-kept file.',
+    'Everything you\'re watching, planning, and quietly abandoning. I see all.',
+  ],
+  birthday: [
+    'Happy birthday, {user}! Another year of surviving this world. Impressive, honestly~',
+    '{user}, it\'s your birthday! Kunikida-kun budgeted a cake. I budgeted eating it.',
+    'Today belongs to {user}. Be kind to them, or at least kinder than usual.',
+  ],
+  birthdaySet: ['Noted. I never forget a birthday. A detective\'s memory, you see.'],
   stats: [
     'Your week in numbers. I counted every hunt while pretending to sleep.',
     'Statistics! Kunikida-kun\'s favourite bedtime story.',
