@@ -147,6 +147,13 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
         back(owner),
       ),
     );
+    // only whoever owns the bot sees this one, it collects Texz's own crashes from every server
+    if (isBotOwner(guild, owner)) {
+      const err = store.getKv('errorChannel');
+      fields.push({ name: '🩹 Texz error reports', value: err ? `<#${err}>` : '*off, only the console*', inline: false });
+      comps.push(row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'errch')).setPlaceholder('🩹 Where Texz reports its own errors (owner only)')
+        .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(err ? [err] : [])));
+    }
   }
 
   if (page === 'levels') {
@@ -303,6 +310,11 @@ function formModal(owner: string, what: string, arg: string, title: string, inpu
 
 const num = (raw: string) => (raw.trim() === '' ? null : Number(raw.trim().replace(/x$/i, '')));
 
+export const isBotOwner = (guild: Guild, userId: string) => {
+  const o = guild.client?.application?.owner;
+  return !!o && ('members' in o ? o.members.has(userId) : o.id === userId);
+};
+
 const parseColor = (c: string) => (/^#?[0-9a-f]{6}$/i.test(c) ? Number.parseInt(c.replace('#', ''), 16) : undefined);
 
 async function canGive(guild: Guild, roleId: string) {
@@ -315,7 +327,7 @@ const pageOf: Record<string, string> = {
   mod: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome',
   arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
-  clean: 'home', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
+  clean: 'home', errch: 'mod', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
   noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
@@ -447,6 +459,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'noxprole') g.levels.noXpRoles = values;
     if (action === 'stack') g.levels.stack = !g.levels.stack;
     if (action === 'clean') g.autoclean = Number(values[0]) || 0;
+    if (action === 'errch' && isBotOwner(i.guild, i.user.id)) store.setKv('errorChannel', values[0] ?? null);
     if (action === 'bdch') g.birthdays.channel = values[0] ?? null;
     if (action === 'bdrole') {
       if (values[0] && !(await canGive(i.guild, values[0]))) return fail('I can\'t hand out that role. Move my role above it in Server Settings → Roles, then try again.');

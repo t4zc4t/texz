@@ -278,6 +278,10 @@ export class Store {
         at INTEGER NOT NULL,
         PRIMARY KEY (channel_id, message_id)
       );
+      CREATE TABLE IF NOT EXISTS kv (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS guilds (
         id TEXT PRIMARY KEY,
         settings TEXT NOT NULL
@@ -411,6 +415,16 @@ export class Store {
   activity(guildId: string, userId: string): { last_at: number; last_channel: string | null; messages: number } | null {
     return (this.db.prepare('SELECT last_at, last_channel, messages FROM activity WHERE guild_id = ? AND user_id = ?').get(guildId, userId) as
       { last_at: number; last_channel: string | null; messages: number } | undefined) ?? null;
+  }
+
+  // bot-wide odds and ends, like where error reports go
+  getKv(key: string): string | null {
+    return (this.db.prepare('SELECT value FROM kv WHERE key = ?').get(key) as { value: string } | undefined)?.value ?? null;
+  }
+
+  setKv(key: string, value: string | null) {
+    if (value === null) this.db.prepare('DELETE FROM kv WHERE key = ?').run(key);
+    else this.db.prepare('INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
   }
 
   // ---------- moderation cases ----------

@@ -35,7 +35,7 @@ test('every setup page fits discord limits', async () => {
   const g = store.guild('g1');
   g.levels.rewards = { '5': '111111111111111111' };
   store.saveGuild('g1', g);
-  const guild = { id: 'g1', roles: { cache: new Map() } } as never;
+  const guild = { id: 'g1', roles: { cache: new Map() }, client: { application: { owner: { id: '123456789012345678' } } } } as never;
   const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'rewards', 'lvxp', 'birthdays', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
   for (const p of pages) {
     const v = setupPanel(store, guild, '123456789012345678', p);
@@ -138,4 +138,19 @@ test('birthday dates, leap days and countdowns', async () => {
   assert.equal(daysUntil({ month: 11, day: 3 }, { year: 2026, month: 11, day: 3 }), 0);
   // 20:00 UTC on the 2nd is already the 3rd in India
   assert.deepEqual(localDate('Asia/Kolkata', new Date(Date.UTC(2026, 10, 2, 20))), { year: 2026, month: 11, day: 3 });
+});
+
+test('daily backup keeps a copy and trims old ones', async () => {
+  const { Store } = await import('../src/db.ts');
+  const { backup } = await import('../src/ops.ts');
+  const { mkdtempSync, readdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(`${tmpdir()}/tzb-`);
+  for (const d of ['2026-01-01', '2026-01-02', '2026-01-03']) writeFileSync(`${dir}/texz-${d}.db`, 'x');
+  const store = new Store(`${dir}/live.db`);
+  store.setKv('a', 'b');
+  backup(store, `${dir}`, 2);
+  const left = readdirSync(dir).filter((f) => f.startsWith('texz-'));
+  assert.equal(left.length, 2);
+  assert.equal(new Store(`${dir}/${left.sort().at(-1)}`).getKv('a'), 'b');
 });

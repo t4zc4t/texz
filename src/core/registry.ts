@@ -17,6 +17,7 @@ import { giveaways, onGiveawayButton } from '../modules/giveaways.js';
 import { birthdays } from '../modules/birthdays.js';
 import { onSetup, useModules } from '../features/setup.js';
 import { RED, card, type Kind } from '../theme.js';
+import { report } from '../ops.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
 
@@ -92,7 +93,7 @@ async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command) {
   try {
     await cmd.run(ctx, store);
   } catch (e) {
-    console.error(`${cmd.name} failed`, e);
+    report(`${cmd.name} failed`, e);
     await ctx.reply({ embeds: [card({ kind: 'error', title: 'Well, that slipped', emoji: '🩹', color: RED })], temp: true }).catch(() => {});
   }
 }
@@ -156,7 +157,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onCaseComponent(store, i)) return;
     if (await onGiveawayButton(store, i)) return;
   } catch (e) {
-    console.error('component', e);
+    report('component', e);
   }
   if (i.isModalSubmit() || i.isButton() || i.isStringSelectMenu()) {
     const rp = parseRp(i.customId);
