@@ -5,7 +5,7 @@ import type { Command, Module } from '../core/module.js';
 import { armouryPage, filters, type Filter } from '../features/armoury-pages.js';
 import { shopDeals } from '../features/armoury.js';
 import { dayStatus } from '../features/daily.js';
-import { durability, planGems } from '../features/gems.js';
+import { durability, gemTotals, planGems } from '../features/gems.js';
 import { advise, maxLevel } from '../features/huntbot.js';
 import { damageOn, teamCheck } from '../features/weapons.js';
 import { planZoo, values } from '../features/zoo.js';
@@ -56,6 +56,13 @@ const status: Command = {
       { name: '⏱️ Timers', value: [timer('huntbot', '🤖 Huntbot'), timer('pray', '🙏 Pray'), timer('vote', '🗳️ Vote'), `🌙 Reset · <t:${unix(nextReset())}:R>`].join('\n'), inline: true },
       { name: `📋 Today · ${done}/${items.length}`, value: `${bar(done, items.length, 10)}\n` + items.map((i) => `${i.done ? '✅' : '▫️'} ${i.label}`).join('\n'), inline: true },
     ];
+    const streak = store.snapshot<{ now: number; best: number }>(ctx.userId, 'streak')?.data;
+    if (streak) money.push(`⚔️ battle streak **${streak.now}** (best ${streak.best})`);
+    const inv = store.snapshot<[number, number][]>(ctx.userId, 'inv')?.data;
+    if (inv) {
+      const gt = gemTotals(new Map(inv));
+      money.push(`💎 gems · ${gt.hunting} hunting · ${gt.empowering} empowering · ${gt.lucky} lucky`);
+    }
     if (money.length) fields.push({ name: '👛 Wallet', value: money.join('\n'), inline: false });
     if (hb) {
       const a = advise(hb);
@@ -93,6 +100,14 @@ const huntbot: Command = {
     });
     fields.push({ name: '🧠 The plan', value: a.lines.join('\n'), inline: false });
     if (hb.essence !== null) fields.push({ name: '✨ Essence on hand', value: `**${hb.essence.toLocaleString()}**`, inline: true });
+    // how far each trait moved in the last week
+    const hist = store.snapshot<{ at: number; levels: Record<string, number> }[]>(ctx.userId, 'hbhist')?.data ?? [];
+    const weekAgo = [...hist].reverse().find((h) => h.at <= Date.now() - 7 * 86_400_000) ?? hist[0];
+    const last = hist.at(-1);
+    if (weekAgo && last && weekAgo !== last) {
+      const moved = Object.entries(last.levels).map(([k, v]) => [k, v - (weekAgo.levels[k] ?? v)] as const).filter(([, d]) => d > 0);
+      fields.push({ name: `📈 Since <t:${Math.floor(weekAgo.at / 1000)}:d>`, value: moved.length ? moved.map(([k, d]) => `${icons[k]} ${k} +${d}`).join(' · ') : 'no levels gained yet', inline: true });
+    }
     return show(ctx, store, { kind: 'huntbot', title: 'Huntbot', emoji: '🤖', fields, at: snap.at });
   },
 };

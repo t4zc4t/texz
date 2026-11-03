@@ -2,6 +2,7 @@ import type { Client, EmbedBuilder } from 'discord.js';
 import type { Reminder, Store } from './db.js';
 import { todoLines } from './features/daily.js';
 import { advise } from './features/huntbot.js';
+import { gemTotals } from './features/gems.js';
 import type { Huntbot } from './owo/parse.js';
 import { RED, card, say } from './theme.js';
 import { HOUR, afterQuiet, nextReset } from './time.js';
@@ -55,7 +56,21 @@ function text(store: Store, r: Reminder): EmbedBuilder | null {
     case 'lastcall': {
       const todo = todoLines(store, r.user_id);
       if (!todo.length) return null;
-      return card({ kind: 'lastCall', title: 'Two hours to reset', emoji: '⏳', color: RED, body: todo.join('\n') });
+      // the rest of the picture, so one message covers the evening
+      const extra: string[] = [];
+      const hbAt = store.cooldowns(r.user_id).get('huntbot');
+      if (hbAt) extra.push(hbAt <= Date.now() ? '🤖 huntbot is home, collect it' : `🤖 huntbot back <t:${Math.floor(hbAt / 1000)}:R>`);
+      const inv = store.snapshot<[number, number][]>(r.user_id, 'inv')?.data;
+      if (inv) {
+        const g = gemTotals(new Map(inv));
+        extra.push(`💎 gems left · hunting ${g.hunting} · empowering ${g.empowering} · lucky ${g.lucky}`);
+      }
+      return card({ kind: 'lastCall', title: 'Two hours to reset', emoji: '⏳', color: RED, body: todo.join('\n') + (extra.length ? `\n\n${extra.join('\n')}` : '') });
+    }
+    case 'gemlow': {
+      const kinds = r.note.split(',').filter(Boolean);
+      return card({ kind: 'gemLow', title: `Gems running out: ${kinds.join(', ')}`, emoji: '💎', color: RED,
+        body: 'Down to the last one. Buy or open lootboxes before your next hunts lose their bonus.\n`owo lb all` opens every lootbox you have.' });
     }
     case 'custom':
       return card({ kind: 'custom', title: 'A promise kept', emoji: '📝', body: `**${r.note}**` });
@@ -66,7 +81,7 @@ function text(store: Store, r: Reminder): EmbedBuilder | null {
 
 // reminder kind -> the setting that decides where it goes
 export const routeOf: Record<string, string> = {
-  huntbot: 'huntbot', pray: 'pray', vote: 'vote', reset: 'daily', lastcall: 'lastcall', hunt: 'huntbattle', custom: 'custom',
+  huntbot: 'huntbot', pray: 'pray', vote: 'vote', reset: 'daily', lastcall: 'lastcall', gemlow: 'gems', hunt: 'huntbattle', custom: 'custom',
 };
 
 // channel reminders are a short line with a ping, not a whole card

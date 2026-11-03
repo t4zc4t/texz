@@ -14,6 +14,8 @@ export interface Settings {
   minigames: boolean;
   huntbattle: boolean;
   lastcall: boolean;
+  // alert when a gem type is about to run out
+  gems: boolean;
   // where each reminder type goes, falls back to delivery when not set
   routes: Partial<Record<string, Delivery>>;
   // seconds before a channel reminder deletes itself, 0 keeps it
@@ -31,6 +33,7 @@ export const defaultSettings: Settings = {
   minigames: true,
   huntbattle: false,
   lastcall: true,
+  gems: true,
   routes: {},
   autodelete: 0,
 };

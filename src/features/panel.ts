@@ -9,7 +9,7 @@ import { card } from '../theme.js';
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
 
-export const toggles = ['huntbot', 'pray', 'vote', 'daily', 'minigames', 'lastcall', 'huntbattle'] as const;
+export const toggles = ['huntbot', 'pray', 'vote', 'daily', 'minigames', 'lastcall', 'gems', 'huntbattle'] as const;
 export type Toggle = (typeof toggles)[number];
 
 const names: Record<Toggle, { label: string; emoji: string; about: string }> = {
@@ -19,11 +19,12 @@ const names: Record<Toggle, { label: string; emoji: string; about: string }> = {
   daily: { label: 'New day', emoji: '🌅', about: 'the list when OwO resets' },
   minigames: { label: 'Minigames', emoji: '🦀', about: 'alastor, piku, run and friends on the list' },
   lastcall: { label: 'Last call', emoji: '⏳', about: 'two hours before reset, if anything is open' },
+  gems: { label: 'Gems low', emoji: '💎', about: 'when a gem type is about to run out' },
   huntbattle: { label: 'Hunt 15s', emoji: '🏹', about: 'every hunt and battle cooldown (noisy)' },
 };
 
 // reminder types that can each go to DM or a channel
-export const routable = ['huntbot', 'pray', 'vote', 'daily', 'lastcall', 'huntbattle', 'custom', 'anime'] as const;
+export const routable = ['huntbot', 'pray', 'vote', 'daily', 'lastcall', 'gems', 'huntbattle', 'custom', 'anime'] as const;
 const customName = { label: 'My own', emoji: '📝', about: 'reminders you set yourself' };
 const animeName = { label: 'Episode alerts', emoji: '📺', about: 'new episodes of shows you follow' };
 const nameOf = (k: string) => (k === 'custom' ? customName : k === 'anime' ? animeName : names[k as Toggle]);
@@ -38,6 +39,7 @@ export const autodeleteChoices = [
 ];
 
 const kindLabel: Record<string, string> = {
+  gemlow: '💎 Gems low',
   huntbot: '🤖 huntbot home', pray: '🙏 pray ready', vote: '🗳️ vote open', hunt: '🏹 hunt ready',
   reset: '🌅 new OwO day', lastcall: '⏳ last call', custom: '📝',
 };

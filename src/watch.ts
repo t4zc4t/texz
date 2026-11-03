@@ -8,6 +8,7 @@ import {
   type Embedish, type Huntbot, type ListedWeapon, type Weapon,
 } from './owo/parse.js';
 import { scheduleDailies, urgent } from './reminders.js';
+import { gemTotals } from './features/gems.js';
 import { RED, card } from './theme.js';
 import { HOUR, owoDay } from './time.js';
 
@@ -117,12 +118,19 @@ function readReply(store: Store, p: Pending, text: string, embeds: Embedish[], c
 
   switch (p.cmd) {
     case 'hunt':
-    case 'battle':
+    case 'battle': {
+      // battle results end with "Streak: 4" in the footer
+      const streak = p.cmd === 'battle' ? numberAfter(text, /Streak:\s*([\d,]+)/i) : null;
+      if (streak !== null) {
+        const old = store.snapshot<{ now: number; best: number }>(p.userId, 'streak')?.data;
+        store.saveSnapshot(p.userId, 'streak', { now: streak, best: Math.max(streak, old?.best ?? 0) });
+      }
       if (!onCooldown) {
         store.setCooldown(p.userId, p.cmd, new Date(now + 15_000));
         if (s.huntbattle) store.setReminder(p.userId, 'hunt', new Date(now + 15_000), '', m.channelId);
       }
       break;
+    }
     case 'pray':
     case 'curse': {
       const ms = onCooldown && wait ? parseDuration(wait[1]) : 5 * 60_000;
@@ -194,6 +202,12 @@ function readReply(store: Store, p: Pending, text: string, embeds: Embedish[], c
       const old = store.snapshot<Huntbot>(p.userId, 'huntbot')?.data;
       const merged: Huntbot = Object.keys(hb.traits).length ? hb : { ...(old ?? hb), backInMs: hb.backInMs, percentDone: hb.percentDone };
       store.saveSnapshot(p.userId, 'huntbot', merged);
+      // trait levels over time, a new entry only when something levelled
+      const levels = Object.fromEntries(Object.entries(merged.traits).map(([k, v]) => [k, v?.level ?? 0]));
+      const hist = store.snapshot<{ at: number; levels: Record<string, number> }[]>(p.userId, 'hbhist')?.data ?? [];
+      if (JSON.stringify(hist.at(-1)?.levels) !== JSON.stringify(levels) && Object.keys(levels).length) {
+        store.saveSnapshot(p.userId, 'hbhist', [...hist, { at: now, levels }].slice(-60));
+      }
       if (hb.backInMs) {
         store.setCooldown(p.userId, 'huntbot', new Date(now + hb.backInMs));
         if (s.huntbot) store.setReminder(p.userId, 'huntbot', new Date(now + hb.backInMs), '', m.channelId);
@@ -202,7 +216,15 @@ function readReply(store: Store, p: Pending, text: string, embeds: Embedish[], c
     }
     case 'inv': {
       const inv = parseInventory(text);
-      if (inv.size) store.saveSnapshot(p.userId, 'inv', [...inv]);
+      if (!inv.size) break;
+      store.saveSnapshot(p.userId, 'inv', [...inv]);
+      // one alert each time a kind drops to its last gem, not every time the inventory is opened
+      const low = Object.entries(gemTotals(inv)).filter(([, n]) => n <= 1).map(([k]) => k);
+      const key = `gemlow:${p.userId}`;
+      const before = (store.getKv(key) ?? '').split(',').filter(Boolean);
+      const fresh = low.filter((k) => !before.includes(k));
+      store.setKv(key, low.join(',') || null);
+      if (fresh.length && s.gems) store.setReminder(p.userId, 'gemlow', new Date(now), fresh.join(','), m.channelId);
       break;
     }
     case 'team': {

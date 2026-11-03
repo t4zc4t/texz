@@ -49,3 +49,10 @@ export function planGems(inv: Map<number, number>): GemPlan {
   lines.push('Before using any, do one `owo hunt` to see what is already active, an active gem cannot be swapped out.');
   return { lines, owned };
 }
+
+// gems left of each kind that matters for hunting, every tier added up
+export function gemTotals(inv: Map<number, number>) {
+  const out = {} as Record<'hunting' | 'empowering' | 'lucky', number>;
+  for (const k of ['hunting', 'empowering', 'lucky'] as const) out[k] = tiers.reduce((a, _, i) => a + (inv.get(base[k] + i) ?? 0), 0);
+  return out;
+}

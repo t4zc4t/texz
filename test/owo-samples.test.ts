@@ -162,3 +162,18 @@ test('vote cooldown is read from "available in 10 H"', async () => {
   onReplyForTest(store, 'u2', 'vote', '**✅ | Your daily vote is available!**\n**<:blank:427371936482328596> |** You can vote every 12 hours!');
   assert.ok(store.cooldowns('u2').get('vote')! <= Date.now());
 });
+
+test('battle streak, low gem alert once, huntbot history', async () => {
+  const { Store } = await import('../src/db.ts');
+  const { onReplyForTest } = await import('../src/watch.ts');
+  const store = new Store(':memory:');
+  onReplyForTest(store, 'u', 'battle', 'Nyxaroth goes into battle!\nYou won in 2 turns!  |  +800 xp  |  Streak: 4');
+  onReplyForTest(store, 'u', 'battle', 'Nyxaroth goes into battle!\nYou lost in 5 turns!  |  +200 xp  |  Streak: 0');
+  assert.deepEqual(store.snapshot('u', 'streak')?.data, { now: 0, best: 4 });
+  const inv = "**====== Nyxaroth's Inventory ======**\n`051`<:cgem1:1>¹⁴    `065`<:cgem3:1>¹⁰    `072`<:cgem4:1>⁰¹";
+  onReplyForTest(store, 'u', 'inv', inv);
+  onReplyForTest(store, 'u', 'inv', inv);
+  const alerts = store.userReminders('u').filter((r) => r.kind === 'gemlow');
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].note, 'lucky');
+});
