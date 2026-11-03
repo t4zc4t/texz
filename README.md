@@ -102,7 +102,7 @@ It needs Node 24 or newer. Everything is stored in one SQLite file (`texz.db`), 
 
 ## Keeping it online
 
-Reminders only work while texz is running, so it lives on a small free cloud server instead of my PC. Any always-on Linux box with Node works, run it with a process manager or a systemd service so it comes back after a restart.
+Reminders only work while texz is running, so it runs on a PC that stays on. On Windows, a small launcher in the Startup folder starts it in the background at login, it comes back on its own if it crashes, and its output goes to `texz.log`. Any always-on Linux box with Node works too, with a process manager or a systemd service.
 
 ## Looking after it
 

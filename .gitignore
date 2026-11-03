@@ -5,3 +5,5 @@ dist
 *.db-*
 owo-debug.log
 backups
+texz.log
+.restarting
