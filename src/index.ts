@@ -5,6 +5,7 @@ import { warmUp } from './gifs.js';
 import { startScheduler } from './reminders.js';
 import { onComponent, onSlash, onText } from './core/registry.js';
 import { afkWatch } from './modules/utility.js';
+import { startModTimers } from './modules/moderation.js';
 import { watchEpisodes } from './anime/alerts.js';
 import { wireEvents } from './events.js';
 import { watch } from './watch.js';
@@ -35,6 +36,7 @@ client.once(Events.ClientReady, (c) => {
   void warmUp(custom).then((n) => console.log(`gifs ready: ${n}`));
   startScheduler(client, store);
   watchEpisodes(store);
+  startModTimers(client, store);
   // rotating status, so the profile looks alive
   const moods = [
     'hiding from Kunikida\'s schedule',

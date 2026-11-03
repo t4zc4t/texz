@@ -1,7 +1,7 @@
 import {
-  ChannelType, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder, type Client, type GuildMember, type PermissionResolvable,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, type Interaction, type MessageActionRowComponentBuilder, SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder, type Client, type GuildMember, type PermissionResolvable,
 } from 'discord.js';
-import type { Store } from '../db.js';
+import type { Case, Store } from '../db.js';
 import type { Ctx } from '../core/ctx.js';
 import type { Command, Module } from '../core/module.js';
 import { RED, card, say, type Kind } from '../theme.js';
@@ -81,33 +81,12 @@ const warn: Command = {
     const t = await target(ctx, PermissionFlagsBits.ModerateMembers);
     if (typeof t === 'string') return ctx.reply(t);
     const why = ctx.str('reason') ?? say('noReason');
-    const id = store.warn(ctx.guildId!, t.them!.id, ctx.userId, why);
-    const count = store.warnings(ctx.guildId!, t.them!.id).length;
+    const num = store.addCase({ guild_id: ctx.guildId!, type: 'warn', user_id: t.them!.id, user_name: t.them!.user.username, mod_id: ctx.userId, reason: why });
+    const count = store.findCases(ctx.guildId!, { user: t.them!.id, type: 'warn' }, 1).total;
     await tellThem(t.them!, `⚠️ You were warned in **${ctx.guild!.name}**: ${why}`);
-    const e = actionCard('warn', 'Warning filed', '⚠️', `<@${t.them!.id}>`, ctx.userId, why, [{ name: '📒 Warnings', value: `#${id} · ${count} total`, inline: true }]);
+    const e = actionCard('warn', `Case #${num} · Warning`, '⚠️', `<@${t.them!.id}>`, ctx.userId, why, [{ name: '📒 Warnings', value: `${count} on file`, inline: true }]);
     await log(ctx.guild!.client, store, ctx.guildId!, e);
     return ctx.reply({ embeds: [e], private: false });
-  },
-};
-
-const warnings: Command = {
-  name: 'warnings',
-  data: new SlashCommandBuilder().setName('warnings').setDescription('Someone\'s warnings, or remove one')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).setDMPermission(false)
-    .addUserOption((x) => x.setName('user').setDescription('Who').setRequired(true))
-    .addIntegerOption((x) => x.setName('remove').setDescription('Warning number to remove')).toJSON(),
-  text: { aliases: ['warns'], args: ['user', 'remove'] },
-  run: async (ctx, store) => {
-    if (!ctx.guildId || !ctx.member?.permissions.has(PermissionFlagsBits.ModerateMembers)) return ctx.reply('You don\'t have the authority for that, partner.');
-    const id = ctx.user('user');
-    if (!id) return ctx.reply('Whose file? Mention someone.');
-    const rm = ctx.int('remove');
-    if (rm) return ctx.reply(store.unwarn(ctx.guildId, rm) ? `🧽 Warning #${rm} wiped from the record.` : 'No warning with that number.');
-    const list = store.warnings(ctx.guildId, id);
-    return ctx.reply(card({
-      kind: 'warn', title: `Record · ${list.length} warning${list.length === 1 ? '' : 's'}`, emoji: '📒', gif: 'off',
-      body: list.length ? list.slice(0, 15).map((w) => `\`#${w.id}\` <t:${unix(w.at)}:d> by <@${w.mod_id}> · ${w.reason}`).join('\n') : `<@${id}> has a spotless record. Suspiciously spotless.`,
-    }));
   },
 };
 
@@ -124,8 +103,9 @@ const timeout: Command = {
     if (!ms || ms > 28 * 86_400_000) return ctx.reply('Give me a length like `10m`, `2h` or `1d`, up to 28 days.');
     const why = ctx.str('reason') ?? say('noReason');
     await t.them!.timeout(ms, why);
+    const num = store.addCase({ guild_id: ctx.guildId!, type: 'timeout', user_id: t.them!.id, user_name: t.them!.user.username, mod_id: ctx.userId, reason: why, until: Date.now() + ms });
     await tellThem(t.them!, `🔇 You were timed out in **${ctx.guild!.name}** for ${human(ms)}: ${why}`);
-    const e = actionCard('timeout', 'No Longer Human', '🩹', `<@${t.them!.id}>`, ctx.userId, why, [{ name: '⏳ Until', value: `<t:${unix(Date.now() + ms)}:R>`, inline: true }]);
+    const e = actionCard('timeout', `Case #${num} · No Longer Human`, '🩹', `<@${t.them!.id}>`, ctx.userId, why, [{ name: '⏳ Until', value: `<t:${unix(Date.now() + ms)}:R>`, inline: true }]);
     await log(ctx.guild!.client, store, ctx.guildId!, e);
     return ctx.reply({ embeds: [e], private: false });
   },
@@ -140,7 +120,8 @@ const untimeout: Command = {
     const t = await target(ctx, PermissionFlagsBits.ModerateMembers);
     if (typeof t === 'string') return ctx.reply(t);
     await t.them!.timeout(null);
-    const e = actionCard('unban', 'Voice restored', '🔊', `<@${t.them!.id}>`, ctx.userId, 'timeout lifted');
+    const num = store.addCase({ guild_id: ctx.guildId!, type: 'untimeout', user_id: t.them!.id, user_name: t.them!.user.username, mod_id: ctx.userId, reason: 'timeout lifted' });
+    const e = actionCard('unban', `Case #${num} · Voice restored`, '🔊', `<@${t.them!.id}>`, ctx.userId, 'timeout lifted');
     await log(ctx.guild!.client, store, ctx.guildId!, e);
     return ctx.reply({ embeds: [e], private: false });
   },
@@ -157,7 +138,8 @@ const kick: Command = {
     const why = ctx.str('reason') ?? say('noReason');
     await tellThem(t.them!, `👢 You were kicked from **${ctx.guild!.name}**: ${why}`);
     await t.them!.kick(why);
-    const e = actionCard('kick', 'Shown the door', '👢', `${t.them!.user.username} (\`${t.them!.id}\`)`, ctx.userId, why);
+    const num = store.addCase({ guild_id: ctx.guildId!, type: 'kick', user_id: t.them!.id, user_name: t.them!.user.username, mod_id: ctx.userId, reason: why });
+    const e = actionCard('kick', `Case #${num} · Shown the door`, '👢', `${t.them!.user.username} (\`${t.them!.id}\`)`, ctx.userId, why);
     await log(ctx.guild!.client, store, ctx.guildId!, e);
     return ctx.reply({ embeds: [e], private: false });
   },
@@ -165,17 +147,30 @@ const kick: Command = {
 
 const ban: Command = {
   name: 'ban',
-  data: reason(user(new SlashCommandBuilder().setName('ban').setDescription('Banish someone for good')
+  data: reason(user(new SlashCommandBuilder().setName('ban').setDescription('Banish someone, for good or for a while')
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers).setDMPermission(false)))
+    .addStringOption((x) => x.setName('length').setDescription('Temporary ban, like 1d or 2w (empty = forever)'))
     .addIntegerOption((x) => x.setName('clear').setDescription('Delete their messages from the last N days').setMinValue(0).setMaxValue(7)).toJSON(),
-  text: { args: ['user', 'reason'] },
+  // "tz ban @x 3d spamming" is a temp ban, "tz ban @x spamming" is forever
+  text: { aliases: ['tempban'], args: ['user', 'reason'] },
   run: async (ctx, store) => {
     const t = await target(ctx, PermissionFlagsBits.BanMembers);
     if (typeof t === 'string') return ctx.reply(t);
-    const why = ctx.str('reason') ?? say('noReason');
-    await tellThem(t.them!, `🔨 You were banned from **${ctx.guild!.name}**: ${why}`);
+    let lengthRaw = ctx.str('length');
+    let why = ctx.str('reason');
+    if (ctx.viaText && why) {
+      const [first, ...rest] = why.split(/\s+/);
+      if (/^(\d+(s|m|h|d|w))+$/i.test(first)) { lengthRaw = first; why = rest.join(' ') || null; }
+    }
+    const ms = lengthRaw ? parseLength(lengthRaw) : null;
+    if (lengthRaw && (!ms || ms < 60_000 || ms > 365 * 86_400_000)) return ctx.reply('Ban length should look like `1d`, `12h` or `2w`, from a minute to a year.');
+    why ??= say('noReason');
+    const until = ms ? Date.now() + ms : null;
+    await tellThem(t.them!, `🔨 You were banned from **${ctx.guild!.name}**${ms ? ` for ${human(ms)}` : ''}: ${why}`);
     await t.them!.ban({ reason: why, deleteMessageSeconds: (ctx.int('clear') ?? 0) * 86_400 });
-    const e = actionCard('ban', 'Banished', '🔨', `${t.them!.user.username} (\`${t.them!.id}\`)`, ctx.userId, why);
+    const num = store.addCase({ guild_id: ctx.guildId!, type: ms ? 'tempban' : 'ban', user_id: t.them!.id, user_name: t.them!.user.username, mod_id: ctx.userId, reason: why, until, open: !!ms });
+    const e = actionCard(ms ? 'tempban' : 'ban', `Case #${num} · ${ms ? 'Sent on holiday' : 'Banished'}`, '🔨', `${t.them!.user.username} (\`${t.them!.id}\`)`, ctx.userId, why,
+      until ? [{ name: '⏳ Back', value: `<t:${unix(until)}:R>`, inline: true }] : []);
     await log(ctx.guild!.client, store, ctx.guildId!, e);
     return ctx.reply({ embeds: [e], private: false });
   },
@@ -193,7 +188,9 @@ const unban: Command = {
     if (!id) return ctx.reply('I need their user ID.');
     const done = await ctx.guild.members.unban(id).then(() => true).catch(() => false);
     if (!done) return ctx.reply('Couldn\'t unban that ID. Are they actually banned?');
-    const e = actionCard('unban', 'Pardoned', '🕊️', `\`${id}\``, ctx.userId, 'unbanned');
+    store.closeCases(ctx.guild.id, id, 'tempban');
+    const num = store.addCase({ guild_id: ctx.guild.id, type: 'unban', user_id: id, mod_id: ctx.userId, reason: 'pardoned' });
+    const e = actionCard('unban', `Case #${num} · Pardoned`, '🕊️', `\`${id}\``, ctx.userId, 'unbanned');
     await log(ctx.guild.client, store, ctx.guild.id, e);
     return ctx.reply({ embeds: [e], private: false });
   },
@@ -262,9 +259,127 @@ const slowmode: Command = {
   },
 };
 
+const caseIcon: Record<string, string> = { warn: '⚠️', timeout: '🩹', untimeout: '🔊', kick: '👢', ban: '🔨', tempban: '⏳', unban: '🕊️' };
+const caseTypes = Object.keys(caseIcon);
+
+function caseCard(c: Case) {
+  const fields = [
+    { name: '👤 Who', value: `<@${c.user_id}>${c.user_name ? ` · ${c.user_name}` : ''}`, inline: true },
+    { name: '🕵️ By', value: `<@${c.mod_id}>`, inline: true },
+    { name: '📅 When', value: `<t:${unix(c.at)}:f>`, inline: true },
+  ];
+  if (c.until) fields.push({ name: c.type === 'tempban' ? '⏳ Ban ends' : '⏳ Until', value: `<t:${unix(c.until)}:R>${c.type === 'tempban' && !c.open ? ' (over)' : ''}`, inline: true });
+  fields.push({ name: '📝 Reason', value: c.reason, inline: false });
+  return card({ kind: 'caseFile', title: `Case #${c.num} · ${c.type}`, emoji: caseIcon[c.type] ?? '📁', color: RED, gif: 'off', fields });
+}
+
+interface CaseFilter { user?: string; mod?: string; type?: string; text?: string }
+const PER = 8;
+
+// ids carry the filter so the pages work without remembering anything
+export function casePage(store: Store, guildId: string, owner: string, page: number, f: CaseFilter) {
+  const { rows, total } = store.findCases(guildId, f, PER, page * PER);
+  const pages = Math.max(1, Math.ceil(total / PER));
+  const what = [f.user && `about <@${f.user}>`, f.mod && `by <@${f.mod}>`, f.type && `type **${f.type}**`, f.text && `matching "${f.text}"`].filter(Boolean).join(' · ');
+  const body = rows.length
+    ? rows.map((c) => `${caseIcon[c.type] ?? '📁'} \`#${c.num}\` <t:${unix(c.at)}:d> <@${c.user_id}> by <@${c.mod_id}>\n-# ${c.reason.slice(0, 90)}`).join('\n')
+    : 'Nothing on file. Either everyone behaves, or nobody gets caught.';
+  const key = [f.user ?? '', f.mod ?? '', f.type ?? '', (f.text ?? '').slice(0, 20).replace(/\|/g, '')].join('|');
+  const nav = (p: number, label: string, emoji: string) => new ButtonBuilder().setCustomId(`cs|${owner}|${p}|${key}`.slice(0, 100))
+    .setLabel(label).setEmoji(emoji).setStyle(ButtonStyle.Secondary).setDisabled(p < 0 || p >= pages);
+  const e = card({ kind: 'caseList', title: `Case archive · ${total}`, emoji: '🗄️', gif: 'off', body: `${what ? `${what}\n\n` : ''}${body}` });
+  e.setFooter({ text: `Page ${page + 1}/${pages} · /case view <number> opens one` });
+  return { embeds: [e], components: pages > 1 ? [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(nav(page - 1, 'Newer', '◀️'), nav(page + 1, 'Older', '▶️'))] : [] };
+}
+
+export async function onCaseComponent(store: Store, i: Interaction): Promise<boolean> {
+  if (!i.isButton() || !i.customId.startsWith('cs|') || !i.guildId) return false;
+  const [, owner, page, user, mod, type, text] = i.customId.split('|');
+  if (i.user.id !== owner) {
+    await i.reply({ content: 'Open your own with `/case list`.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
+  await i.update(casePage(store, i.guildId, owner, Number(page), { user: user || undefined, mod: mod || undefined, type: type || undefined, text: text || undefined }));
+  return true;
+}
+
+const cases: Command = {
+  name: 'case',
+  data: new SlashCommandBuilder().setName('case').setDescription('The moderation archive: look up, search, edit cases')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).setDMPermission(false)
+    .addSubcommand((c) => c.setName('view').setDescription('Open one case')
+      .addIntegerOption((o) => o.setName('number').setDescription('Case number').setRequired(true).setMinValue(1)))
+    .addSubcommand((c) => c.setName('list').setDescription('Search the archive')
+      .addUserOption((o) => o.setName('user').setDescription('Cases about them'))
+      .addUserOption((o) => o.setName('mod').setDescription('Cases filed by them'))
+      .addStringOption((o) => o.setName('type').setDescription('Only one kind').addChoices(...caseTypes.map((t) => ({ name: t, value: t }))))
+      .addStringOption((o) => o.setName('search').setDescription('Words in the reason or name').setMaxLength(50)))
+    .addSubcommand((c) => c.setName('reason').setDescription('Change a case\'s reason')
+      .addIntegerOption((o) => o.setName('number').setDescription('Case number').setRequired(true).setMinValue(1))
+      .addStringOption((o) => o.setName('reason').setDescription('New reason').setRequired(true).setMaxLength(300)))
+    .addSubcommand((c) => c.setName('delete').setDescription('Remove a case from the record')
+      .addIntegerOption((o) => o.setName('number').setDescription('Case number').setRequired(true).setMinValue(1)))
+    .toJSON(),
+  // tz case 12, tz case @user, tz case list warn, tz case reason 12 new words, tz warnings @user
+  text: { aliases: ['cases', 'warnings', 'warns'], sub: true, subArgs: { view: ['number'], list: ['user', 'search'], reason: ['number', 'reason'], delete: ['number'] } },
+  run: async (ctx, store) => {
+    if (!ctx.guildId || !ctx.member?.permissions.has(PermissionFlagsBits.ModerateMembers)) return ctx.reply('You don\'t have the authority for that, partner.');
+    let sub = ctx.sub();
+    let num = ctx.int('number');
+    const f: CaseFilter = {};
+    // text shortcuts: a bare number opens it, a bare mention or type searches
+    if (ctx.viaText && sub && !['view', 'list', 'reason', 'delete'].includes(sub)) {
+      if (/^#?\d+$/.test(sub)) { num = Number(sub.replace('#', '')); sub = 'view'; }
+      else if (/^<@!?\d+>$/.test(sub)) { f.user = sub.replace(/\D/g, ''); sub = 'list'; }
+      else if (caseTypes.includes(sub)) { f.type = sub; sub = 'list'; }
+      else { f.text = sub; sub = 'list'; }
+    }
+    sub ??= 'list';
+    if (sub === 'view') {
+      const c = num ? store.getCase(ctx.guildId, num) : null;
+      return ctx.reply(c ? { embeds: [caseCard(c)], private: false } : 'No case with that number.');
+    }
+    if (sub === 'reason') {
+      const why = ctx.str('reason');
+      if (!num || !why) return ctx.reply('Like this: `/case reason number:12 reason:...`');
+      return ctx.reply(store.editCase(ctx.guildId, num, why) ? `🖋️ Case #${num} amended.` : 'No case with that number.');
+    }
+    if (sub === 'delete') {
+      if (!num) return ctx.reply('Which number?');
+      return ctx.reply(store.deleteCase(ctx.guildId, num) ? `🧽 Case #${num} wiped from the record. Kunikida-kun will be furious.` : 'No case with that number.');
+    }
+    f.user ??= ctx.user('user') ?? undefined;
+    f.mod = ctx.viaText ? undefined : ctx.user('mod') ?? undefined;
+    f.type ??= ctx.viaText ? undefined : ctx.str('type') ?? undefined;
+    const search = ctx.str('search');
+    if (search) {
+      if (ctx.viaText && caseTypes.includes(search.toLowerCase())) f.type = search.toLowerCase();
+      else f.text = search;
+    }
+    return ctx.reply({ ...casePage(store, ctx.guildId, ctx.userId, 0, f), private: false });
+  },
+};
+
+// lifts temp bans when their time is up, checked every minute so a restart doesn't lose any
+export function startModTimers(client: Client, store: Store) {
+  const tick = async () => {
+    for (const c of store.dueCases(Date.now())) {
+      store.closeCases(c.guild_id, c.user_id, 'tempban');
+      const guild = await client.guilds.fetch(c.guild_id).catch(() => null);
+      if (!guild) continue;
+      const ok = await guild.members.unban(c.user_id, `temp ban from case #${c.num} ended`).then(() => true).catch(() => false);
+      if (!ok) continue;
+      const num = store.addCase({ guild_id: c.guild_id, type: 'unban', user_id: c.user_id, user_name: c.user_name, mod_id: client.user!.id, reason: `temp ban from case #${c.num} ended` });
+      await log(client, store, c.guild_id, actionCard('unban', `Case #${num} · Holiday over`, '🕊️', `${c.user_name ?? ''} (\`${c.user_id}\`)`, client.user!.id, `temp ban from case #${c.num} ended`));
+    }
+  };
+  setInterval(() => void tick(), 60_000);
+  void tick();
+}
+
 export const moderation: Module = {
   name: 'moderation',
   label: 'Moderation',
-  about: 'Warn, timeout, kick, ban, purge, lock and slowmode. Logs and automod are in /setup',
-  commands: [warn, warnings, timeout, untimeout, kick, ban, unban, purge, lock, slowmode],
+  about: 'Warn, timeout, kick, bans (temporary too), purge, lock and slowmode, every action filed as a numbered case. Logs and automod are in /setup',
+  commands: [warn, cases, timeout, untimeout, kick, ban, unban, purge, lock, slowmode],
 };

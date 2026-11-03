@@ -89,6 +89,45 @@ export const defaultLevels = (): LevelRules => ({
 });
 
 // features a server has to switch on itself, levels posting in every chat isn't something to spring on people
+export interface Case {
+  guild_id: string;
+  num: number;
+  type: string;
+  user_id: string;
+  user_name: string | null;
+  mod_id: string;
+  reason: string;
+  at: number;
+  until: number | null;
+  open: number;
+}
+
+export interface Giveaway {
+  id: number;
+  guild_id: string;
+  channel_id: string;
+  message_id: string | null;
+  host_id: string;
+  prize: string;
+  winners: number;
+  ends_at: number;
+  // json of GiveawayRules
+  rules: string;
+  ended: number;
+  picked: string | null;
+}
+
+export interface WatchEntry {
+  user_id: string;
+  media_id: number;
+  title: string;
+  kind: string;
+  status: string;
+  progress: number;
+  total: number | null;
+  updated_at: number;
+}
+
 export const offByDefault = new Set(['levels']);
 export const defaultRules = (module = ''): ModuleRules => ({ enabled: !offByDefault.has(module), channels: [], roles: [] });
 
@@ -169,20 +208,66 @@ export class Store {
         messages INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (guild_id, user_id)
       );
-      CREATE TABLE IF NOT EXISTS warnings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        guild_id TEXT NOT NULL,
-        user_id TEXT NOT NULL,
-        mod_id TEXT NOT NULL,
-        reason TEXT NOT NULL,
-        at INTEGER NOT NULL
-      );
       CREATE TABLE IF NOT EXISTS xp (
         guild_id TEXT NOT NULL,
         user_id TEXT NOT NULL,
         xp INTEGER NOT NULL DEFAULT 0,
         last_at INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (guild_id, user_id)
+      );
+      CREATE TABLE IF NOT EXISTS cases (
+        guild_id TEXT NOT NULL,
+        num INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        user_name TEXT,
+        mod_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        at INTEGER NOT NULL,
+        until INTEGER,
+        open INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (guild_id, num)
+      );
+      CREATE TABLE IF NOT EXISTS giveaways (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        message_id TEXT,
+        host_id TEXT NOT NULL,
+        prize TEXT NOT NULL,
+        winners INTEGER NOT NULL,
+        ends_at INTEGER NOT NULL,
+        rules TEXT NOT NULL,
+        ended INTEGER NOT NULL DEFAULT 0,
+        picked TEXT
+      );
+      CREATE TABLE IF NOT EXISTS entries (
+        giveaway_id INTEGER NOT NULL,
+        user_id TEXT NOT NULL,
+        PRIMARY KEY (giveaway_id, user_id)
+      );
+      CREATE TABLE IF NOT EXISTS watchlist (
+        user_id TEXT NOT NULL,
+        media_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        progress INTEGER NOT NULL DEFAULT 0,
+        total INTEGER,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, media_id)
+      );
+      CREATE TABLE IF NOT EXISTS birthdays (
+        user_id TEXT PRIMARY KEY,
+        month INTEGER NOT NULL,
+        day INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS birthday_done (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        role_until INTEGER,
+        PRIMARY KEY (guild_id, user_id, year)
       );
       CREATE TABLE IF NOT EXISTS pending_deletes (
         channel_id TEXT NOT NULL,
@@ -201,6 +286,16 @@ export class Store {
         PRIMARY KEY (user_id, what)
       );
     `);
+    // warnings used to live in their own table, they're cases now
+    const old = this.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'warnings'").get();
+    if (old) {
+      this.db.exec(`
+        INSERT OR IGNORE INTO cases (guild_id, num, type, user_id, mod_id, reason, at)
+          SELECT guild_id, (SELECT COALESCE(MAX(num), 0) FROM cases c WHERE c.guild_id = w.guild_id) + ROW_NUMBER() OVER (PARTITION BY guild_id ORDER BY at), 'warn', user_id, mod_id, reason, at
+          FROM warnings w;
+        DROP TABLE warnings;
+      `);
+    }
   }
 
   settings(userId: string): Settings {
@@ -313,18 +408,135 @@ export class Store {
       { last_at: number; last_channel: string | null; messages: number } | undefined) ?? null;
   }
 
-  warn(guildId: string, userId: string, modId: string, reason: string): number {
-    const r = this.db.prepare('INSERT INTO warnings (guild_id, user_id, mod_id, reason, at) VALUES (?, ?, ?, ?, ?)').run(guildId, userId, modId, reason, Date.now());
-    return Number(r.lastInsertRowid);
+  // ---------- moderation cases ----------
+
+  addCase(c: Omit<Case, 'num' | 'at' | 'open' | 'until' | 'user_name'> & { open?: boolean; until?: number | null; user_name?: string | null }): number {
+    const num = (this.db.prepare('SELECT COALESCE(MAX(num), 0) + 1 AS n FROM cases WHERE guild_id = ?').get(c.guild_id) as { n: number }).n;
+    this.db.prepare('INSERT INTO cases (guild_id, num, type, user_id, user_name, mod_id, reason, at, until, open) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(c.guild_id, num, c.type, c.user_id, c.user_name ?? null, c.mod_id, c.reason, Date.now(), c.until ?? null, c.open ? 1 : 0);
+    return num;
   }
 
-  warnings(guildId: string, userId: string): { id: number; mod_id: string; reason: string; at: number }[] {
-    return this.db.prepare('SELECT id, mod_id, reason, at FROM warnings WHERE guild_id = ? AND user_id = ? ORDER BY at DESC').all(guildId, userId) as
-      { id: number; mod_id: string; reason: string; at: number }[];
+  getCase(guildId: string, num: number): Case | null {
+    return (this.db.prepare('SELECT * FROM cases WHERE guild_id = ? AND num = ?').get(guildId, num) as Case | undefined) ?? null;
   }
 
-  unwarn(guildId: string, id: number): boolean {
-    return Number(this.db.prepare('DELETE FROM warnings WHERE guild_id = ? AND id = ?').run(guildId, id).changes) > 0;
+  findCases(guildId: string, f: { user?: string; mod?: string; type?: string; text?: string }, limit = 10, offset = 0): { rows: Case[]; total: number } {
+    const where = ['guild_id = ?'];
+    const args: (string | number)[] = [guildId];
+    if (f.user) { where.push('user_id = ?'); args.push(f.user); }
+    if (f.mod) { where.push('mod_id = ?'); args.push(f.mod); }
+    if (f.type) { where.push('type = ?'); args.push(f.type); }
+    if (f.text) { where.push("(reason LIKE ? ESCAPE '\\' OR user_name LIKE ? ESCAPE '\\')"); const t = `%${f.text.replace(/[\\%_]/g, '\\$&')}%`; args.push(t, t); }
+    const w = where.join(' AND ');
+    const total = (this.db.prepare(`SELECT COUNT(*) AS n FROM cases WHERE ${w}`).get(...args) as { n: number }).n;
+    const rows = this.db.prepare(`SELECT * FROM cases WHERE ${w} ORDER BY num DESC LIMIT ? OFFSET ?`).all(...args, limit, offset) as unknown as Case[];
+    return { rows, total };
+  }
+
+  editCase(guildId: string, num: number, reason: string): boolean {
+    return Number(this.db.prepare('UPDATE cases SET reason = ? WHERE guild_id = ? AND num = ?').run(reason, guildId, num).changes) > 0;
+  }
+
+  deleteCase(guildId: string, num: number): boolean {
+    return Number(this.db.prepare('DELETE FROM cases WHERE guild_id = ? AND num = ?').run(guildId, num).changes) > 0;
+  }
+
+  // temp bans whose time is up
+  dueCases(now: number): Case[] {
+    return this.db.prepare("SELECT * FROM cases WHERE open = 1 AND type = 'tempban' AND until <= ?").all(now) as unknown as Case[];
+  }
+
+  closeCases(guildId: string, userId: string, type: string) {
+    this.db.prepare('UPDATE cases SET open = 0 WHERE guild_id = ? AND user_id = ? AND type = ?').run(guildId, userId, type);
+  }
+
+  // ---------- giveaways ----------
+
+  addGiveaway(g: Omit<Giveaway, 'id' | 'ended' | 'picked' | 'message_id'>): number {
+    return Number(this.db.prepare('INSERT INTO giveaways (guild_id, channel_id, host_id, prize, winners, ends_at, rules) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(g.guild_id, g.channel_id, g.host_id, g.prize, g.winners, g.ends_at, g.rules).lastInsertRowid);
+  }
+
+  giveaway(id: number): Giveaway | null {
+    return (this.db.prepare('SELECT * FROM giveaways WHERE id = ?').get(id) as Giveaway | undefined) ?? null;
+  }
+
+  updateGiveaway(id: number, patch: Partial<Pick<Giveaway, 'message_id' | 'ended' | 'picked' | 'ends_at'>>) {
+    for (const [k, v] of Object.entries(patch)) this.db.prepare(`UPDATE giveaways SET ${k} = ? WHERE id = ?`).run(v as string | number | null, id);
+  }
+
+  activeGiveaways(guildId: string): Giveaway[] {
+    return this.db.prepare('SELECT * FROM giveaways WHERE guild_id = ? AND ended = 0 ORDER BY ends_at').all(guildId) as unknown as Giveaway[];
+  }
+
+  dueGiveaways(now: number): Giveaway[] {
+    return this.db.prepare('SELECT * FROM giveaways WHERE ended = 0 AND ends_at <= ?').all(now) as unknown as Giveaway[];
+  }
+
+  toggleEntry(id: number, userId: string): boolean {
+    const had = Number(this.db.prepare('DELETE FROM entries WHERE giveaway_id = ? AND user_id = ?').run(id, userId).changes) > 0;
+    if (!had) this.db.prepare('INSERT INTO entries (giveaway_id, user_id) VALUES (?, ?)').run(id, userId);
+    return !had;
+  }
+
+  entries(id: number): string[] {
+    return (this.db.prepare('SELECT user_id FROM entries WHERE giveaway_id = ?').all(id) as { user_id: string }[]).map((r) => r.user_id);
+  }
+
+  // ---------- watchlist ----------
+
+  watch(e: Omit<WatchEntry, 'updated_at'>) {
+    this.db.prepare(`INSERT INTO watchlist (user_id, media_id, title, kind, status, progress, total, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, media_id) DO UPDATE SET status = excluded.status, progress = excluded.progress, total = excluded.total, title = excluded.title, updated_at = excluded.updated_at`)
+      .run(e.user_id, e.media_id, e.title, e.kind, e.status, e.progress, e.total ?? null, Date.now());
+  }
+
+  watchEntry(userId: string, mediaId: number): WatchEntry | null {
+    return (this.db.prepare('SELECT * FROM watchlist WHERE user_id = ? AND media_id = ?').get(userId, mediaId) as WatchEntry | undefined) ?? null;
+  }
+
+  watchlist(userId: string, status?: string): WatchEntry[] {
+    return (status
+      ? this.db.prepare('SELECT * FROM watchlist WHERE user_id = ? AND status = ? ORDER BY updated_at DESC').all(userId, status)
+      : this.db.prepare('SELECT * FROM watchlist WHERE user_id = ? ORDER BY updated_at DESC').all(userId)) as unknown as WatchEntry[];
+  }
+
+  unwatch(userId: string, mediaId: number): boolean {
+    return Number(this.db.prepare('DELETE FROM watchlist WHERE user_id = ? AND media_id = ?').run(userId, mediaId).changes) > 0;
+  }
+
+  // ---------- birthdays ----------
+
+  setBirthday(userId: string, month: number, day: number) {
+    this.db.prepare('INSERT INTO birthdays (user_id, month, day) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET month = excluded.month, day = excluded.day').run(userId, month, day);
+  }
+
+  birthday(userId: string): { month: number; day: number } | null {
+    return (this.db.prepare('SELECT month, day FROM birthdays WHERE user_id = ?').get(userId) as { month: number; day: number } | undefined) ?? null;
+  }
+
+  removeBirthday(userId: string): boolean {
+    return Number(this.db.prepare('DELETE FROM birthdays WHERE user_id = ?').run(userId).changes) > 0;
+  }
+
+  birthdays(): { user_id: string; month: number; day: number }[] {
+    return this.db.prepare('SELECT user_id, month, day FROM birthdays').all() as { user_id: string; month: number; day: number }[];
+  }
+
+  birthdayDone(guildId: string, userId: string, year: number): boolean {
+    return !!this.db.prepare('SELECT 1 FROM birthday_done WHERE guild_id = ? AND user_id = ? AND year = ?').get(guildId, userId, year);
+  }
+
+  markBirthday(guildId: string, userId: string, year: number, roleUntil: number | null) {
+    this.db.prepare('INSERT OR IGNORE INTO birthday_done (guild_id, user_id, year, role_until) VALUES (?, ?, ?, ?)').run(guildId, userId, year, roleUntil);
+  }
+
+  // birthday roles that have had their day
+  dueBirthdayRoles(now: number): { guild_id: string; user_id: string; year: number }[] {
+    const rows = this.db.prepare('SELECT guild_id, user_id, year FROM birthday_done WHERE role_until IS NOT NULL AND role_until <= ?').all(now) as { guild_id: string; user_id: string; year: number }[];
+    this.db.prepare('UPDATE birthday_done SET role_until = NULL WHERE role_until IS NOT NULL AND role_until <= ?').run(now);
+    return rows;
   }
 
   xpOf(guildId: string, userId: string): { xp: number; last_at: number } {

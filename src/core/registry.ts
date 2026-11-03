@@ -6,7 +6,7 @@ import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
 import { anime, onAnimeComponent } from '../modules/anime.js';
 import { onAvatarButton, onPollButton, utility } from '../modules/utility.js';
-import { moderation } from '../modules/moderation.js';
+import { moderation, onCaseComponent } from '../modules/moderation.js';
 import { onRoleButton, welcomeModule } from '../modules/welcome.js';
 import { levelsModule } from '../modules/levels.js';
 import { onSetup, useModules } from '../features/setup.js';
@@ -90,6 +90,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onPollButton(store, i)) return;
     if (await onAvatarButton(i)) return;
     if (await onRoleButton(i)) return;
+    if (await onCaseComponent(store, i)) return;
   } catch (e) {
     console.error('component', e);
   }

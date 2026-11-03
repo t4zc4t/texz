@@ -70,3 +70,28 @@ test('xp boosts multiply, best role only, capped at 10x', async () => {
   l.boost.from = now + 5000;
   assert.equal(boostsFor(l, null, null, null, now).total, 2);
 });
+
+test('cases: old warnings move over, numbering and search work', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { Store } = await import('../src/db.ts');
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const path = `${mkdtempSync(`${tmpdir()}/tz-`)}/t.db`;
+  const old = new DatabaseSync(path);
+  old.exec('CREATE TABLE warnings (id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT, user_id TEXT, mod_id TEXT, reason TEXT, at INTEGER)');
+  old.exec("INSERT INTO warnings (guild_id, user_id, mod_id, reason, at) VALUES ('g', 'u1', 'm', 'spam 100%', 1), ('g', 'u2', 'm', 'rude', 2), ('h', 'u1', 'm', 'x', 3)");
+  old.close();
+  const store = new Store(path);
+  assert.equal(store.getCase('g', 2)?.reason, 'rude');
+  assert.equal(store.getCase('h', 1)?.reason, 'x');
+  const n = store.addCase({ guild_id: 'g', type: 'tempban', user_id: 'u1', mod_id: 'm', reason: 'raid', until: 10, open: true });
+  assert.equal(n, 3);
+  assert.equal(store.findCases('g', { user: 'u1' }).total, 2);
+  assert.equal(store.findCases('g', { text: '100%' }).total, 1);
+  assert.equal(store.findCases('g', { text: '_' }).total, 0);
+  assert.equal(store.dueCases(20).length, 1);
+  store.closeCases('g', 'u1', 'tempban');
+  assert.equal(store.dueCases(20).length, 0);
+  const again = new Store(path);
+  assert.equal(again.findCases('g', {}).total, 3);
+});
