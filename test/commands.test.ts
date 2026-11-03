@@ -36,7 +36,7 @@ test('every setup page fits discord limits', async () => {
   g.levels.rewards = { '5': '111111111111111111' };
   store.saveGuild('g1', g);
   const guild = { id: 'g1', roles: { cache: new Map() }, client: { application: { owner: { id: '123456789012345678' } } } } as never;
-  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'rewards', 'lvxp', 'birthdays', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
+  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'rewards', 'lvxp', 'birthdays', 'starboard', 'tickets', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
   for (const p of pages) {
     const v = setupPanel(store, guild, '123456789012345678', p);
     assert.ok(v.components.length >= 1 && v.components.length <= 5, `${p}: rows`);
@@ -153,4 +153,16 @@ test('daily backup keeps a copy and trims old ones', async () => {
   const left = readdirSync(dir).filter((f) => f.startsWith('texz-'));
   assert.equal(left.length, 2);
   assert.equal(new Store(`${dir}/${left.sort().at(-1)}`).getKv('a'), 'b');
+});
+
+test('planned post times', async () => {
+  const { parseWhen } = await import('../src/modules/server.ts');
+  const now = Date.UTC(2026, 10, 3, 10, 0); // 15:30 in India
+  assert.equal(parseWhen('in 2h', 'Asia/Kolkata', now), now + 2 * 3_600_000);
+  assert.equal(parseWhen('18:30', 'Asia/Kolkata', now), Date.UTC(2026, 10, 3, 13, 0));
+  assert.equal(parseWhen('09:00', 'Asia/Kolkata', now), Date.UTC(2026, 10, 4, 3, 30));
+  assert.equal(parseWhen('tomorrow 18:30', 'Asia/Kolkata', now), Date.UTC(2026, 10, 4, 13, 0));
+  assert.equal(parseWhen('<t:1793700000:f>', 'UTC', now), 1793700000000);
+  assert.equal(parseWhen('soon', 'UTC', now), null);
+  assert.equal(parseWhen('25:00', 'UTC', now), null);
 });

@@ -1,6 +1,6 @@
 import {
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits, SlashCommandBuilder,
-  type GuildMember, type Interaction, type MessageActionRowComponentBuilder, type PartialGuildMember,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits, RoleSelectMenuBuilder, SlashCommandBuilder, StringSelectMenuBuilder,
+  type GuildMember, type Role, type Interaction, type MessageActionRowComponentBuilder, type PartialGuildMember,
 } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
@@ -54,35 +54,70 @@ export async function onLeave(store: Store, m: GuildMember | PartialGuildMember)
 const rolepicker: Command = {
   name: 'rolepicker',
   admin: true,
-  data: new SlashCommandBuilder().setName('rolepicker').setDescription('Post buttons people press to get or drop roles')
+  data: new SlashCommandBuilder().setName('rolepicker').setDescription('Post a panel people use to give themselves roles')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles).setDMPermission(false)
     .addStringOption((x) => x.setName('title').setDescription('Panel title').setRequired(true).setMaxLength(100))
-    .addRoleOption((x) => x.setName('role1').setDescription('Role').setRequired(true))
-    .addRoleOption((x) => x.setName('role2').setDescription('Role'))
-    .addRoleOption((x) => x.setName('role3').setDescription('Role'))
-    .addRoleOption((x) => x.setName('role4').setDescription('Role'))
-    .addRoleOption((x) => x.setName('role5').setDescription('Role'))
+    .addStringOption((x) => x.setName('style').setDescription('Buttons (up to 5 roles) or a menu (up to 25)')
+      .addChoices({ name: 'buttons', value: 'buttons' }, { name: 'menu', value: 'menu' }, { name: 'menu, one role only', value: 'single' }))
     .addStringOption((x) => x.setName('about').setDescription('A line under the title').setMaxLength(300)).toJSON(),
-  run: async (ctx) => {
+  // tz rolepicker Colours, then pick the roles from the menu that shows up
+  text: { args: ['title'] },
+  run: (ctx, store) => {
     if (!ctx.guild) return ctx.reply('Server only.');
-    const me = await ctx.guild.members.fetchMe();
-    const ids = ['role1', 'role2', 'role3', 'role4', 'role5'].map((k) => ctx.role(k)).filter((x): x is string => !!x);
-    const roles = (await Promise.all(ids.map((id) => ctx.guild!.roles.fetch(id).catch(() => null)))).filter((r) => !!r);
-    const bad = roles.filter((r) => r!.position >= me.roles.highest.position || r!.managed);
-    if (bad.length) return ctx.reply(`I can't hand out ${bad.map((r) => `<@&${r!.id}>`).join(' ')}, move my role above them first.`);
-    const row = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      ...roles.map((r) => new ButtonBuilder().setCustomId(`role|${r!.id}`).setLabel(r!.name.slice(0, 80)).setStyle(ButtonStyle.Secondary)),
-    );
-    const e = card({
-      kind: 'roles', title: ctx.str('title')!, emoji: '🎭', gif: 'off',
-      body: [ctx.str('about') ?? '', roles.map((r) => `<@&${r!.id}>`).join(' · ')].filter(Boolean).join('\n\n'),
+    const style = ctx.str('style') ?? 'menu';
+    // the draft waits here while the roles get picked
+    store.setKv(`rpk:${ctx.userId}`, JSON.stringify({ title: ctx.str('title') ?? 'Pick your roles', about: ctx.str('about'), style }));
+    const max = style === 'buttons' ? 5 : 25;
+    return ctx.reply({
+      content: `🎭 Which roles go on the panel? Pick up to ${max}, then I'll post it in this channel.`,
+      components: [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+        new RoleSelectMenuBuilder().setCustomId(`rpk|${ctx.userId}`).setPlaceholder('Pick the roles').setMinValues(1).setMaxValues(max))],
     });
-    return ctx.reply({ embeds: [e], components: [row], public: true });
   },
 };
 
-export async function onRoleButton(i: Interaction) {
-  if (!i.isButton() || !i.customId.startsWith('role|') || !i.guild) return false;
+function pickerView(title: string, about: string | null, style: string, roles: Role[]) {
+  const e = card({ kind: 'roles', title, emoji: '🎭', gif: 'off', body: [about ?? '', roles.map((r) => `<@&${r.id}>`).join(' · ')].filter(Boolean).join('\n\n') });
+  const rows = style === 'buttons'
+    ? [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+        ...roles.map((r) => new ButtonBuilder().setCustomId(`role|${r.id}`).setLabel(r.name.slice(0, 80)).setStyle(ButtonStyle.Secondary)))]
+    : [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+        new StringSelectMenuBuilder().setCustomId(`rolem|${style === 'single' ? 1 : 0}`).setPlaceholder(style === 'single' ? 'Pick one' : 'Pick any, unpick to drop')
+          .setMinValues(0).setMaxValues(style === 'single' ? 1 : roles.length)
+          .addOptions(roles.map((r) => ({ label: r.name.slice(0, 100), value: r.id }))))];
+  return { embeds: [e], components: rows };
+}
+
+export async function onRoleButton(store: Store, i: Interaction) {
+  if (!i.guild) return false;
+  if (i.isRoleSelectMenu() && i.customId.startsWith('rpk|')) {
+    if (i.customId.split('|')[1] !== i.user.id) { await i.reply({ content: 'Start your own with `/rolepicker`.', flags: 64 }); return true; }
+    const draft = JSON.parse(store.getKv(`rpk:${i.user.id}`) ?? 'null') as { title: string; about: string | null; style: string } | null;
+    if (!draft) { await i.reply({ content: 'That draft expired, run `/rolepicker` again.', flags: 64 }); return true; }
+    const me = await i.guild.members.fetchMe();
+    const roles = [...i.roles.values()].map((r) => i.guild!.roles.cache.get(r.id)).filter((r): r is Role => !!r);
+    const bad = roles.filter((r) => r.position >= me.roles.highest.position || r.managed || r.id === i.guild!.id);
+    if (bad.length) { await i.reply({ content: `I can't hand out ${bad.map((r) => `<@&${r.id}>`).join(' ')}, move my role above them first.`, flags: 64, allowedMentions: { parse: [] } }); return true; }
+    const ch = i.channel;
+    if (!ch?.isSendable()) { await i.reply({ content: 'I can\'t post here.', flags: 64 }); return true; }
+    await ch.send({ ...pickerView(draft.title, draft.about, draft.style, roles), allowedMentions: { parse: [] } });
+    store.setKv(`rpk:${i.user.id}`, null);
+    await i.update({ content: '🎭 Panel posted.', components: [] });
+    return true;
+  }
+  if (i.isStringSelectMenu() && i.customId.startsWith('rolem|')) {
+    const m = await i.guild.members.fetch(i.user.id).catch(() => null);
+    if (!m) return true;
+    const all = i.component.options.map((o) => o.value);
+    const want = new Set(i.values);
+    const add = all.filter((id) => want.has(id) && !m.roles.cache.has(id));
+    const drop = all.filter((id) => !want.has(id) && m.roles.cache.has(id));
+    const ok = await Promise.all([...add.map((id) => m.roles.add(id, 'role picker')), ...drop.map((id) => m.roles.remove(id, 'role picker'))]).then(() => true).catch(() => false);
+    const parts = [add.length && `➕ ${add.map((id) => `<@&${id}>`).join(' ')}`, drop.length && `➖ ${drop.map((id) => `<@&${id}>`).join(' ')}`].filter(Boolean);
+    await i.reply({ content: ok ? (parts.join('\n') || 'Nothing changed.') : 'I couldn\'t change those roles. Ask an admin to check my permissions.', flags: 64, allowedMentions: { parse: [] } });
+    return true;
+  }
+  if (!i.isButton() || !i.customId.startsWith('role|')) return false;
   const roleId = i.customId.split('|')[1];
   const m = await i.guild.members.fetch(i.user.id).catch(() => null);
   if (!m) return true;

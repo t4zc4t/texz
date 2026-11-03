@@ -64,6 +64,8 @@ export interface GuildSettings {
   birthdays: { channel: string | null; role: string | null; message: string | null };
   // seconds before quick typed answers clean themselves up, 0 keeps them
   autoclean: number;
+  starboard: { channel: string | null; emoji: string; min: number; self: boolean };
+  tickets: { category: string | null; staff: string | null; log: string | null };
 }
 
 export interface LevelRules {
@@ -95,6 +97,16 @@ export const defaultLevels = (): LevelRules => ({
 });
 
 // features a server has to switch on itself, levels posting in every chat isn't something to spring on people
+export interface Schedule {
+  id: number;
+  guild_id: string;
+  channel_id: string;
+  text: string;
+  next_at: number;
+  every_ms: number;
+  by_id: string;
+}
+
 export interface Case {
   guild_id: string;
   num: number;
@@ -281,6 +293,38 @@ export class Store {
         at INTEGER NOT NULL,
         PRIMARY KEY (channel_id, message_id)
       );
+      CREATE TABLE IF NOT EXISTS stars (
+        guild_id TEXT NOT NULL,
+        message_id TEXT NOT NULL,
+        board_id TEXT,
+        count INTEGER NOT NULL,
+        PRIMARY KEY (guild_id, message_id)
+      );
+      CREATE TABLE IF NOT EXISTS tickets (
+        channel_id TEXT PRIMARY KEY,
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        num INTEGER NOT NULL,
+        opened_at INTEGER NOT NULL,
+        closed_at INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        text TEXT NOT NULL,
+        next_at INTEGER NOT NULL,
+        every_ms INTEGER NOT NULL DEFAULT 0,
+        by_id TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS daystats (
+        guild_id TEXT NOT NULL,
+        day TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        key TEXT NOT NULL,
+        n INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (guild_id, day, kind, key)
+      );
       CREATE TABLE IF NOT EXISTS kv (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -335,6 +379,8 @@ export class Store {
       levels: { ...defaultLevels(), ...saved.levels },
       birthdays: { channel: null, role: null, message: null, ...saved.birthdays },
       autoclean: saved.autoclean ?? 30,
+      starboard: { channel: null, emoji: '⭐', min: 3, self: false, ...saved.starboard },
+      tickets: { category: null, staff: null, log: null, ...saved.tickets },
     };
   }
 
@@ -410,6 +456,8 @@ export class Store {
 
   // last time someone spoke in a server and how much, for the dossier
   heard(guildId: string, userId: string, channelId: string) {
+    this.countDay(guildId, 'msg', channelId);
+    this.countDay(guildId, 'user', userId);
     this.db.prepare(`INSERT INTO activity (guild_id, user_id, last_at, last_channel, messages) VALUES (?, ?, ?, ?, 1)
       ON CONFLICT(guild_id, user_id) DO UPDATE SET last_at = excluded.last_at, last_channel = excluded.last_channel, messages = messages + 1`)
       .run(guildId, userId, Date.now(), channelId);
@@ -428,6 +476,77 @@ export class Store {
   setKv(key: string, value: string | null) {
     if (value === null) this.db.prepare('DELETE FROM kv WHERE key = ?').run(key);
     else this.db.prepare('INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+  }
+
+  // ---------- starboard ----------
+
+  star(guildId: string, messageId: string): { board_id: string | null; count: number } | null {
+    return (this.db.prepare('SELECT board_id, count FROM stars WHERE guild_id = ? AND message_id = ?').get(guildId, messageId) as { board_id: string | null; count: number } | undefined) ?? null;
+  }
+
+  setStar(guildId: string, messageId: string, boardId: string | null, count: number) {
+    this.db.prepare(`INSERT INTO stars (guild_id, message_id, board_id, count) VALUES (?, ?, ?, ?)
+      ON CONFLICT(guild_id, message_id) DO UPDATE SET board_id = excluded.board_id, count = excluded.count`).run(guildId, messageId, boardId, count);
+  }
+
+  // ---------- tickets ----------
+
+  openTicket(guildId: string, userId: string): { channel_id: string } | null {
+    return (this.db.prepare('SELECT channel_id FROM tickets WHERE guild_id = ? AND user_id = ? AND closed_at IS NULL').get(guildId, userId) as { channel_id: string } | undefined) ?? null;
+  }
+
+  addTicket(guildId: string, userId: string, channelId: string): number {
+    const num = (this.db.prepare('SELECT COUNT(*) + 1 AS n FROM tickets WHERE guild_id = ?').get(guildId) as { n: number }).n;
+    this.db.prepare('INSERT INTO tickets (channel_id, guild_id, user_id, num, opened_at) VALUES (?, ?, ?, ?, ?)').run(channelId, guildId, userId, num, Date.now());
+    return num;
+  }
+
+  ticket(channelId: string): { guild_id: string; user_id: string; num: number; opened_at: number; closed_at: number | null } | null {
+    return (this.db.prepare('SELECT * FROM tickets WHERE channel_id = ?').get(channelId) as never) ?? null;
+  }
+
+  closeTicket(channelId: string) {
+    this.db.prepare('UPDATE tickets SET closed_at = ? WHERE channel_id = ?').run(Date.now(), channelId);
+  }
+
+  // ---------- scheduled posts ----------
+
+  addSchedule(s: { guild_id: string; channel_id: string; text: string; next_at: number; every_ms: number; by_id: string }): number {
+    return Number(this.db.prepare('INSERT INTO schedules (guild_id, channel_id, text, next_at, every_ms, by_id) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(s.guild_id, s.channel_id, s.text, s.next_at, s.every_ms, s.by_id).lastInsertRowid);
+  }
+
+  schedules(guildId: string): Schedule[] {
+    return this.db.prepare('SELECT * FROM schedules WHERE guild_id = ? ORDER BY next_at').all(guildId) as unknown as Schedule[];
+  }
+
+  dueSchedules(now: number): Schedule[] {
+    return this.db.prepare('SELECT * FROM schedules WHERE next_at <= ?').all(now) as unknown as Schedule[];
+  }
+
+  moveSchedule(id: number, nextAt: number | null) {
+    if (nextAt === null) this.db.prepare('DELETE FROM schedules WHERE id = ?').run(id);
+    else this.db.prepare('UPDATE schedules SET next_at = ? WHERE id = ?').run(nextAt, id);
+  }
+
+  deleteSchedule(guildId: string, id: number): boolean {
+    return Number(this.db.prepare('DELETE FROM schedules WHERE guild_id = ? AND id = ?').run(guildId, id).changes) > 0;
+  }
+
+  // ---------- server stats ----------
+
+  countDay(guildId: string, kind: string, key: string, by = 1, day = new Date().toISOString().slice(0, 10)) {
+    this.db.prepare(`INSERT INTO daystats (guild_id, day, kind, key, n) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(guild_id, day, kind, key) DO UPDATE SET n = n + excluded.n`).run(guildId, day, kind, key, by);
+  }
+
+  // totals per day, or per key over a range of days
+  dayTotals(guildId: string, kind: string, since: string): { day: string; n: number }[] {
+    return this.db.prepare('SELECT day, SUM(n) AS n FROM daystats WHERE guild_id = ? AND kind = ? AND day >= ? GROUP BY day ORDER BY day').all(guildId, kind, since) as { day: string; n: number }[];
+  }
+
+  keyTotals(guildId: string, kind: string, since: string, limit = 5): { key: string; n: number }[] {
+    return this.db.prepare('SELECT key, SUM(n) AS n FROM daystats WHERE guild_id = ? AND kind = ? AND day >= ? GROUP BY key ORDER BY n DESC LIMIT ?').all(guildId, kind, since, limit) as { key: string; n: number }[];
   }
 
   // ---------- moderation cases ----------

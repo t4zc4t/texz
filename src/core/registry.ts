@@ -15,13 +15,14 @@ import { onRoleButton, welcomeModule } from '../modules/welcome.js';
 import { levelsModule } from '../modules/levels.js';
 import { giveaways, onGiveawayButton } from '../modules/giveaways.js';
 import { birthdays } from '../modules/birthdays.js';
+import { onServerComponent, server } from '../modules/server.js';
 import { onSetup, useModules } from '../features/setup.js';
 import { RED, card, type Kind } from '../theme.js';
 import { report } from '../ops.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
 
-export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays];
+export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server];
 allModules.push(...modules);
 useModules(modules);
 
@@ -33,6 +34,7 @@ const groups: Record<string, { description: string; perms?: bigint }> = {
   levels: { description: 'Rank cards, the level leaderboard and xp tools' },
   info: { description: 'Profiles, avatars and the server' },
   fun: { description: 'Dice, coins, the 8ball and hard decisions' },
+  tools: { description: 'Planned announcements and server activity (admins)', perms: PermissionFlagsBits.ManageGuild },
 };
 
 type Hit = { mod: Module; cmd: Command };
@@ -153,9 +155,10 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onWatchlist(store, i)) return;
     if (await onPollButton(store, i)) return;
     if (await onAvatarButton(i)) return;
-    if (await onRoleButton(i)) return;
+    if (await onRoleButton(store, i)) return;
     if (await onCaseComponent(store, i)) return;
     if (await onGiveawayButton(store, i)) return;
+    if (await onServerComponent(store, i)) return;
   } catch (e) {
     report('component', e);
   }

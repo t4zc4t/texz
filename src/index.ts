@@ -12,6 +12,7 @@ import { watchEpisodes } from './anime/alerts.js';
 import { wireEvents } from './events.js';
 import { watch } from './watch.js';
 import { startOps } from './ops.js';
+import { startServerTimers } from './modules/server.js';
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) throw new Error('DISCORD_TOKEN is missing, copy .env.example to .env and fill it in');
@@ -27,8 +28,9 @@ const client = new Client({
     GatewayIntentBits.GuildModeration,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.GuildMessageReactions,
   ],
-  partials: [Partials.Channel, Partials.GuildMember],
+  partials: [Partials.Channel, Partials.GuildMember, Partials.Message, Partials.Reaction, Partials.User],
 });
 
 client.once(Events.ClientReady, (c) => {
@@ -43,6 +45,7 @@ client.once(Events.ClientReady, (c) => {
   startGiveaways(client, store);
   startBirthdays(client, store);
   startOps(client, store);
+  startServerTimers(client, store);
   // knowing the owner lets /setup offer the error channel to them only
   void c.application.fetch().catch(() => {});
   // rotating status, so the profile looks alive

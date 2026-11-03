@@ -8,6 +8,7 @@ import { isGifLink, resolve } from '../gifs.js';
 import type { Module } from '../core/module.js';
 import { card } from '../theme.js';
 import { welcomeCard } from '../modules/welcome.js';
+import { ticketPanel } from '../modules/server.js';
 import { ranks } from '../modules/levels.js';
 import { parseLength } from '../modules/moderation.js';
 
@@ -27,7 +28,7 @@ export const gifMoments = ['help', 'ping', 'welcome', 'goodbye', 'levelup', 'bir
 let modulesRef: Module[] = [];
 export const useModules = (m: Module[]) => { modulesRef = m; };
 const switchable = () => modulesRef.filter((m) => !m.locked);
-const icon: Record<string, string> = { owo: '🐾', anime: '📺', utility: '🧰', moderation: '🛡️', welcome: '🌸', levels: '🎖️', giveaways: '🎁', birthdays: '🎂' };
+const icon: Record<string, string> = { owo: '🐾', anime: '📺', utility: '🧰', moderation: '🛡️', welcome: '🌸', levels: '🎖️', giveaways: '🎁', birthdays: '🎂', server: '🏛️' };
 
 export function setupPanel(store: Store, guild: Guild, owner: string, page: string) {
   const g = store.guild(guild.id);
@@ -55,6 +56,8 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { label: 'Log channel and automod', value: 'mod', emoji: '🛡️' },
       { label: 'Levels, xp and reward roles', value: 'levels', emoji: '🎖️' },
       { label: 'Birthday greetings and role', value: 'birthdays', emoji: '🎂' },
+      { label: 'Starboard', value: 'starboard', emoji: '⭐' },
+      { label: 'Tickets', value: 'tickets', emoji: '🎫' },
       { label: 'Gifs for each moment', value: 'gifs', emoji: '🎞️' },
       { label: 'Text prefix', value: 'prefix', emoji: '⌨️' },
     )));
@@ -264,6 +267,51 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
     );
   }
 
+  if (page === 'starboard') {
+    title = 'Starboard';
+    const sb = g.starboard;
+    body = `Messages that collect enough ${sb.emoji} get reposted in the starboard channel with a link back. The count keeps updating as people react.`;
+    fields.push(
+      { name: '📌 Channel', value: ch(sb.channel), inline: true },
+      { name: `${sb.emoji} Needed`, value: String(sb.min), inline: true },
+      { name: '🙋 Own stars', value: sb.self ? 'count' : 'don\'t count', inline: true },
+    );
+    comps.push(
+      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'sbch')).setPlaceholder('📌 Starboard channel (empty = off)')
+        .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(sb.channel ? [sb.channel] : [])),
+      row(new StringSelectMenuBuilder().setCustomId(id(owner, 'sbmin')).setPlaceholder('How many reactions it takes').addOptions(
+        [1, 2, 3, 4, 5, 7, 10, 15, 20].map((n) => ({ label: `${n} reaction${n === 1 ? '' : 's'}`, value: String(n), default: sb.min === n })))),
+      row(
+        new ButtonBuilder().setCustomId(id(owner, 'sbemoji')).setLabel(`Emoji: ${sb.emoji}`.slice(0, 80)).setStyle(ButtonStyle.Secondary),
+        toggle(owner, 'sbself', '', 'Own stars count', sb.self, '🙋'),
+        back(owner),
+      ),
+    );
+  }
+
+  if (page === 'tickets') {
+    title = 'Tickets';
+    const t = g.tickets;
+    body = 'Pick a category for ticket channels, the staff role that can see them, and a channel for transcripts. Then press **Post the panel here** in the channel where people should open tickets.';
+    fields.push(
+      { name: '📁 Category', value: t.category ? `<#${t.category}>` : '*top of the list*', inline: true },
+      { name: '🛡️ Staff', value: t.staff ? `<@&${t.staff}>` : '*admins only*', inline: true },
+      { name: '🧾 Transcripts', value: ch(t.log), inline: true },
+    );
+    comps.push(
+      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'tkcat')).setPlaceholder('📁 Category for ticket channels')
+        .setChannelTypes(ChannelType.GuildCategory).setMinValues(0).setMaxValues(1).setDefaultChannels(t.category ? [t.category] : [])),
+      row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'tkstaff')).setPlaceholder('🛡️ Staff role that sees tickets')
+        .setMinValues(0).setMaxValues(1).setDefaultRoles(t.staff ? [t.staff] : [])),
+      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'tklog')).setPlaceholder('🧾 Transcript channel (empty = none)')
+        .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(t.log ? [t.log] : [])),
+      row(
+        new ButtonBuilder().setCustomId(id(owner, 'tkpost')).setLabel('Post the panel here').setEmoji('🎫').setStyle(ButtonStyle.Success),
+        back(owner),
+      ),
+    );
+  }
+
   if (page === 'gifs') {
     title = 'Gifs';
     body = 'Pick a moment and paste a Giphy link (or a direct .gif). Type `default` to bring mine back or `off` to hide it.';
@@ -327,7 +375,8 @@ const pageOf: Record<string, string> = {
   mod: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome',
   arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
-  clean: 'home', errch: 'mod', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
+  clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
+  tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
   noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
@@ -421,6 +470,19 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       ]));
       return true;
     }
+    if (action === 'sbemoji') {
+      await i.showModal(formModal(owner, 'sbemoji', '', 'Starboard emoji', [
+        { id: 'v', label: 'One emoji, like ⭐ or 🔥 or a server emoji', value: g.starboard.emoji, required: true, max: 60 },
+      ]));
+      return true;
+    }
+    if (action === 'tkpost') {
+      const here = i.channel;
+      if (!here?.isSendable()) return fail('I can\'t post in this channel.');
+      await here.send(ticketPanel()).catch(() => null);
+      await i.reply({ content: '🎫 Panel posted. People press the button to open a ticket.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
     if (action === 'bdmsg') {
       await i.showModal(formModal(owner, 'bdmsg', '', 'Birthday greeting', [
         { id: 'v', label: 'Use {user} {name} {server}', value: g.birthdays.message ?? '', long: true, max: 300, hint: 'Empty brings back my own lines' },
@@ -459,6 +521,12 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'noxprole') g.levels.noXpRoles = values;
     if (action === 'stack') g.levels.stack = !g.levels.stack;
     if (action === 'clean') g.autoclean = Number(values[0]) || 0;
+    if (action === 'sbch') g.starboard.channel = values[0] ?? null;
+    if (action === 'sbmin') g.starboard.min = Number(values[0]) || 3;
+    if (action === 'sbself') g.starboard.self = !g.starboard.self;
+    if (action === 'tkcat') g.tickets.category = values[0] ?? null;
+    if (action === 'tkstaff') g.tickets.staff = values[0] ?? null;
+    if (action === 'tklog') g.tickets.log = values[0] ?? null;
     if (action === 'errch' && isBotOwner(i.guild, i.user.id)) store.setKv('errorChannel', values[0] ?? null);
     if (action === 'bdch') g.birthdays.channel = values[0] ?? null;
     if (action === 'bdrole') {
@@ -534,6 +602,12 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       }
     }
     if (action === 'lvmsg') g.levels.message = i.fields.getTextInputValue('v').trim() || null;
+    if (action === 'sbemoji') {
+      // a plain emoji, or a server one written as <:name:id>
+      const v = i.fields.getTextInputValue('v').trim();
+      if (!/^(<a?:\w+:\d+>|\p{Extended_Pictographic}[\u{FE0F}\u{200D}\p{Extended_Pictographic}]*)$/u.test(v)) return fail('That needs to be one emoji.');
+      g.starboard.emoji = v;
+    }
     if (action === 'bdmsg') g.birthdays.message = i.fields.getTextInputValue('v').trim() || null;
     if (action === 'prefix') {
       const p = text.toLowerCase();

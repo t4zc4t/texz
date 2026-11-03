@@ -85,6 +85,9 @@ const bank = {
     'Little mysteries, little rewards. Here\'s what\'s still open on your board.',
     'Some of these need friends. Lucky you, you know a very charming detective.',
   ],
+  ticket: ['A private room for a private matter. The Agency is listening.', 'Speak freely, only the right people can see this.'],
+  ticketClose: ['Case closed. Kunikida-kun will file the paperwork.'],
+  announce: ['Words that wait for the right moment. Very dramatic, I approve.'],
   gemLow: ['Your gem pouch is nearly empty. Even a detective needs supplies.', 'Last gem standing. Restock before your hunts get sad.'],
   shop: [
     'Window shopping with a detective. I point at things, you pay for them. Fair, no?',
