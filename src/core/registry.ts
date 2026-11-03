@@ -11,12 +11,13 @@ import { moderation, onCaseComponent } from '../modules/moderation.js';
 import { onRoleButton, welcomeModule } from '../modules/welcome.js';
 import { levelsModule } from '../modules/levels.js';
 import { giveaways, onGiveawayButton } from '../modules/giveaways.js';
+import { birthdays } from '../modules/birthdays.js';
 import { onSetup, useModules } from '../features/setup.js';
 import { RED, card, type Kind } from '../theme.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import type { Command, Module } from './module.js';
 
-export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways];
+export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays];
 allModules.push(...modules);
 useModules(modules);
 

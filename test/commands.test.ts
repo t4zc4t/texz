@@ -36,7 +36,7 @@ test('every setup page fits discord limits', async () => {
   g.levels.rewards = { '5': '111111111111111111' };
   store.saveGuild('g1', g);
   const guild = { id: 'g1', roles: { cache: new Map() } } as never;
-  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'rewards', 'lvxp', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
+  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'rewards', 'lvxp', 'birthdays', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
   for (const p of pages) {
     const v = setupPanel(store, guild, '123456789012345678', p);
     assert.ok(v.components.length >= 1 && v.components.length <= 5, `${p}: rows`);
@@ -122,4 +122,20 @@ test('watchlist pages and status filters fit discord limits', async () => {
   const theirs = listPage(store, 'x', 'u', 'all', 0);
   assert.ok(!JSON.stringify(theirs.components.map((r) => r.toJSON())).includes('wle|'));
   for (const r of v.components) for (const c of r.toJSON().components) if ('custom_id' in c) assert.ok(c.custom_id.length <= 100);
+});
+
+test('birthday dates, leap days and countdowns', async () => {
+  const { parseDate, isBirthday, daysUntil, localDate } = await import('../src/modules/birthdays.ts');
+  assert.deepEqual(parseDate('14 feb'), { month: 2, day: 14 });
+  assert.deepEqual(parseDate('February 14th'), { month: 2, day: 14 });
+  assert.deepEqual(parseDate('14/02'), { month: 2, day: 14 });
+  assert.deepEqual(parseDate('2001-02-14'), { month: 2, day: 14 });
+  assert.equal(parseDate('31 apr'), null);
+  assert.equal(parseDate('hello'), null);
+  assert.ok(isBirthday({ month: 2, day: 29 }, { year: 2027, month: 2, day: 28 }));
+  assert.ok(!isBirthday({ month: 2, day: 29 }, { year: 2028, month: 2, day: 28 }));
+  assert.equal(daysUntil({ month: 1, day: 1 }, { year: 2026, month: 12, day: 31 }), 1);
+  assert.equal(daysUntil({ month: 11, day: 3 }, { year: 2026, month: 11, day: 3 }), 0);
+  // 20:00 UTC on the 2nd is already the 3rd in India
+  assert.deepEqual(localDate('Asia/Kolkata', new Date(Date.UTC(2026, 10, 2, 20))), { year: 2026, month: 11, day: 3 });
 });

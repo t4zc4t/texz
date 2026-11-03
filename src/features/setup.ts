@@ -22,7 +22,7 @@ const back = (owner: string, to = 'home') => new ButtonBuilder().setCustomId(id(
 const toggle = (owner: string, action: string, arg: string, label: string, on: boolean, emoji: string) =>
   new ButtonBuilder().setCustomId(id(owner, action, arg)).setLabel(`${label}: ${on ? 'on' : 'off'}`).setEmoji(emoji).setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary);
 
-export const gifMoments = ['help', 'ping', 'welcome', 'goodbye', 'levelup', 'warn', 'timeout', 'kick', 'ban', 'status', 'leaderboard'];
+export const gifMoments = ['help', 'ping', 'welcome', 'goodbye', 'levelup', 'birthday', 'warn', 'timeout', 'kick', 'ban', 'status', 'leaderboard'];
 
 let modulesRef: Module[] = [];
 export const useModules = (m: Module[]) => { modulesRef = m; };
@@ -53,6 +53,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { label: 'Autorole for newcomers', value: 'autorole', emoji: '🎭' },
       { label: 'Log channel and automod', value: 'mod', emoji: '🛡️' },
       { label: 'Levels, xp and reward roles', value: 'levels', emoji: '🎖️' },
+      { label: 'Birthday greetings and role', value: 'birthdays', emoji: '🎂' },
       { label: 'Gifs for each moment', value: 'gifs', emoji: '🎞️' },
       { label: 'Text prefix', value: 'prefix', emoji: '⌨️' },
     )));
@@ -225,6 +226,31 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
     );
   }
 
+  if (page === 'birthdays') {
+    title = 'Birthdays';
+    const b = g.birthdays;
+    const on = store.rules(guild.id, 'birthdays').enabled;
+    body = [
+      'People save their birthday with `tz bday set 14 feb` (no year). On the day, going by their own timezone, I greet them in the birthday channel and hand out the birthday role for 24 hours.',
+      on ? '' : '**Birthdays are switched off** in Features, so nothing happens until they\'re back on.',
+    ].filter(Boolean).join('\n');
+    fields.push(
+      { name: '📣 Channel', value: ch(b.channel), inline: true },
+      { name: '🎭 Role for the day', value: b.role ? `<@&${b.role}>` : '*none*', inline: true },
+      { name: '📝 Greeting', value: b.message ? `> ${b.message}` : '*my own lines*', inline: false },
+    );
+    comps.push(
+      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'bdch')).setPlaceholder('📣 Birthday channel (empty = no greeting)')
+        .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setMinValues(0).setMaxValues(1).setDefaultChannels(b.channel ? [b.channel] : [])),
+      row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'bdrole')).setPlaceholder('🎭 Birthday role for the day (empty = none)')
+        .setMinValues(0).setMaxValues(1).setDefaultRoles(b.role ? [b.role] : [])),
+      row(
+        new ButtonBuilder().setCustomId(id(owner, 'bdmsg')).setLabel('Greeting').setEmoji('📝').setStyle(ButtonStyle.Secondary),
+        back(owner),
+      ),
+    );
+  }
+
   if (page === 'gifs') {
     title = 'Gifs';
     body = 'Pick a moment and paste a Giphy link (or a direct .gif). Type `default` to bring mine back or `off` to hide it.';
@@ -283,6 +309,7 @@ const pageOf: Record<string, string> = {
   mod: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome',
   arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
+  bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
   noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
@@ -376,6 +403,12 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       ]));
       return true;
     }
+    if (action === 'bdmsg') {
+      await i.showModal(formModal(owner, 'bdmsg', '', 'Birthday greeting', [
+        { id: 'v', label: 'Use {user} {name} {server}', value: g.birthdays.message ?? '', long: true, max: 300, hint: 'Empty brings back my own lines' },
+      ]));
+      return true;
+    }
     if (action === 'lvmsg') {
       await i.showModal(formModal(owner, 'lvmsg', '', 'Level-up line', [
         { id: 'v', label: 'Use {user} {name} {level} {rank} {server}', value: g.levels.message ?? '', long: true, max: 300, hint: 'Empty brings back my own lines' },
@@ -407,6 +440,11 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'noxpch') g.levels.noXpChannels = values;
     if (action === 'noxprole') g.levels.noXpRoles = values;
     if (action === 'stack') g.levels.stack = !g.levels.stack;
+    if (action === 'bdch') g.birthdays.channel = values[0] ?? null;
+    if (action === 'bdrole') {
+      if (values[0] && !(await canGive(i.guild, values[0]))) return fail('I can\'t hand out that role. Move my role above it in Server Settings → Roles, then try again.');
+      g.birthdays.role = values[0] ?? null;
+    }
   } else {
     if (!i.isModalSubmit()) return true;
     if (action === 'wtext') g.welcome.message = text;
@@ -476,6 +514,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       }
     }
     if (action === 'lvmsg') g.levels.message = i.fields.getTextInputValue('v').trim() || null;
+    if (action === 'bdmsg') g.birthdays.message = i.fields.getTextInputValue('v').trim() || null;
     if (action === 'prefix') {
       const p = text.toLowerCase();
       if (!p || /\s/.test(p) || p === 'owo' || p === 'w') return fail('Pick a short prefix without spaces, and not `owo` or `w`, those belong to OwO.');

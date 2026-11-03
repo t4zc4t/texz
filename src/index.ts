@@ -7,6 +7,7 @@ import { onComponent, onSlash, onText } from './core/registry.js';
 import { afkWatch } from './modules/utility.js';
 import { startModTimers } from './modules/moderation.js';
 import { startGiveaways } from './modules/giveaways.js';
+import { startBirthdays } from './modules/birthdays.js';
 import { watchEpisodes } from './anime/alerts.js';
 import { wireEvents } from './events.js';
 import { watch } from './watch.js';
@@ -39,6 +40,7 @@ client.once(Events.ClientReady, (c) => {
   watchEpisodes(store);
   startModTimers(client, store);
   startGiveaways(client, store);
+  startBirthdays(client, store);
   // rotating status, so the profile looks alive
   const moods = [
     'hiding from Kunikida\'s schedule',

@@ -58,6 +58,7 @@ export interface GuildSettings {
   mod: { logChannel: string | null; invites: boolean; spam: boolean; mentions: boolean };
   welcome: { channel: string | null; message: string | null; goodbyeChannel: string | null; goodbyeMessage: string | null; autorole: string | null };
   levels: LevelRules;
+  birthdays: { channel: string | null; role: string | null; message: string | null };
 }
 
 export interface LevelRules {
@@ -323,6 +324,7 @@ export class Store {
       mod: { logChannel: null, invites: false, spam: false, mentions: false, ...saved.mod },
       welcome: { channel: null, message: null, goodbyeChannel: null, goodbyeMessage: null, autorole: null, ...saved.welcome },
       levels: { ...defaultLevels(), ...saved.levels },
+      birthdays: { channel: null, role: null, message: null, ...saved.birthdays },
     };
   }
 

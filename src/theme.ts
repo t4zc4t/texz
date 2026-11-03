@@ -119,6 +119,7 @@ const bank = {
     '{user}, it\'s your birthday! Kunikida-kun budgeted a cake. I budgeted eating it.',
     'Today belongs to {user}. Be kind to them, or at least kinder than usual.',
   ],
+  birthdayList: ['Every birthday on file. Forgetting one would be very unlike a detective.', 'The calendar of cake. My favourite kind of evidence.'],
   birthdaySet: ['Noted. I never forget a birthday. A detective\'s memory, you see.'],
   stats: [
     'Your week in numbers. I counted every hunt while pretending to sleep.',

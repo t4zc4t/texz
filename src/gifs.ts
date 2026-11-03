@@ -26,6 +26,7 @@ export const defaults: Record<string, string[]> = {
   // chibi Dazai dancing, saved for welcomes and level ups
   welcome: [giphy('UzGnrtOUKXmdrtja0V')],
   levelup: [giphy('UzGnrtOUKXmdrtja0V')],
+  birthday: [giphy('UzGnrtOUKXmdrtja0V')],
   // flat, unimpressed stare
   warn: [giphy('aJ25GJE4LT8fQvvSPr')],
   // the creepy smile with reaching hands, No Longer Human
@@ -40,7 +41,7 @@ export const defaults: Record<string, string[]> = {
 
 // which card kinds show which moment's gif
 export const momentOf: Record<string, string> = {
-  help: 'help', ping: 'ping', status: 'status', leaderboard: 'leaderboard', ask: 'ask', welcome: 'welcome', levelup: 'levelup', rankUp: 'levelup', warn: 'warn', timeout: 'timeout', kick: 'kick', ban: 'ban', goodbye: 'goodbye',
+  help: 'help', ping: 'ping', status: 'status', leaderboard: 'leaderboard', ask: 'ask', welcome: 'welcome', levelup: 'levelup', rankUp: 'levelup', warn: 'warn', timeout: 'timeout', kick: 'kick', ban: 'ban', tempban: 'ban', goodbye: 'goodbye', birthday: 'birthday',
 };
 
 export const isGifLink = (url: string) => direct.test(url) || tenorPage.test(url) || giphyPage.test(url);
