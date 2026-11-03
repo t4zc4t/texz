@@ -61,12 +61,16 @@ export interface Media {
   studios: { nodes: { name: string }[] };
   nextAiringEpisode: { episode: number; airingAt: number } | null;
   startDate: { year: number | null; month: number | null; day: number | null };
+  externalLinks?: { site: string; url: string; type: string | null; isDisabled: boolean | null }[];
+  relations?: { edges: { relationType: string; node: { id: number; type: string; format: string | null; title: { romaji: string | null; english: string | null } } }[] };
 }
 
 const MEDIA = `id type siteUrl title { romaji english native } format status description(asHtml: false)
   episodes duration chapters volumes season seasonYear averageScore popularity genres isAdult
   coverImage { large color } bannerImage studios(isMain: true) { nodes { name } }
-  nextAiringEpisode { episode airingAt } startDate { year month day }`;
+  nextAiringEpisode { episode airingAt } startDate { year month day }
+  externalLinks { site url type isDisabled }
+  relations { edges { relationType node { id type format title { romaji english } } } }`;
 
 export async function searchMedia(search: string, type: 'ANIME' | 'MANGA'): Promise<Media[]> {
   const q = `query ($search: String, $type: MediaType) { Page(perPage: 6) { media(search: $search, type: $type, isAdult: false, sort: SEARCH_MATCH) { ${MEDIA} } } }`;
@@ -163,4 +167,12 @@ export async function guessRound(): Promise<{ answer: Media; options: Media[] } 
   const withPic = options.filter((m) => m.bannerImage);
   if (options.length < 4 || !withPic.length) return null;
   return { answer: withPic[Math.floor(Math.random() * withPic.length)], options };
+}
+
+// what airs today (or on another day), in UTC day bounds
+export async function airingOn(from: number, to: number): Promise<{ episode: number; airingAt: number; media: Media }[]> {
+  const q = `query ($from: Int, $to: Int) { Page(perPage: 25) { airingSchedules(airingAt_greater: $from, airingAt_lesser: $to, sort: TIME) {
+    episode airingAt media { ${MEDIA} } } } }`;
+  const d = await ask<{ Page: { airingSchedules: { episode: number; airingAt: number; media: Media }[] } }>(q, { from, to }, 30 * 60_000);
+  return d.Page.airingSchedules.filter((a) => !a.media.isAdult);
 }

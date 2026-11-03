@@ -7,3 +7,5 @@ owo-debug.log
 backups
 texz.log
 .restarting
+.alive
+tray/settings.json

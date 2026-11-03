@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Client } from 'discord.js';
 import type { Store } from './db.js';
@@ -59,4 +59,8 @@ export function startOps(c: Client, s: Store) {
   };
   daily();
   setInterval(daily, 3_600_000);
+  // the tray icon reads this to tell "online" from "running but stuck"
+  const beat = () => { try { writeFileSync('.alive', String(c.isReady() ? Date.now() : 0)); } catch { /* read-only folder, no tray then */ } };
+  beat();
+  setInterval(beat, 30_000);
 }

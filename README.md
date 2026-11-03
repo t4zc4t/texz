@@ -24,6 +24,8 @@ Some quests need other people, so there are quest buddies: `tz buddy join` to op
 
 Every card also has a 📋 menu to put the show on your own list as watching (or reading), planning, completed, paused or dropped. `tz wl` opens the list with a filter by status and pages, `tz wl completed` or `tz wl @someone` go straight there, and picking a show from it opens a small panel with +1 episode, an exact progress number, a status change or removing it. The last episode moves it to completed by itself. `tz wl add watching frieren` adds one without opening the card.
 
+`tz airing` (or `tz airing tomorrow`) lists the episodes airing that day in your timezone, and cards link to sequels, prequels and the source, with buttons for the official places to watch or read.
+
 AniList's api is free with no key, but it only allows 30 requests a minute right now, so Texz paces itself and keeps answers for half an hour.
 
 ## Utility
@@ -102,7 +104,7 @@ It needs Node 24 or newer. Everything is stored in one SQLite file (`texz.db`), 
 
 ## Keeping it online
 
-Reminders only work while texz is running, so it runs on a PC that stays on. On Windows, a small launcher in the Startup folder starts it in the background at login, it comes back on its own if it crashes, and its output goes to `texz.log`. Any always-on Linux box with Node works too, with a process manager or a systemd service.
+Reminders only work while texz is running, so it runs on a PC that stays on. On Windows, double-click `tray/texz-tray.vbs` once. A dot appears next to the clock (green online, orange starting or stuck, grey off) with a menu to turn the bot on or off, restart it, rebuild after local changes, start with Windows, and update itself from GitHub once a day. If an update crashes in its first minute it rolls back to the last working version. Everything the bot prints goes to `texz.log`. Any always-on Linux box with Node works too, with a process manager or a systemd service.
 
 ## Looking after it
 

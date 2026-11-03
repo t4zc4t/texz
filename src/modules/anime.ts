@@ -5,12 +5,13 @@ import {
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import {
-  AniListError, characterOfDay, guessRound, type Character, currentSeason, plain, randomPopular, searchCharacter, searchMedia, seasonal, titleOf, trending, mediaById,
+  AniListError, airingOn, characterOfDay, guessRound, type Character, currentSeason, plain, randomPopular, searchCharacter, searchMedia, seasonal, titleOf, trending, mediaById,
   type Media,
 } from '../anime/anilist.js';
 import { RED, card, say } from '../theme.js';
 import { listMenu, watchlist } from './watchlist.js';
 import { GUESS_PAY } from './economy.js';
+import { zonedTime } from '../time.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
@@ -44,6 +45,11 @@ export function mediaCard(m: Media) {
   if (m.studios.nodes.length) fields.push({ name: '🏢 Studio', value: m.studios.nodes.map((s) => s.name).join(', '), inline: true });
   if (m.genres.length) fields.push({ name: '🏷️ Genres', value: m.genres.slice(0, 6).join(' · '), inline: false });
   fields.push({ name: '🕵️ Texz\'s verdict', value: verdict(m.averageScore, m.type), inline: false });
+  // sequels, prequels and the source, so the next thing to watch is one click away
+  const rel = (m.relations?.edges ?? []).filter((e) => ['SEQUEL', 'PREQUEL', 'ADAPTATION', 'SOURCE', 'PARENT', 'SIDE_STORY'].includes(e.relationType)).slice(0, 5);
+  if (rel.length) {
+    fields.push({ name: '🔗 Related', value: rel.map((e) => `${nice(e.relationType)}: [${e.node.title.english ?? e.node.title.romaji}](https://anilist.co/${e.node.type.toLowerCase()}/${e.node.id})`).join('\n'), inline: false });
+  }
   if (m.nextAiringEpisode) {
     fields.push({ name: '⏰ Next episode', value: `Episode **${m.nextAiringEpisode.episode}** <t:${m.nextAiringEpisode.airingAt}:R> (<t:${m.nextAiringEpisode.airingAt}:f>)`, inline: false });
   }
@@ -73,12 +79,19 @@ function mediaRows(userId: string, m: Media, others: Media[], following: boolean
       })))));
   }
   const buttons: MessageActionRowComponentBuilder[] = [new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(m.siteUrl).setLabel('AniList').setEmoji('🔗')];
+  // official places to watch or read, straight from AniList's own list
+  const where = (m.externalLinks ?? []).filter((l) => l.type === 'STREAMING' && !l.isDisabled && /^https:\/\//.test(l.url));
+  const seen = new Set<string>();
+  const official = where.filter((l) => !seen.has(l.site) && seen.add(l.site)).slice(0, 4);
   if (m.type === 'ANIME' && m.nextAiringEpisode) {
     buttons.unshift(new ButtonBuilder().setCustomId(`anif|${userId}|${m.id}`).setStyle(following ? ButtonStyle.Success : ButtonStyle.Primary)
       .setEmoji(following ? '🔕' : '🔔').setLabel(following ? 'Stop episode alerts' : 'Alert me for new episodes'));
   }
   rows.push(row(listMenu(m)));
   rows.push(row(...buttons));
+  if (official.length) {
+    rows.push(row(...official.map((l) => new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(l.url).setLabel(`${m.type === 'MANGA' ? 'Read' : 'Watch'} on ${l.site}`.slice(0, 80)))));
+  }
   return rows;
 }
 
@@ -213,6 +226,27 @@ const alerts: Command = {
   },
 };
 
+const airing: Command = {
+  name: 'airing',
+  group: 'anime',
+  data: new SlashCommandBuilder().setName('airing').setDescription('Episodes airing today, or tomorrow')
+    .addStringOption((o) => o.setName('day').setDescription('Today if empty').addChoices({ name: 'today', value: 'today' }, { name: 'tomorrow', value: 'tomorrow' })).toJSON(),
+  text: { aliases: ['airs', 'aired'], args: ['day'] },
+  run: async (ctx, store) => {
+    // the day goes by the asker's own timezone
+    const tz = store.settings(ctx.userId).timezone;
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(new Date()).map((x) => [x.type, x.value]));
+    const add = ctx.str('day')?.toLowerCase() === 'tomorrow' ? 1 : 0;
+    const from = zonedTime(tz, Number(p.year), Number(p.month), Number(p.day) + add).getTime() / 1000;
+    const list = await airingOn(Math.floor(from), Math.floor(from) + 86_400).catch(() => null);
+    if (!list) return ctx.reply('AniList didn\'t answer, try again in a moment.');
+    const body = list.length
+      ? list.slice(0, 20).map((a) => `<t:${a.airingAt}:t> **[${titleOf(a.media)}](${a.media.siteUrl})** · ep ${a.episode}${a.media.averageScore ? ` · ⭐ ${a.media.averageScore}` : ''}`).join('\n')
+      : 'Nothing airing. A rare quiet day for Yokohama.';
+    return ctx.reply({ embeds: [card({ kind: 'season', title: add ? 'Airing tomorrow' : 'Airing today', emoji: '📡', gif: 'off', body })] });
+  },
+};
+
 const daily: Command = {
   name: 'today',
   group: 'anime',
@@ -295,7 +329,7 @@ export const anime: Module = {
   name: 'anime',
   label: 'Anime and manga',
   about: 'Search anime, manga and characters, seasons, trending picks, new-episode alerts and your own watch list',
-  commands: [lookup('ANIME'), lookup('MANGA'), character, daily, guess, season, trend, random, alerts, watchlist],
+  commands: [lookup('ANIME'), lookup('MANGA'), character, airing, daily, guess, season, trend, random, alerts, watchlist],
 };
 
 // ---------- buttons and menus ----------
