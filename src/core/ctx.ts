@@ -1,10 +1,10 @@
 import {
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits, type MessageActionRowComponentBuilder,
+  ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits, type MessageActionRowComponentBuilder,
   type ButtonInteraction, type ChatInputCommandInteraction, type Guild, type GuildMember, type Message, type StringSelectMenuInteraction,
 } from 'discord.js';
 
 export type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
-export type Reply = string | EmbedBuilder | { content?: string; embeds?: EmbedBuilder[]; private?: boolean; ping?: string[]; components?: Row[] };
+export type Reply = string | EmbedBuilder | { content?: string; embeds?: EmbedBuilder[]; private?: boolean; ping?: string[]; components?: Row[]; files?: AttachmentBuilder[] };
 
 // one shape for both slash commands and "tz" text commands, so each command is written once
 export interface Ctx {
@@ -27,9 +27,10 @@ export interface Ctx {
 }
 
 function normalise(r: Reply) {
-  if (typeof r === 'string') return { content: r, embeds: [] as EmbedBuilder[], private: true, ping: [] as string[], components: [] as Row[] };
-  if (r instanceof EmbedBuilder) return { content: undefined, embeds: [r], private: true, ping: [] as string[], components: [] as Row[] };
-  return { content: r.content, embeds: r.embeds ?? [], private: r.private ?? true, ping: r.ping ?? [], components: r.components ?? [] };
+  const files = [] as AttachmentBuilder[];
+  if (typeof r === 'string') return { content: r, embeds: [] as EmbedBuilder[], private: true, ping: [] as string[], components: [] as Row[], files };
+  if (r instanceof EmbedBuilder) return { content: undefined, embeds: [r], private: true, ping: [] as string[], components: [] as Row[], files };
+  return { content: r.content, embeds: r.embeds ?? [], private: r.private ?? true, ping: r.ping ?? [], components: r.components ?? [], files: r.files ?? files };
 }
 
 export function fromSlash(i: ChatInputCommandInteraction): Ctx {
@@ -53,8 +54,8 @@ export function fromSlash(i: ChatInputCommandInteraction): Ctx {
     reply: (r) => {
       const n = normalise(r);
       const payload = n.private
-        ? { content: n.content, embeds: n.embeds, components: n.components, flags: MessageFlags.Ephemeral as const, allowedMentions: { parse: [] } }
-        : { content: n.content, embeds: n.embeds, components: n.components, allowedMentions: { parse: [], users: n.ping } };
+        ? { content: n.content, embeds: n.embeds, components: n.components, files: n.files, flags: MessageFlags.Ephemeral as const, allowedMentions: { parse: [] } }
+        : { content: n.content, embeds: n.embeds, components: n.components, files: n.files, allowedMentions: { parse: [], users: n.ping } };
       return i.replied || i.deferred ? i.followUp(payload) : i.reply({ ...payload, withResponse: true });
     },
   };
@@ -90,9 +91,9 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
             new ButtonBuilder().setCustomId(`nav|${opts.back}|owner=${opts.owner}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
           ));
         }
-        return i.update({ content: n.content ?? null, embeds: n.embeds, components: rows });
+        return i.update({ content: n.content ?? null, embeds: n.embeds, components: rows, ...(n.files.length ? { files: n.files } : { attachments: [] }) });
       }
-      return i.reply({ content: n.content, embeds: n.embeds, components: n.components, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+      return i.reply({ content: n.content, embeds: n.embeds, components: n.components, files: n.files, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     },
   };
 }
@@ -132,7 +133,7 @@ export function fromText(m: Message, tokens: string[], argNames: string[], hasSu
     role: (n) => id(n, /^<@&(\d+)>$/) ?? values.get(n)?.match(/^(\d{15,})$/)?.[1] ?? null,
     reply: (r) => {
       const n = normalise(r);
-      return m.reply({ content: n.content, embeds: n.embeds, components: n.components, allowedMentions: { repliedUser: false, parse: [], users: n.ping } });
+      return m.reply({ content: n.content, embeds: n.embeds, components: n.components, files: n.files, allowedMentions: { repliedUser: false, parse: [], users: n.ping } });
     },
   };
 }

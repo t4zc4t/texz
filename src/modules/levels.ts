@@ -1,7 +1,8 @@
-import { SlashCommandBuilder, type GuildMember, type Message } from 'discord.js';
+import { AttachmentBuilder, SlashCommandBuilder, type GuildMember, type Message } from 'discord.js';
+import { fetchAvatar, rankCard } from '../features/rankcard.js';
 import type { LevelRules, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
-import { bar, card } from '../theme.js';
+import { card } from '../theme.js';
 
 // xp needed to go from a level to the next one, the usual curve so early levels come quick
 export const stepXp = (level: number) => 5 * level * level + 50 * level + 100;
@@ -97,33 +98,26 @@ export async function giveXp(store: Store, m: Message) {
 
 const rank: Command = {
   name: 'rank',
-  data: new SlashCommandBuilder().setName('rank').setDescription('Your level and Agency rank in this server')
+  data: new SlashCommandBuilder().setName('rank').setDescription('Your level and Agency rank card')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
   text: { aliases: ['level', 'lvl'], args: ['user'] },
   run: async (ctx, store) => {
     if (!ctx.guild) return ctx.reply('Ranks live in servers.');
     const id = ctx.user('user') ?? ctx.userId;
     const m = await ctx.guild.members.fetch(id).catch(() => null);
+    if (m?.user.bot) return ctx.reply('Bots don\'t get promoted. Trust me, I\'ve asked.');
     const { xp } = store.xpOf(ctx.guild.id, id);
     const l = levelOf(xp);
     const r = rankFor(l.level);
     const next = ranks.find((x) => x.at > l.level);
-    const e = card({
-      kind: 'rank', title: `${m?.displayName ?? 'Agent'} · ${r.name}`, emoji: r.emoji, gif: 'off',
-      fields: [
-        { name: '📈 Level', value: `**${l.level}**`, inline: true },
-        { name: '🏅 Position', value: `#${store.xpPosition(ctx.guild.id, xp)}`, inline: true },
-        { name: '✨ Total xp', value: xp.toLocaleString(), inline: true },
-        { name: `To level ${l.level + 1}`, value: `${bar(l.into, l.need, 16)}\n${l.into.toLocaleString()} / ${l.need.toLocaleString()} xp`, inline: false },
-        ...(() => {
-          const b = boostsFor(store.guild(ctx.guild!.id).levels, m, ctx.channelId, null);
-          return b.total !== 1 ? [{ name: '🔥 Boost right now', value: `**${+b.total.toFixed(2)}x** · ${b.parts.map((p) => `${p.why} ${p.x}x`).join(' · ')}`, inline: false }] : [];
-        })(),
-        { name: '🎖️ Next promotion', value: next ? `${next.emoji} **${next.name}** at level ${next.at}` : 'None left. You\'ve outranked everyone, me included. Well, almost.', inline: false },
-      ],
+    const boost = boostsFor(store.guild(ctx.guild.id).levels, m, ctx.channelId, null);
+    const png = await rankCard({
+      name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, level: l.level, rank: r.name,
+      avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null,
+      position: store.xpPosition(ctx.guild.id, xp), totalXp: xp, into: l.into, need: l.need,
+      nextRank: next ? `${next.name} at ${next.at}` : null, boost: boost.total,
     });
-    if (m) e.setThumbnail(m.displayAvatarURL({ size: 256, forceStatic: false }));
-    return ctx.reply({ embeds: [e], private: false });
+    return ctx.reply({ files: [new AttachmentBuilder(png, { name: 'rank.png' })], private: false });
   },
 };
 
