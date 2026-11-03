@@ -54,6 +54,26 @@ Levels are off until an admin switches them on in `/setup`. Then one message a m
 
 The **Xp and boosts** page in `/setup` covers the rest: how much xp a message gives and how often it counts, channels and roles that earn nothing, a multiplier for certain roles (boosters, say) or channels, a standing weekend multiplier, and a timed boost event that can start now, in a few hours or at an exact `<t:unix>` time. Boosts multiply each other up to 10x and show on rank cards while they're live. Reward roles can stack or be swapped so only the highest stays, and the level-up line can be your own with `{user}`, `{level}`, `{rank}` and friends. Admins can also move xp by hand with `/levels xp give`, `/levels xp take`, `/levels xp level` and `/levels xp reset` (`tz xp give @user 500` works too).
 
+## Server tools
+
+- **Starboard:** messages that collect enough ⭐ (or any emoji you pick) get reposted in a starboard channel with a jump link, and the count keeps updating.
+- **Tickets:** a panel with a button opens a private channel for the person and the staff role. Closing it saves a text transcript to a log channel.
+- **Planned posts:** `/tools announce add when:18:30 repeat:daily message:...` posts once or on repeat. Times can be `in 2h`, `18:30`, `tomorrow 09:00` or a `<t:unix>` stamp.
+- **Server stats:** `/tools stats` shows messages per day, the busiest channels and people, and joins against leaves.
+- **Role pickers:** `/rolepicker` asks for the roles in a menu and posts either buttons (up to 5) or a dropdown (up to 25, or one-only).
+
+Starboard, tickets and the character of the day are all set in `/setup`.
+
+## Economy and games
+
+Yen comes from `tz daily` (more for every day in a row, up to a week), a little for chatting, and from `tz guess`, which shows a picture from a popular anime with four names to choose from. The first right answer wins. `tz bal`, `tz give @someone 100` and `/eco top` cover the rest, and admins stock a role shop with `/eco shop add` that people buy from with `tz market buy <id>`.
+
+`tz profile` draws a profile card with your rank, yen, birthday, finished anime and favourite show, plus a bio set with `tz profile bio ...`. `tz cotd` shows the character of the day, and `/setup` can post one every morning.
+
+## OwO extras
+
+The case file shows your battle streak and gems left. An alert goes out when a gem type drops to its last one, the last call before reset also says where the huntbot is and how many gems are left, and `tz hb` shows how far each trait moved over the last week.
+
 ## Using it
 
 Every command works as a slash command and with the short prefix, so `tz status` and `tz status` do the same thing, and most have a shorter alias too (`tz hb`, `tz s`, `tz w <id>`). `tz help` lists everything switched on in the server.
@@ -83,6 +103,10 @@ It needs Node 24 or newer. Everything is stored in one SQLite file (`texz.db`), 
 ## Keeping it online
 
 Reminders only work while texz is running, so it lives on a small free cloud server instead of my PC. Any always-on Linux box with Node works, run it with a process manager or a systemd service so it comes back after a restart.
+
+## Looking after it
+
+A copy of the database is saved every day in `backups/`, keeping the last week. Whoever owns the bot can pick a channel in `/setup` → Logs where Texz reports its own errors, so problems show up without opening the terminal.
 
 ## Tests
 
