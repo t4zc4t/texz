@@ -154,6 +154,12 @@ export class Store {
         last_at INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (guild_id, user_id)
       );
+      CREATE TABLE IF NOT EXISTS pending_deletes (
+        channel_id TEXT NOT NULL,
+        message_id TEXT NOT NULL,
+        at INTEGER NOT NULL,
+        PRIMARY KEY (channel_id, message_id)
+      );
       CREATE TABLE IF NOT EXISTS guilds (
         id TEXT PRIMARY KEY,
         settings TEXT NOT NULL
@@ -311,6 +317,17 @@ export class Store {
 
   xpPosition(guildId: string, xp: number): number {
     return 1 + (this.db.prepare('SELECT COUNT(*) AS n FROM xp WHERE guild_id = ? AND xp > ?').get(guildId, xp) as { n: number }).n;
+  }
+
+  // channel pings that should vanish later, kept here so a restart doesn't forget them
+  deleteLater(channelId: string, messageId: string, at: number) {
+    this.db.prepare('INSERT OR REPLACE INTO pending_deletes (channel_id, message_id, at) VALUES (?, ?, ?)').run(channelId, messageId, at);
+  }
+
+  dueDeletes(now: number): { channel_id: string; message_id: string }[] {
+    const rows = this.db.prepare('SELECT channel_id, message_id FROM pending_deletes WHERE at <= ?').all(now) as { channel_id: string; message_id: string }[];
+    this.db.prepare('DELETE FROM pending_deletes WHERE at <= ?').run(now);
+    return rows;
   }
 
   touch(userId: string, channelId: string) {

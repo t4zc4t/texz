@@ -116,7 +116,7 @@ async function deliver(client: Client, store: Store, r: Reminder, body: EmbedBui
     ? await ch.send({ content: `<@${r.user_id}> ${text}`.slice(0, 2000), allowedMentions: { users: [r.user_id] } })
     : await ch.send({ content: `<@${r.user_id}>`, embeds: [body], allowedMentions: { users: [r.user_id] } });
   // some people don't want reminders sitting in the channel
-  if (s.autodelete > 0) setTimeout(() => void sent.delete().catch(() => {}), s.autodelete * 1000);
+  if (s.autodelete > 0) store.deleteLater(sent.channelId, sent.id, Date.now() + s.autodelete * 1000);
 }
 
 export function startScheduler(client: Client, store: Store) {
@@ -130,13 +130,26 @@ export function startScheduler(client: Client, store: Store) {
         continue;
       }
       store.deleteReminder(r.id);
+      // timers that went off hours ago while Texz was offline are old news, skip them
+      const stale = ['huntbot', 'pray', 'hunt', 'vote', 'reset', 'lastcall'].includes(r.kind) && now.getTime() - r.due_at > 3 * HOUR;
+      if (stale) {
+        if (r.kind === 'reset' || r.kind === 'lastcall') scheduleDailies(store, r.user_id, new Date(now.getTime() + 60_000));
+        continue;
+      }
       const body = text(store, r);
       if (body) await deliver(client, store, r, body).catch((e) => console.error('send failed', e));
       if (r.kind === 'reset' || r.kind === 'lastcall') scheduleDailies(store, r.user_id, new Date(now.getTime() + 60_000));
     }
   };
-  setInterval(() => void tick(), 20_000);
+  const sweep = async () => {
+    for (const d of store.dueDeletes(Date.now())) {
+      const ch = await client.channels.fetch(d.channel_id).catch(() => null);
+      if (ch?.isTextBased()) await ch.messages.delete(d.message_id).catch(() => {});
+    }
+  };
+  setInterval(() => { void tick(); void sweep(); }, 20_000);
   void tick();
+  void sweep();
 }
 
 export async function urgent(client: Client, store: Store, userId: string, channelId: string, body: EmbedBuilder) {

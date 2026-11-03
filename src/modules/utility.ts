@@ -84,6 +84,18 @@ function deduce(facts: {
   return out.slice(0, 3);
 }
 
+// the full member list is only needed for join order, so it's fetched at most every 10 minutes per server
+const lists = new Map<string, { at: number; members: Map<string, number> }>();
+async function memberList(guild: Guild) {
+  const hit = lists.get(guild.id);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.members;
+  const fetched = await guild.members.fetch().catch(() => null);
+  if (!fetched) return hit?.members ?? null;
+  const members = new Map([...fetched.values()].map((m) => [m.id, m.joinedTimestamp ?? 0]));
+  lists.set(guild.id, { at: Date.now(), members });
+  return members;
+}
+
 const user: Command = {
   name: 'user',
   data: new SlashCommandBuilder().setName('user').setDescription('Texz opens a dossier on someone, deductions included')
@@ -94,8 +106,8 @@ const user: Command = {
     const m = await ctx.guild.members.fetch(ctx.user('user') ?? ctx.userId).catch(() => null);
     if (!m) return ctx.reply('Nobody by that name here. Either they left, or they\'re very good at hiding.');
     const u = await m.user.fetch(true).catch(() => m.user);
-    const all = await ctx.guild.members.fetch().catch(() => null);
-    const position = all && m.joinedTimestamp ? [...all.values()].filter((x) => (x.joinedTimestamp ?? 0) < m.joinedTimestamp!).length + 1 : null;
+    const all = await memberList(ctx.guild);
+    const position = all && m.joinedTimestamp ? [...all.values()].filter((t) => t < m.joinedTimestamp!).length + 1 : null;
     const roles = m.roles.cache.filter((r) => r.id !== ctx.guild!.id).sort((a, b) => b.position - a.position);
     const act = store.activity(ctx.guild.id, m.id);
     const presence = m.presence;
