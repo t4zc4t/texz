@@ -9,12 +9,13 @@ import { onAvatarButton, onPollButton, utility } from '../modules/utility.js';
 import { moderation, onCaseComponent } from '../modules/moderation.js';
 import { onRoleButton, welcomeModule } from '../modules/welcome.js';
 import { levelsModule } from '../modules/levels.js';
+import { giveaways, onGiveawayButton } from '../modules/giveaways.js';
 import { onSetup, useModules } from '../features/setup.js';
 import { RED, card, type Kind } from '../theme.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import type { Command, Module } from './module.js';
 
-export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule];
+export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways];
 allModules.push(...modules);
 useModules(modules);
 
@@ -91,6 +92,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onAvatarButton(i)) return;
     if (await onRoleButton(i)) return;
     if (await onCaseComponent(store, i)) return;
+    if (await onGiveawayButton(store, i)) return;
   } catch (e) {
     console.error('component', e);
   }

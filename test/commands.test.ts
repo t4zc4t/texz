@@ -95,3 +95,16 @@ test('cases: old warnings move over, numbering and search work', async () => {
   const again = new Store(path);
   assert.equal(again.findCases('g', {}).total, 3);
 });
+
+test('giveaway draw is weighted and never repeats a winner', async () => {
+  const { draw } = await import('../src/modules/giveaways.ts');
+  const pool = [{ who: 'a', weight: 1 }, { who: 'b', weight: 1 }, { who: 'c', weight: 8 }];
+  const won = draw(pool, 3);
+  assert.equal(new Set(won).size, 3);
+  assert.deepEqual(draw(pool, 5).sort(), ['a', 'b', 'c']);
+  // rolling just under the end of the pool lands on the heavy ticket
+  assert.deepEqual(draw(pool, 1, () => 0.95), ['c']);
+  let c = 0;
+  for (let i = 0; i < 2000; i++) if (draw(pool, 1)[0] === 'c') c++;
+  assert.ok(c > 1400 && c < 1800, `heavy ticket won ${c} of 2000`);
+});

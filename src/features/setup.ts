@@ -27,7 +27,7 @@ export const gifMoments = ['help', 'ping', 'welcome', 'goodbye', 'levelup', 'war
 let modulesRef: Module[] = [];
 export const useModules = (m: Module[]) => { modulesRef = m; };
 const switchable = () => modulesRef.filter((m) => !m.locked);
-const icon: Record<string, string> = { owo: '🐾', anime: '📺', utility: '🧰', moderation: '🛡️', welcome: '🌸', levels: '🎖️' };
+const icon: Record<string, string> = { owo: '🐾', anime: '📺', utility: '🧰', moderation: '🛡️', welcome: '🌸', levels: '🎖️', giveaways: '🎁', birthdays: '🎂' };
 
 export function setupPanel(store: Store, guild: Guild, owner: string, page: string) {
   const g = store.guild(guild.id);
