@@ -17,7 +17,7 @@ function rulesText(store: Store, guildId: string) {
   const g = store.guild(guildId);
   const out = [`Prefix: \`${g.prefix}\``, ''];
   for (const m of switchable()) {
-    const r = { ...defaultRules(), ...g.modules[m.name] };
+    const r = { ...defaultRules(m.name), ...g.modules[m.name] };
     const where = r.channels.length ? r.channels.map((c) => `<#${c}>`).join(' ') : 'everywhere';
     const who = r.roles.length ? r.roles.map((x) => `<@&${x}>`).join(' ') : 'everyone';
     out.push(`${r.enabled ? '✅' : '⬜'} **${m.label}** (\`${m.name}\`): ${where}, ${who}`);
@@ -182,7 +182,7 @@ const config: Command = {
     if (['feature', 'channel', 'role'].includes(sub) && !mod) {
       return ctx.reply(`Which feature? Options: ${switchable().map((m) => `\`${m.name}\``).join(', ')}`);
     }
-    const rules = mod ? { ...defaultRules(), ...g.modules[mod.name] } : null;
+    const rules = mod ? { ...defaultRules(mod.name), ...g.modules[mod.name] } : null;
 
     if (sub === 'feature' && mod && rules) {
       const on = ctx.bool('on');

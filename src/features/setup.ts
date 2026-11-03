@@ -43,7 +43,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { name: '🧩 Features', value: switchable().map((m) => `${store.rules(guild.id, m.name).enabled ? '🟢' : '⚫'} ${m.label}`).join('\n'), inline: true },
       { name: '🌸 Welcome', value: `in ${ch(g.welcome.channel)}\ngoodbye ${ch(g.welcome.goodbyeChannel)}\nautorole ${g.welcome.autorole ? `<@&${g.welcome.autorole}>` : '*none*'}`, inline: true },
       { name: '🛡️ Moderation', value: `logs ${ch(g.mod.logChannel)}\nautomod: ${[g.mod.invites && 'invites', g.mod.spam && 'spam', g.mod.mentions && 'mentions'].filter(Boolean).join(', ') || '*off*'}`, inline: true },
-      { name: '🎖️ Levels', value: `${g.levels.announce ? (g.levels.channel ? `posts in ${ch(g.levels.channel)}` : 'posts where people chat') : 'silent'}\n${Object.keys(g.levels.rewards).length} reward roles`, inline: true },
+      { name: '🎖️ Levels', value: !store.rules(guild.id, 'levels').enabled ? '*off*' : `${g.levels.announce ? (g.levels.channel ? `posts in ${ch(g.levels.channel)}` : 'posts where people chat') : 'silent'}\n${Object.keys(g.levels.rewards).length} reward roles`, inline: true },
       { name: '⌨️ Prefix', value: `\`${g.prefix}\``, inline: true },
       { name: '🎞️ Gifs', value: Object.keys(g.gifs).length ? Object.keys(g.gifs).join(', ') : 'my defaults', inline: true },
     );
@@ -52,7 +52,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { label: 'Welcome and goodbye messages', value: 'welcome', emoji: '🌸' },
       { label: 'Autorole for newcomers', value: 'autorole', emoji: '🎭' },
       { label: 'Log channel and automod', value: 'mod', emoji: '🛡️' },
-      { label: 'Levels and reward roles', value: 'levels', emoji: '🎖️' },
+      { label: 'Levels, xp and reward roles', value: 'levels', emoji: '🎖️' },
       { label: 'Gifs for each moment', value: 'gifs', emoji: '🎞️' },
       { label: 'Text prefix', value: 'prefix', emoji: '⌨️' },
     )));
@@ -75,7 +75,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
   if (page.startsWith('f:')) {
     const mod = switchable().find((m) => m.name === page.slice(2));
     if (mod) {
-      const r = { ...defaultRules(), ...g.modules[mod.name] };
+      const r = { ...defaultRules(mod.name), ...g.modules[mod.name] };
       title = mod.label;
       body = `${mod.about}\n\nLeave the menus empty to allow it everywhere and for everyone. Admins can always use everything.`;
       comps.push(
@@ -144,27 +144,45 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
 
   if (page === 'levels') {
     title = 'Levels';
-    const rewards = Object.entries(g.levels.rewards).sort((a, b) => Number(a[0]) - Number(b[0]));
-    body = [
-      'Pick where level-ups get posted, or leave it empty to post where people chat.',
-      '**Reward roles:** make the Agency ranks in one go, make a single role with your own name, or hand out a role you already have. Pick a reward in the edit menu to rename it or change its level.',
-    ].join('\n');
-    fields.push({ name: '🎁 Reward roles', value: rewards.length ? rewards.map(([l, r]) => `lvl ${l} → <@&${r}>`).join('\n') : '*none yet*' });
-    comps.push(
-      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'lvch')).setPlaceholder('📣 Level-up channel (empty = where they chat)')
-        .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(g.levels.channel ? [g.levels.channel] : [])),
-      row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'rwrole')).setPlaceholder('🎁 Use a role you already have as a reward').setMinValues(1).setMaxValues(1)),
+    const on = store.rules(guild.id, 'levels').enabled;
+    const l = g.levels;
+    body = on
+      ? 'Levels are **on**. People earn xp by chatting and climb the Agency ranks. Pick where level-ups get posted (empty = where they chat) and which channels earn nothing.'
+      : 'Levels are **off**, nobody earns xp and `rank` stays quiet. Switch them on when you want them.';
+    fields.push(
+      { name: '📣 Level-up posts', value: l.announce ? (l.channel ? `in <#${l.channel}>` : 'where people chat') : '*off, levels go up quietly*', inline: true },
+      { name: '🎁 Reward roles', value: `${Object.keys(l.rewards).length} set`, inline: true },
+      { name: '🚫 No xp in', value: l.noXpChannels.map((c) => `<#${c}>`).join(' ') || '*nowhere*', inline: false },
     );
+    comps.push(
+      row(
+        toggle(owner, 'lvon', '', 'Levels', on, '🎖️'),
+        toggle(owner, 'ann', '', 'Level-up posts', l.announce, '📣'),
+        new ButtonBuilder().setCustomId(id(owner, 'page', 'rewards')).setLabel('Reward roles').setEmoji('🎁').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(id(owner, 'page', 'lvxp')).setLabel('Xp and boosts').setEmoji('🔥').setStyle(ButtonStyle.Primary),
+        back(owner),
+      ),
+      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'lvch')).setPlaceholder('📣 Level-up channel (empty = where they chat)')
+        .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(l.channel ? [l.channel] : [])),
+      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'noxpch')).setPlaceholder('🚫 Channels where chatting gives no xp')
+        .setChannelTypes(ChannelType.GuildText, ChannelType.GuildForum, ChannelType.GuildAnnouncement).setMinValues(0).setMaxValues(25).setDefaultChannels(l.noXpChannels.slice(0, 25))),
+    );
+  }
+
+  if (page === 'rewards') {
+    title = 'Reward roles';
+    const rewards = Object.entries(g.levels.rewards).sort((a, b) => Number(a[0]) - Number(b[0]));
+    body = 'Make the Agency ranks in one go, make a single role with your own name, or hand out a role you already have. Pick a reward in the edit menu to rename it or change its level.';
+    fields.push({ name: '🎁 Reward roles', value: rewards.length ? rewards.map(([l, r]) => `lvl ${l} → <@&${r}>`).join('\n') : '*none yet*' });
+    comps.push(row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'rwrole')).setPlaceholder('🎁 Use a role you already have as a reward').setMinValues(1).setMaxValues(1)));
     if (rewards.length) {
       comps.push(row(new StringSelectMenuBuilder().setCustomId(id(owner, 'rwedit')).setPlaceholder('✏️ Rename, move or remove a reward')
         .addOptions(rewards.slice(0, 25).map(([l, r]) => ({ label: `Level ${l} · ${guild.roles.cache.get(r)?.name ?? 'missing role'}`.slice(0, 100), value: l })))));
     }
     comps.push(row(
-      toggle(owner, 'ann', '', 'Posts', g.levels.announce, '📣'),
       new ButtonBuilder().setCustomId(id(owner, 'rwranks')).setLabel('Make rank roles').setEmoji('✨').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(id(owner, 'rwnew')).setLabel('New reward role').setEmoji('➕').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(id(owner, 'page', 'lvxp')).setLabel('Xp and boosts').setEmoji('🔥').setStyle(ButtonStyle.Primary),
-      back(owner),
+      back(owner, 'levels'),
     ));
   }
 
@@ -192,8 +210,6 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { name: '📣 Level-up line', value: l.message ? `> ${l.message}` : '*my own lines*', inline: false },
     );
     comps.push(
-      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'noxpch')).setPlaceholder('🚫 Channels where chatting gives no xp')
-        .setChannelTypes(ChannelType.GuildText, ChannelType.GuildForum, ChannelType.GuildAnnouncement).setMinValues(0).setMaxValues(25).setDefaultChannels(l.noXpChannels.slice(0, 25))),
       row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'noxprole')).setPlaceholder('🚫 Roles that earn no xp (muted, bots...)')
         .setMinValues(0).setMaxValues(25).setDefaultRoles(l.noXpRoles.slice(0, 25))),
       row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'rboost')).setPlaceholder('🎭 Give a role an xp boost (boosters, vips...)').setMinValues(1).setMaxValues(1)),
@@ -265,9 +281,9 @@ async function canGive(guild: Guild, roleId: string) {
 
 const pageOf: Record<string, string> = {
   mod: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome',
-  arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', rwrole: 'levels', rwdel: 'levels', ann: 'levels', rw: 'levels',
-  rwranks: 'levels', rwnew: 'levels', rwedit: 'levels', gifm: 'gifs', gif: 'gifs', prefix: 'home',
-  noxpch: 'lvxp', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
+  arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
+  rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
+  noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
 export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
@@ -327,7 +343,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
         if (role) { g.levels.rewards[String(r.at)] = role.id; made++; }
       }
       store.saveGuild(i.guild.id, g);
-      await i.editReply(setupPanel(store, i.guild, owner, 'levels'));
+      await i.editReply(setupPanel(store, i.guild, owner, 'rewards'));
       await i.followUp({ content: made ? `✨ ${made} rank roles ready. Rename any of them from the edit menu~` : 'Every rank already has a role.', flags: MessageFlags.Ephemeral });
       return true;
     }
@@ -372,9 +388,9 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       return true;
     }
 
-    if (action === 'mod') g.modules[arg] = { ...defaultRules(), ...g.modules[arg], enabled: !store.rules(i.guild.id, arg).enabled };
-    if (action === 'modch') g.modules[arg] = { ...defaultRules(), ...g.modules[arg], channels: values };
-    if (action === 'modrole') g.modules[arg] = { ...defaultRules(), ...g.modules[arg], roles: values };
+    if (action === 'mod') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], enabled: !store.rules(i.guild.id, arg).enabled };
+    if (action === 'modch') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], channels: values };
+    if (action === 'modrole') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], roles: values };
     if (action === 'wch') g.welcome.channel = values[0] ?? null;
     if (action === 'gch') g.welcome.goodbyeChannel = values[0] ?? null;
     if (action === 'wreset') { g.welcome.message = null; g.welcome.goodbyeMessage = null; }
@@ -386,6 +402,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'am' && (arg === 'invites' || arg === 'spam' || arg === 'mentions')) g.mod[arg] = !g.mod[arg];
     if (action === 'lvch') g.levels.channel = values[0] ?? null;
     if (action === 'ann') g.levels.announce = !g.levels.announce;
+    if (action === 'lvon') g.modules.levels = { ...defaultRules('levels'), ...g.modules.levels, enabled: !store.rules(i.guild.id, 'levels').enabled };
     if (action === 'rwdel') delete g.levels.rewards[values[0]];
     if (action === 'noxpch') g.levels.noXpChannels = values;
     if (action === 'noxprole') g.levels.noXpRoles = values;

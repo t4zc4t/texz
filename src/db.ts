@@ -88,7 +88,9 @@ export const defaultLevels = (): LevelRules => ({
   boost: null, weekend: 1, roleBoosts: {}, channelBoosts: {}, noXpChannels: [], noXpRoles: [],
 });
 
-export const defaultRules = (): ModuleRules => ({ enabled: true, channels: [], roles: [] });
+// features a server has to switch on itself, levels posting in every chat isn't something to spring on people
+export const offByDefault = new Set(['levels']);
+export const defaultRules = (module = ''): ModuleRules => ({ enabled: !offByDefault.has(module), channels: [], roles: [] });
 
 export class Store {
   db: DatabaseSync;
@@ -230,8 +232,8 @@ export class Store {
   }
 
   rules(guildId: string | null, module: string): ModuleRules {
-    if (!guildId) return defaultRules();
-    return { ...defaultRules(), ...this.guild(guildId).modules[module] };
+    if (!guildId) return defaultRules(module);
+    return { ...defaultRules(module), ...this.guild(guildId).modules[module] };
   }
 
   saveGuild(guildId: string, s: GuildSettings) {
