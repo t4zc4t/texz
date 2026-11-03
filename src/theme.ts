@@ -88,6 +88,13 @@ const bank = {
   ticket: ['A private room for a private matter. The Agency is listening.', 'Speak freely, only the right people can see this.'],
   ticketClose: ['Case closed. Kunikida-kun will file the paperwork.'],
   announce: ['Words that wait for the right moment. Very dramatic, I approve.'],
+  guess: ['A picture, four names, one truth. Deduce it, detective.', 'Let\'s see how sharp your eyes are~'],
+  guessWin: ['Sharp eyes. The Agency could use you.', 'Correct! I\'d have gotten it faster, but well done.'],
+  ecoDaily: ['Pocket money from the Agency. Don\'t spend it all on crab. Actually, do.', 'Paid, like a proper detective. Come back tomorrow for more.'],
+  ecoTop: ['Follow the money, they say. Here\'s where it went.', 'The wealthy of Yokohama, ranked. I\'m not on it, I spent mine on crab.'],
+  ecoBuy: ['A fine purchase. Very fashionable.', 'Bought and paid for. Wear it well~'],
+  ecoShop: ['Everything has a price. Here are today\'s.', 'Window shopping again? Very relatable.'],
+  profile: ['A detective\'s file on someone. Fairly flattering, this one.'],
   gemLow: ['Your gem pouch is nearly empty. Even a detective needs supplies.', 'Last gem standing. Restock before your hunts get sad.'],
   shop: [
     'Window shopping with a detective. I point at things, you pay for them. Fair, no?',

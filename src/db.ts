@@ -66,6 +66,8 @@ export interface GuildSettings {
   autoclean: number;
   starboard: { channel: string | null; emoji: string; min: number; self: boolean };
   tickets: { category: string | null; staff: string | null; log: string | null };
+  // channel for the character of the day
+  daily: { channel: string | null };
 }
 
 export interface LevelRules {
@@ -325,6 +327,26 @@ export class Store {
         n INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (guild_id, day, kind, key)
       );
+      CREATE TABLE IF NOT EXISTS wallets (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        yen INTEGER NOT NULL DEFAULT 0,
+        daily_day TEXT,
+        streak INTEGER NOT NULL DEFAULT 0,
+        chat_at INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (guild_id, user_id)
+      );
+      CREATE TABLE IF NOT EXISTS shop_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id TEXT NOT NULL,
+        role_id TEXT NOT NULL,
+        price INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS profiles (
+        user_id TEXT PRIMARY KEY,
+        bio TEXT,
+        favourite TEXT
+      );
       CREATE TABLE IF NOT EXISTS kv (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -381,6 +403,7 @@ export class Store {
       autoclean: saved.autoclean ?? 30,
       starboard: { channel: null, emoji: '⭐', min: 3, self: false, ...saved.starboard },
       tickets: { category: null, staff: null, log: null, ...saved.tickets },
+      daily: { channel: null, ...saved.daily },
     };
   }
 
@@ -476,6 +499,52 @@ export class Store {
   setKv(key: string, value: string | null) {
     if (value === null) this.db.prepare('DELETE FROM kv WHERE key = ?').run(key);
     else this.db.prepare('INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+  }
+
+  // ---------- economy ----------
+
+  wallet(guildId: string, userId: string): { yen: number; daily_day: string | null; streak: number; chat_at: number } {
+    return (this.db.prepare('SELECT yen, daily_day, streak, chat_at FROM wallets WHERE guild_id = ? AND user_id = ?').get(guildId, userId) as never)
+      ?? { yen: 0, daily_day: null, streak: 0, chat_at: 0 };
+  }
+
+  // adds (or takes, with a negative amount) yen, refusing to go below zero
+  pay(guildId: string, userId: string, amount: number, patch: { daily_day?: string; streak?: number; chat_at?: number } = {}): boolean {
+    const w = this.wallet(guildId, userId);
+    if (w.yen + amount < 0) return false;
+    this.db.prepare(`INSERT INTO wallets (guild_id, user_id, yen, daily_day, streak, chat_at) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(guild_id, user_id) DO UPDATE SET yen = excluded.yen, daily_day = excluded.daily_day, streak = excluded.streak, chat_at = excluded.chat_at`)
+      .run(guildId, userId, w.yen + amount, patch.daily_day ?? w.daily_day, patch.streak ?? w.streak, patch.chat_at ?? w.chat_at);
+    return true;
+  }
+
+  richest(guildId: string, limit = 10): { user_id: string; yen: number }[] {
+    return this.db.prepare('SELECT user_id, yen FROM wallets WHERE guild_id = ? AND yen > 0 ORDER BY yen DESC LIMIT ?').all(guildId, limit) as { user_id: string; yen: number }[];
+  }
+
+  shopItems(guildId: string): { id: number; role_id: string; price: number }[] {
+    return this.db.prepare('SELECT id, role_id, price FROM shop_items WHERE guild_id = ? ORDER BY price').all(guildId) as { id: number; role_id: string; price: number }[];
+  }
+
+  addShopItem(guildId: string, roleId: string, price: number): number {
+    this.db.prepare('DELETE FROM shop_items WHERE guild_id = ? AND role_id = ?').run(guildId, roleId);
+    return Number(this.db.prepare('INSERT INTO shop_items (guild_id, role_id, price) VALUES (?, ?, ?)').run(guildId, roleId, price).lastInsertRowid);
+  }
+
+  removeShopItem(guildId: string, id: number): boolean {
+    return Number(this.db.prepare('DELETE FROM shop_items WHERE guild_id = ? AND id = ?').run(guildId, id).changes) > 0;
+  }
+
+  // ---------- profiles ----------
+
+  profile(userId: string): { bio: string | null; favourite: string | null } {
+    return (this.db.prepare('SELECT bio, favourite FROM profiles WHERE user_id = ?').get(userId) as never) ?? { bio: null, favourite: null };
+  }
+
+  setProfile(userId: string, p: { bio?: string | null; favourite?: string | null }) {
+    const old = this.profile(userId);
+    this.db.prepare('INSERT INTO profiles (user_id, bio, favourite) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET bio = excluded.bio, favourite = excluded.favourite')
+      .run(userId, p.bio === undefined ? old.bio : p.bio, p.favourite === undefined ? old.favourite : p.favourite);
   }
 
   // ---------- starboard ----------

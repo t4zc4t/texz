@@ -5,11 +5,12 @@ import {
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import {
-  AniListError, currentSeason, plain, randomPopular, searchCharacter, searchMedia, seasonal, titleOf, trending, mediaById,
+  AniListError, characterOfDay, guessRound, type Character, currentSeason, plain, randomPopular, searchCharacter, searchMedia, seasonal, titleOf, trending, mediaById,
   type Media,
 } from '../anime/anilist.js';
-import { RED, card } from '../theme.js';
+import { RED, card, say } from '../theme.js';
 import { listMenu, watchlist } from './watchlist.js';
+import { GUESS_PAY } from './economy.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
@@ -122,8 +123,14 @@ const character: Command = {
     try {
       const [c] = await searchCharacter(name);
       if (!c) return ctx.reply(card({ kind: 'missing', title: `Nobody called "${name}"`, emoji: '🔍', gif: 'off' }));
+      return ctx.reply({ embeds: [characterCard(c)] });
+    } catch (e) { return ctx.reply(oops(e)); }
+  },
+};
+
+export function characterCard(c: Character, title?: string) {
       const e = card({
-        kind: 'character', title: c.name.full ?? name, emoji: '🎭', gif: 'off',
+        kind: 'character', title: title ?? c.name.full ?? '?', emoji: '🎭', gif: 'off',
         body: [c.name.native ? `*${c.name.native}*` : '', plain(c.description, 500)].filter(Boolean).join('\n\n'),
         fields: [
           { name: '📚 Appears in', value: c.media.nodes.map((n) => `${n.type === 'ANIME' ? '📺' : '📖'} ${n.title.english ?? n.title.romaji}`).join('\n') || '?', inline: false },
@@ -133,10 +140,8 @@ const character: Command = {
         ],
       }).setURL(c.siteUrl);
       if (c.image.large) e.setThumbnail(c.image.large);
-      return ctx.reply({ embeds: [e], private: false });
-    } catch (e) { return ctx.reply(oops(e)); }
-  },
-};
+      return e;
+}
 
 const season: Command = {
   name: 'season',
@@ -208,11 +213,89 @@ const alerts: Command = {
   },
 };
 
+const daily: Command = {
+  name: 'today',
+  group: 'anime',
+  data: new SlashCommandBuilder().setName('today').setDescription('Today\'s character of the day').toJSON(),
+  text: { aliases: ['cotd'] },
+  run: async (ctx) => {
+    const c = await characterOfDay().catch(() => null);
+    if (!c) return ctx.reply('AniList didn\'t answer, try again in a moment.');
+    return ctx.reply({ embeds: [characterCard(c, `Character of the day · ${c.name.full ?? '?'}`)] });
+  },
+};
+
+// one round per channel, the first right answer wins
+const rounds = new Map<string, { answer: number; titles: string[]; ends: number; done: boolean }>();
+
+const guess: Command = {
+  name: 'guess',
+  group: 'anime',
+  data: new SlashCommandBuilder().setName('guess').setDescription('Name the anime from a picture, first right answer wins yen').toJSON(),
+  text: { aliases: ['gta', 'quiz'] },
+  run: async (ctx, store) => {
+    const live = rounds.get(ctx.channelId);
+    if (live && !live.done && live.ends > Date.now()) return ctx.reply('A round is already running here, answer that one first.');
+    const r = await guessRound().catch(() => null);
+    if (!r) return ctx.reply('AniList didn\'t give me a good picture, try again.');
+    const order = [...r.options].sort(() => Math.random() - 0.5);
+    const titles = order.map(titleOf);
+    const id = `${ctx.channelId}`;
+    rounds.set(id, { answer: order.findIndex((m) => m.id === r.answer.id), titles, ends: Date.now() + 30_000, done: false });
+    const e = card({ kind: 'guess', title: 'Which anime is this?', emoji: '🔎', gif: 'off', body: `30 seconds. First right answer${ctx.guildId && store.rules(ctx.guildId, 'economy').enabled ? ` gets **¥${GUESS_PAY}**` : ' wins'}.` })
+      .setImage(r.answer.bannerImage);
+    const buttons = row(...titles.map((t, i) => new ButtonBuilder().setCustomId(`gs|${id}|${i}`).setLabel(t.slice(0, 80)).setStyle(ButtonStyle.Secondary)));
+    // everyone in the channel plays, so it's posted for all
+    return ctx.reply({ embeds: [e], components: [buttons], public: true });
+  },
+};
+
+export async function onGuess(store: Store, i: import('discord.js').Interaction) {
+  if (!i.isButton() || !i.customId.startsWith('gs|')) return false;
+  const [, id, pick] = i.customId.split('|');
+  const r = rounds.get(id);
+  if (!r || r.done || r.ends < Date.now()) {
+    if (r && !r.done) r.done = true;
+    await i.reply({ content: r ? `Time's up, it was **${r.titles[r.answer]}**.` : 'This round is over.', flags: 64 });
+    return true;
+  }
+  if (Number(pick) !== r.answer) { await i.reply({ content: '❌ Not that one.', flags: 64 }); return true; }
+  r.done = true;
+  const paid = i.guildId && store.rules(i.guildId, 'economy').enabled ? store.pay(i.guildId, i.user.id, GUESS_PAY) : false;
+  const rows = i.message.components.map((c) => c.toJSON());
+  for (const rw of rows) for (const b of (rw as { components: { disabled?: boolean; style?: number; custom_id?: string }[] }).components) {
+    b.disabled = true;
+    if (b.custom_id === `gs|${id}|${r.answer}`) b.style = ButtonStyle.Success;
+  }
+  await i.update({ components: rows as never });
+  await i.followUp({ content: `🎉 <@${i.user.id}> got it: **${r.titles[r.answer]}**${paid ? ` · +¥${GUESS_PAY}` : ''}. ${say('guessWin')}`, allowedMentions: { users: [i.user.id] } });
+  return true;
+}
+
+// posts the character of the day once a day, around 9 in the morning in India
+export function startDailyCharacter(client: import('discord.js').Client, store: Store) {
+  const tick = async () => {
+    const now = new Date();
+    if (now.getUTCHours() < 3 || (now.getUTCHours() === 3 && now.getUTCMinutes() < 30)) return;
+    const day = now.toISOString().slice(0, 10);
+    for (const guild of client.guilds.cache.values()) {
+      const chId = store.guild(guild.id).daily.channel;
+      if (!chId || !store.rules(guild.id, 'anime').enabled || store.getKv(`cotd:${guild.id}`) === day) continue;
+      store.setKv(`cotd:${guild.id}`, day);
+      const c = await characterOfDay(day).catch(() => null);
+      const ch = c ? await guild.channels.fetch(chId).catch(() => null) : null;
+      if (c && ch?.isSendable()) await ch.send({ embeds: [characterCard(c, `Character of the day · ${c.name.full ?? '?'}`)] }).catch(() => {});
+    }
+  };
+  setInterval(() => void tick(), 10 * 60_000);
+  setTimeout(() => void tick(), 20_000);
+}
+
 export const anime: Module = {
   name: 'anime',
   label: 'Anime and manga',
   about: 'Search anime, manga and characters, seasons, trending picks, new-episode alerts and your own watch list',
-  commands: [lookup('ANIME'), lookup('MANGA'), character, season, trend, random, alerts, watchlist],
+  commands: [lookup('ANIME'), lookup('MANGA'), character, daily, guess, season, trend, random, alerts, watchlist],
 };
 
 // ---------- buttons and menus ----------

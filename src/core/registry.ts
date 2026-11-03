@@ -7,7 +7,8 @@ import { apply, modalFor, panel, parseRp } from '../features/panel.js';
 import type { Store } from '../db.js';
 import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
-import { anime, onAnimeComponent } from '../modules/anime.js';
+import { anime, onAnimeComponent, onGuess } from '../modules/anime.js';
+import { economy } from '../modules/economy.js';
 import { onWatchlist } from '../modules/watchlist.js';
 import { onAvatarButton, onPollButton, utility } from '../modules/utility.js';
 import { moderation, onCaseComponent } from '../modules/moderation.js';
@@ -22,7 +23,7 @@ import { report } from '../ops.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
 
-export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server];
+export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy];
 allModules.push(...modules);
 useModules(modules);
 
@@ -34,6 +35,7 @@ const groups: Record<string, { description: string; perms?: bigint }> = {
   levels: { description: 'Rank cards, the level leaderboard and xp tools' },
   info: { description: 'Profiles, avatars and the server' },
   fun: { description: 'Dice, coins, the 8ball and hard decisions' },
+  eco: { description: 'Yen: daily claim, balance, giving, the richest and the role shop' },
   tools: { description: 'Planned announcements and server activity (admins)', perms: PermissionFlagsBits.ManageGuild },
 };
 
@@ -159,6 +161,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onCaseComponent(store, i)) return;
     if (await onGiveawayButton(store, i)) return;
     if (await onServerComponent(store, i)) return;
+    if (await onGuess(store, i)) return;
   } catch (e) {
     report('component', e);
   }

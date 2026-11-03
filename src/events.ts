@@ -2,6 +2,7 @@ import { Events, PermissionFlagsBits, type Client, type Message } from 'discord.
 import type { Store } from './db.js';
 import { log } from './modules/moderation.js';
 import { giveXp } from './modules/levels.js';
+import { chatPay } from './modules/economy.js';
 import { onJoin, onLeave } from './modules/welcome.js';
 import { RED, card } from './theme.js';
 
@@ -49,6 +50,7 @@ export function wireEvents(client: Client, store: Store) {
   client.on(Events.MessageCreate, (m) => {
     void automod(store, m).catch((e) => console.error('automod', e));
     void giveXp(store, m).catch((e) => console.error('xp', e));
+    chatPay(store, m);
   });
 
   client.on(Events.GuildMemberAdd, (m) => {

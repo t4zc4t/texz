@@ -1,10 +1,13 @@
 import {
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder,
+  ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder,
   type Client, type Guild, type Interaction, type Message, type MessageActionRowComponentBuilder,
 } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { bar, card, pick, say } from '../theme.js';
+import { fetchAvatar, profileCard } from '../features/rankcard.js';
+import { levelOf, rankFor } from './levels.js';
+import { fmtDate } from './birthdays.js';
 
 const unix = (ms: number) => Math.floor(ms / 1000);
 
@@ -326,9 +329,60 @@ export async function afkWatch(store: Store, m: Message) {
   }
 }
 
+const profile: Command = {
+  name: 'profile',
+  group: 'info',
+  data: new SlashCommandBuilder().setName('profile').setDescription('Your personnel file as a picture, with a bio and favourite anime')
+    .addSubcommand((s) => s.setName('view').setDescription('Show a profile card')
+      .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')))
+    .addSubcommand((s) => s.setName('bio').setDescription('Set the line about you')
+      .addStringOption((o) => o.setName('text').setDescription('About you, "clear" removes it').setRequired(true).setMaxLength(180)))
+    .addSubcommand((s) => s.setName('favourite').setDescription('Set your favourite anime')
+      .addStringOption((o) => o.setName('title').setDescription('Title, "clear" removes it').setRequired(true).setMaxLength(60)))
+    .toJSON(),
+  // tz profile, tz profile @user, tz profile bio ..., tz profile favourite ...
+  text: { aliases: ['pf', 'card'], sub: true, subArgs: { view: ['user'], bio: ['text'], favourite: ['title'], fav: ['title'] } },
+  run: async (ctx, store) => {
+    let sub = ctx.sub() ?? 'view';
+    let who = ctx.user('user');
+    if (ctx.viaText && /^<@!?\d+>$/.test(sub)) { who = sub.replace(/\D/g, ''); sub = 'view'; }
+    if (sub === 'bio') {
+      const t = ctx.str('text')?.trim() ?? '';
+      store.setProfile(ctx.userId, { bio: !t || t.toLowerCase() === 'clear' ? null : t.slice(0, 180) });
+      return ctx.reply({ content: '🖋️ Bio updated. `tz profile` to see the card.', temp: true });
+    }
+    if (sub === 'favourite' || sub === 'fav') {
+      const t = ctx.str('title')?.trim() ?? '';
+      store.setProfile(ctx.userId, { favourite: !t || t.toLowerCase() === 'clear' ? null : t.slice(0, 60) });
+      return ctx.reply({ content: '⭐ Favourite saved.', temp: true });
+    }
+    const id = who ?? ctx.userId;
+    const m = ctx.guild ? await ctx.guild.members.fetch(id).catch(() => null) : null;
+    const p = store.profile(id);
+    const chips: { label: string; value: string }[] = [];
+    let title = 'Agency visitor';
+    if (ctx.guildId && store.rules(ctx.guildId, 'levels').enabled) {
+      const l = levelOf(store.xpOf(ctx.guildId, id).xp).level;
+      title = rankFor(l).name;
+      chips.push({ label: 'Level', value: String(l) });
+    }
+    if (ctx.guildId && store.rules(ctx.guildId, 'economy').enabled) chips.push({ label: 'Yen', value: `¥${store.wallet(ctx.guildId, id).yen.toLocaleString()}` });
+    const b = store.birthday(id);
+    if (b) chips.push({ label: 'Birthday', value: fmtDate(b.month, b.day) });
+    const done = store.watchlist(id, 'completed').length;
+    if (done) chips.push({ label: 'Anime done', value: String(done) });
+    if (p.favourite) chips.push({ label: 'Favourite', value: p.favourite });
+    const png = await profileCard({
+      name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: p.bio, chips,
+      avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null,
+    });
+    return ctx.reply({ files: [new AttachmentBuilder(png, { name: 'profile.png' })] });
+  },
+};
+
 export const utility: Module = {
   name: 'utility',
   label: 'Utility and fun',
   about: 'Avatars, user and server info, polls, choose, dice, coin, 8ball and AFK',
-  commands: [avatar, user, server, poll, choose, roll, coin, eightball, afk],
+  commands: [avatar, user, profile, server, poll, choose, roll, coin, eightball, afk],
 };

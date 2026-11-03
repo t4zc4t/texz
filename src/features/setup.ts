@@ -28,7 +28,7 @@ export const gifMoments = ['help', 'ping', 'welcome', 'goodbye', 'levelup', 'bir
 let modulesRef: Module[] = [];
 export const useModules = (m: Module[]) => { modulesRef = m; };
 const switchable = () => modulesRef.filter((m) => !m.locked);
-const icon: Record<string, string> = { owo: '🐾', anime: '📺', utility: '🧰', moderation: '🛡️', welcome: '🌸', levels: '🎖️', giveaways: '🎁', birthdays: '🎂', server: '🏛️' };
+const icon: Record<string, string> = { owo: '🐾', anime: '📺', utility: '🧰', moderation: '🛡️', welcome: '🌸', levels: '🎖️', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴' };
 
 export function setupPanel(store: Store, guild: Guild, owner: string, page: string) {
   const g = store.guild(guild.id);
@@ -57,6 +57,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { label: 'Levels, xp and reward roles', value: 'levels', emoji: '🎖️' },
       { label: 'Birthday greetings and role', value: 'birthdays', emoji: '🎂' },
       { label: 'Starboard', value: 'starboard', emoji: '⭐' },
+      { label: 'Character of the day', value: 'cotd', emoji: '🎭' },
       { label: 'Tickets', value: 'tickets', emoji: '🎫' },
       { label: 'Gifs for each moment', value: 'gifs', emoji: '🎞️' },
       { label: 'Text prefix', value: 'prefix', emoji: '⌨️' },
@@ -289,6 +290,17 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
     );
   }
 
+  if (page === 'cotd') {
+    title = 'Character of the day';
+    body = 'Every morning (about 9:00 in India) I post one well-loved anime character from AniList in this channel. Anyone can see today\'s with `tz cotd`.';
+    fields.push({ name: '📣 Channel', value: ch(g.daily.channel), inline: true });
+    comps.push(
+      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'cotdch')).setPlaceholder('🎭 Channel for the daily character (empty = off)')
+        .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setMinValues(0).setMaxValues(1).setDefaultChannels(g.daily.channel ? [g.daily.channel] : [])),
+      row(back(owner)),
+    );
+  }
+
   if (page === 'tickets') {
     title = 'Tickets';
     const t = g.tickets;
@@ -376,7 +388,7 @@ const pageOf: Record<string, string> = {
   arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
   clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
-  tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
+  cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
   noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
@@ -522,6 +534,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'stack') g.levels.stack = !g.levels.stack;
     if (action === 'clean') g.autoclean = Number(values[0]) || 0;
     if (action === 'sbch') g.starboard.channel = values[0] ?? null;
+    if (action === 'cotdch') g.daily.channel = values[0] ?? null;
     if (action === 'sbmin') g.starboard.min = Number(values[0]) || 3;
     if (action === 'sbself') g.starboard.self = !g.starboard.self;
     if (action === 'tkcat') g.tickets.category = values[0] ?? null;

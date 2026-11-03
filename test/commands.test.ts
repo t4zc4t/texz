@@ -36,7 +36,7 @@ test('every setup page fits discord limits', async () => {
   g.levels.rewards = { '5': '111111111111111111' };
   store.saveGuild('g1', g);
   const guild = { id: 'g1', roles: { cache: new Map() }, client: { application: { owner: { id: '123456789012345678' } } } } as never;
-  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'rewards', 'lvxp', 'birthdays', 'starboard', 'tickets', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
+  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'rewards', 'lvxp', 'birthdays', 'starboard', 'tickets', 'cotd', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
   for (const p of pages) {
     const v = setupPanel(store, guild, '123456789012345678', p);
     assert.ok(v.components.length >= 1 && v.components.length <= 5, `${p}: rows`);
@@ -165,4 +165,18 @@ test('planned post times', async () => {
   assert.equal(parseWhen('<t:1793700000:f>', 'UTC', now), 1793700000000);
   assert.equal(parseWhen('soon', 'UTC', now), null);
   assert.equal(parseWhen('25:00', 'UTC', now), null);
+});
+
+test('daily yen grows with the streak and the wallet never goes negative', async () => {
+  const { Store } = await import('../src/db.ts');
+  const { claimDaily, DAILY_BASE, DAILY_STEP } = await import('../src/modules/economy.ts');
+  const store = new Store(':memory:');
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  store.pay('g', 'u', 0, { daily_day: yesterday, streak: 3 });
+  const r = claimDaily(store, 'g', 'u');
+  assert.ok(r.ok && r.streak === 4 && r.got === DAILY_BASE + 3 * DAILY_STEP);
+  assert.equal(claimDaily(store, 'g', 'u').ok, false);
+  assert.equal(store.pay('g', 'u', -1_000_000), false);
+  assert.ok(store.pay('g', 'u', -100));
+  assert.equal(store.wallet('g', 'u').yen, DAILY_BASE + 3 * DAILY_STEP - 100);
 });

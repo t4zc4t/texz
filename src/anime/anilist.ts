@@ -140,3 +140,27 @@ export function currentSeason(now = new Date()) {
   const season = m < 3 ? 'WINTER' : m < 6 ? 'SPRING' : m < 9 ? 'SUMMER' : 'FALL';
   return { season, year: now.getUTCFullYear() };
 }
+
+const CHAR = `id siteUrl name { full native } image { large } description(asHtml: false) gender age favourites
+    media(perPage: 3, sort: POPULARITY_DESC) { nodes { title { romaji english } type } }`;
+
+// the same character for everyone all day, picked from the 300 most loved
+export async function characterOfDay(day = new Date().toISOString().slice(0, 10)): Promise<Character | null> {
+  let h = 0;
+  for (const c of day) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const page = 1 + (h % 300);
+  const q = `query ($page: Int) { Page(page: $page, perPage: 1) { characters(sort: FAVOURITES_DESC) { ${CHAR} } } }`;
+  const d = await ask<{ Page: { characters: Character[] } }>(q, { page }, 6 * 60 * 60_000);
+  return d.Page.characters[0] ?? null;
+}
+
+// four popular shows for the guessing game, at least one with a banner picture to show
+export async function guessRound(): Promise<{ answer: Media; options: Media[] } | null> {
+  const page = 1 + Math.floor(Math.random() * 75);
+  const q = `query ($page: Int) { Page(page: $page, perPage: 4) { media(type: ANIME, isAdult: false, sort: POPULARITY_DESC, format_in: [TV, MOVIE]) { ${MEDIA} } } }`;
+  const d = await ask<{ Page: { media: Media[] } }>(q, { page }, 0);
+  const options = d.Page.media;
+  const withPic = options.filter((m) => m.bannerImage);
+  if (options.length < 4 || !withPic.length) return null;
+  return { answer: withPic[Math.floor(Math.random() * withPic.length)], options };
+}
