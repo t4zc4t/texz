@@ -108,3 +108,18 @@ test('giveaway draw is weighted and never repeats a winner', async () => {
   for (let i = 0; i < 2000; i++) if (draw(pool, 1)[0] === 'c') c++;
   assert.ok(c > 1400 && c < 1800, `heavy ticket won ${c} of 2000`);
 });
+
+test('watchlist pages and status filters fit discord limits', async () => {
+  const { Store } = await import('../src/db.ts');
+  const { listPage } = await import('../src/modules/watchlist.ts');
+  const store = new Store(':memory:');
+  for (let i = 1; i <= 23; i++) store.watch({ user_id: 'u', media_id: i, title: `Show ${i} with a fairly long title to test`, kind: i % 3 ? 'ANIME' : 'MANGA', status: ['watching', 'planning', 'completed'][i % 3], progress: i, total: i % 2 ? 24 : null });
+  const v = listPage(store, 'u', 'u', 'all', 2);
+  assert.equal(v.components.length, 3);
+  assert.match(v.embeds[0].toJSON().footer!.text, /Page 3\/3/);
+  const only = listPage(store, 'u', 'u', 'completed', 0);
+  assert.ok(only.embeds[0].toJSON().description!.includes('✅'));
+  const theirs = listPage(store, 'x', 'u', 'all', 0);
+  assert.ok(!JSON.stringify(theirs.components.map((r) => r.toJSON())).includes('wle|'));
+  for (const r of v.components) for (const c of r.toJSON().components) if ('custom_id' in c) assert.ok(c.custom_id.length <= 100);
+});

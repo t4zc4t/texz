@@ -9,6 +9,7 @@ import {
   type Media,
 } from '../anime/anilist.js';
 import { RED, card } from '../theme.js';
+import { listMenu, watchlist } from './watchlist.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
@@ -75,6 +76,7 @@ function mediaRows(userId: string, m: Media, others: Media[], following: boolean
     buttons.unshift(new ButtonBuilder().setCustomId(`anif|${userId}|${m.id}`).setStyle(following ? ButtonStyle.Success : ButtonStyle.Primary)
       .setEmoji(following ? '🔕' : '🔔').setLabel(following ? 'Stop episode alerts' : 'Alert me for new episodes'));
   }
+  rows.push(row(listMenu(m)));
   rows.push(row(...buttons));
   return rows;
 }
@@ -201,8 +203,8 @@ const alerts: Command = {
 export const anime: Module = {
   name: 'anime',
   label: 'Anime and manga',
-  about: 'Search anime, manga and characters, seasons, trending picks and new-episode alerts',
-  commands: [lookup('ANIME'), lookup('MANGA'), character, season, trend, random, alerts],
+  about: 'Search anime, manga and characters, seasons, trending picks, new-episode alerts and your own watch list',
+  commands: [lookup('ANIME'), lookup('MANGA'), character, season, trend, random, alerts, watchlist],
 };
 
 // ---------- buttons and menus ----------

@@ -5,6 +5,7 @@ import type { Store } from '../db.js';
 import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
 import { anime, onAnimeComponent } from '../modules/anime.js';
+import { onWatchlist } from '../modules/watchlist.js';
 import { onAvatarButton, onPollButton, utility } from '../modules/utility.js';
 import { moderation, onCaseComponent } from '../modules/moderation.js';
 import { onRoleButton, welcomeModule } from '../modules/welcome.js';
@@ -88,6 +89,7 @@ export async function onComponent(store: Store, i: Interaction) {
   try {
     if (await onSetup(store, i)) return;
     if (await onAnimeComponent(store, i)) return;
+    if (await onWatchlist(store, i)) return;
     if (await onPollButton(store, i)) return;
     if (await onAvatarButton(i)) return;
     if (await onRoleButton(i)) return;
