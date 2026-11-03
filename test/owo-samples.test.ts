@@ -150,3 +150,15 @@ test('weapon shop page from a real sample', async () => {
   assert.equal(deals.find((d) => d.item.id === '102')!.verdict, 'upgrade');
   assert.equal(deals.find((d) => d.item.id === '110')!.verdict, 'new');
 });
+
+test('vote cooldown is read from "available in 10 H"', async () => {
+  const { Store } = await import('../src/db.ts');
+  const { onReplyForTest } = await import('../src/watch.ts');
+  const store = new Store(':memory:');
+  const text = '**✅ |** Click the link to vote and gain 100+ cowoncy!\n**<:blank:427371936482328596> |** You can vote every 12 hours!\n**<:blank:427371936482328596> |** Your daily vote is available in **10 H**';
+  onReplyForTest(store, 'u1', 'vote', text);
+  const left = store.cooldowns('u1').get('vote')! - Date.now();
+  assert.ok(left > 9.9 * 3_600_000 && left <= 10 * 3_600_000, `left ${left}`);
+  onReplyForTest(store, 'u2', 'vote', '**✅ | Your daily vote is available!**\n**<:blank:427371936482328596> |** You can vote every 12 hours!');
+  assert.ok(store.cooldowns('u2').get('vote')! <= Date.now());
+});

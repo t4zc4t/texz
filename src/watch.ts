@@ -99,7 +99,15 @@ function onCommand(store: Store, m: Message) {
 
 function onReply(store: Store, m: Message | PartialMessage, p: Pending) {
   const embeds = embedsOf(m);
-  const text = flatten([m.content ?? '', componentText(m)].join('\n'), embeds);
+  readReply(store, p, flatten([m.content ?? '', componentText(m)].join('\n'), embeds), embeds, m.channelId);
+}
+
+// tests feed OwO text straight in
+export const onReplyForTest = (store: Store, userId: string, cmd: string, text: string, embeds: Embedish[] = []) =>
+  readReply(store, { userId, cmd, at: Date.now() }, text, embeds, 'c1');
+
+function readReply(store: Store, p: Pending, text: string, embeds: Embedish[], channelId: string) {
+  const m = { channelId };
   const s = store.settings(p.userId);
   const now = Date.now();
   const day = owoDay();
@@ -125,8 +133,8 @@ function onReply(store: Store, m: Message | PartialMessage, p: Pending) {
       break;
     }
     case 'vote': {
-      // "your daily vote is available" means it hasn't been done yet
-      if (/vote is available/i.test(text)) {
+      // "your daily vote is available!" means it hasn't been done yet, "available in 10 H" means it has
+      if (/vote is available(?!\s*in)/i.test(text)) {
         store.setCooldown(p.userId, 'vote', new Date(now));
         break;
       }
