@@ -152,3 +152,30 @@ test('per reminder routes and auto delete', async () => {
   apply(store, u, 'alldm', '', {}, 'c');
   assert.deepEqual(store.settings(u).routes, {});
 });
+
+test('grouped commands keep the slash list short and work typed too', async () => {
+  assert.ok(definitions.length <= 15, `${definitions.length} top-level slash commands`);
+  const owo = definitions.find((d) => d.name === 'owo')!;
+  const subs = (owo.options ?? []).map((o) => o.name);
+  assert.ok(subs.includes('huntbot') && subs.includes('top'));
+  const store = new Store(':memory:');
+  const a = fake('tz owo hb');
+  assert.equal(onText(store, a.m), true);
+  await tick();
+  assert.match(said(a.replies[0]), /owo hb/);
+});
+
+test('quick typed answers are queued for cleanup, cards are not', async () => {
+  const store = new Store(':memory:');
+  const sent: string[] = [];
+  const a = fake('tz coin');
+  (a.m as unknown as { reply: (p: unknown) => Promise<unknown> }).reply = async () => { sent.push('x'); return { id: 'm1', channelId: 'c1' }; };
+  onText(store, a.m);
+  await tick();
+  assert.equal(store.dueDeletes(Date.now() + 31_000).length, 1);
+  const b = fake('tz status');
+  (b.m as unknown as { reply: (p: unknown) => Promise<unknown> }).reply = async () => ({ id: 'm2', channelId: 'c1' });
+  onText(store, b.m);
+  await tick();
+  assert.equal(store.dueDeletes(Date.now() + 31_000).length, 0);
+});

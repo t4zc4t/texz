@@ -40,6 +40,7 @@ export async function mugshot(guild: Guild | null, client: Client, targetId: str
 
 const avatar: Command = {
   name: 'avatar',
+  group: 'info',
   data: new SlashCommandBuilder().setName('avatar').setDescription('Someone\'s picture, server or main, animated ones included')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
   text: { aliases: ['av', 'pfp', 'mugshot'], args: ['user'] },
@@ -98,6 +99,7 @@ async function memberList(guild: Guild) {
 
 const user: Command = {
   name: 'user',
+  group: 'info',
   data: new SlashCommandBuilder().setName('user').setDescription('Texz opens a dossier on someone, deductions included')
     .addUserOption((o) => o.setName('user').setDescription('Who, you if empty')).toJSON(),
   text: { aliases: ['whois', 'ui', 'dossier'], args: ['user'] },
@@ -144,6 +146,7 @@ const user: Command = {
 
 const server: Command = {
   name: 'server',
+  group: 'info',
   data: new SlashCommandBuilder().setName('server').setDescription('Everything about this server at a glance').toJSON(),
   text: { aliases: ['si', 'guild'] },
   run: async (ctx) => {
@@ -212,7 +215,7 @@ const poll: Command = {
     const options = (raw ?? '').split('|').map((x) => x.trim()).filter(Boolean).slice(0, 5);
     if (!question || options.length < 2) return ctx.reply('Like this: `tz poll best snack? | pizza | crab`');
     const p = { question, options, votes: {}, owner: ctx.userId };
-    const sent = await ctx.reply({ ...pollView(null, p), private: false }) as Message | { fetchReply?: () => Promise<Message> } | undefined;
+    const sent = await ctx.reply({ ...pollView(null, p), public: true }) as Message | { fetchReply?: () => Promise<Message> } | undefined;
     // slash replies hand back an interaction response, fetch the real message to key the poll on
     const msg = sent && 'id' in (sent as object) && 'edit' in (sent as object) ? sent as Message : await ((sent as { resource?: { message?: Message } })?.resource?.message ?? null);
     if (msg) {
@@ -245,18 +248,20 @@ export async function onPollButton(store: Store, i: Interaction) {
 
 const choose: Command = {
   name: 'choose',
+  group: 'fun',
   data: new SlashCommandBuilder().setName('choose').setDescription('Let Texz pick for you')
     .addStringOption((o) => o.setName('options').setDescription('Split with | like sleep | work').setRequired(true)).toJSON(),
   text: { aliases: ['pick'], args: ['options'] },
   run: (ctx) => {
     const options = (ctx.str('options') ?? '').split(/\||,| or /).map((x) => x.trim()).filter(Boolean);
     if (options.length < 2) return ctx.reply('Give me at least two: `tz choose nap | work`');
-    return ctx.reply({ embeds: [card({ kind: 'choose', title: `The verdict: ${pick(options)}`, emoji: '🎯', gif: 'off', body: `-# considered: ${options.join(', ')}` })], private: false });
+    return ctx.reply({ content: `🎯 **${pick(options)}**. ${say('choose')}\n-# out of ${options.join(', ')}`, temp: true });
   },
 };
 
 const roll: Command = {
   name: 'roll',
+  group: 'fun',
   data: new SlashCommandBuilder().setName('roll').setDescription('Roll dice, like 2d6 or d20')
     .addStringOption((o) => o.setName('dice').setDescription('Like 2d6, d20, 100')).toJSON(),
   text: { aliases: ['dice'], args: ['dice'] },
@@ -268,26 +273,28 @@ const roll: Command = {
     const sides = Math.max(Number(m[2]), 2);
     const rolls = Array.from({ length: n }, () => 1 + Math.floor(Math.random() * sides));
     const total = rolls.reduce((a, b) => a + b, 0);
-    return ctx.reply({ embeds: [card({ kind: 'roll', title: `Fate says ${total}`, emoji: '🎲', gif: 'off', body: n > 1 ? `${rolls.join(' + ')}\n-# ${n}d${sides}` : `-# d${sides}` })], private: false });
+    return ctx.reply({ content: `🎲 **${total}**${n > 1 ? ` (${rolls.join(' + ')})` : ''} · ${n}d${sides}\n-# ${say('roll')}`, temp: true });
   },
 };
 
 const coin: Command = {
   name: 'coin',
+  group: 'fun',
   data: new SlashCommandBuilder().setName('coin').setDescription('Flip a coin').toJSON(),
   text: { aliases: ['flip', 'cf'] },
-  run: (ctx) => ctx.reply({ embeds: [card({ kind: 'coin', title: Math.random() < 0.5 ? 'Heads, it seems' : 'Tails, it seems', emoji: '🪙', gif: 'off' })], private: false }),
+  run: (ctx) => ctx.reply({ content: `🪙 **${Math.random() < 0.5 ? 'Heads' : 'Tails'}**. ${say('coin')}`, temp: true }),
 };
 
 const eightball: Command = {
   name: '8ball',
+  group: 'fun',
   data: new SlashCommandBuilder().setName('8ball').setDescription('Ask Texz a yes or no question')
     .addStringOption((o) => o.setName('question').setDescription('Your question').setRequired(true).setMaxLength(200)).toJSON(),
   text: { aliases: ['ask8', '8b'], args: ['question'] },
   run: (ctx) => {
     const q = ctx.str('question');
     if (!q) return ctx.reply('Ask me something: `tz 8ball will I pull a fabled today?`');
-    return ctx.reply({ embeds: [card({ kind: 'eightball', title: 'The bandaged oracle answers', emoji: '🎱', gif: 'off', body: `❓ ${q.slice(0, 200)}` })], private: false });
+    return ctx.reply({ content: `🎱 *${q.slice(0, 200)}*\n**${say('eightball')}**`, temp: true });
   },
 };
 
@@ -300,7 +307,7 @@ const afk: Command = {
     // no reason given, Texz makes one up for you
     const reason = ctx.str('reason') ?? say('afkReason');
     store.setAfk(ctx.userId, reason);
-    return ctx.reply({ embeds: [card({ kind: 'afkSet', title: 'Gone, for now', emoji: '💤', gif: 'off', body: `**${reason}**\n-# I'll clear it the moment you speak again.` })], private: false });
+    return ctx.reply({ content: `💤 Away: **${reason}**\n-# ${say('afkSet')} I'll clear it the moment you speak again.`, temp: true });
   },
 };
 

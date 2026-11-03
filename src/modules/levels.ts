@@ -98,6 +98,7 @@ export async function giveXp(store: Store, m: Message) {
 
 const rank: Command = {
   name: 'rank',
+  group: 'levels',
   data: new SlashCommandBuilder().setName('rank').setDescription('Your level and Agency rank card')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
   text: { aliases: ['level', 'lvl'], args: ['user'] },
@@ -123,6 +124,8 @@ const rank: Command = {
 
 const levels: Command = {
   name: 'levels',
+  group: 'levels',
+  as: 'top',
   data: new SlashCommandBuilder().setName('levels').setDescription('The server\'s top 10 by level').toJSON(),
   text: { aliases: ['ranks', 'xplb'] },
   run: (ctx, store) => {
@@ -141,6 +144,7 @@ const levels: Command = {
 
 const xp: Command = {
   name: 'xp',
+  group: 'levels',
   admin: true,
   data: new SlashCommandBuilder().setName('xp').setDescription('Hand out, take or reset xp (admins)')
     .addSubcommand((c) => c.setName('give').setDescription('Add xp to someone')
@@ -166,7 +170,7 @@ const xp: Command = {
       // the text form can't tell "wipe" from a user, so accept it in either slot
       if ((ctx.str('confirm') ?? (ctx.viaText ? ctx.str('user') : null))?.toLowerCase() !== 'wipe') return ctx.reply(`That clears everyone's xp. If you mean it: \`/xp reset confirm:wipe\` or \`${p} xp reset wipe\`.`);
       store.resetXp(ctx.guild.id);
-      return ctx.reply({ embeds: [card({ kind: 'levelSetup', title: 'Fresh start', emoji: '🧹', gif: 'off', body: 'Every file in the roster is blank again. Reward roles stay until people level past them or you remove them.' })], private: false });
+      return ctx.reply({ content: '🧹 Fresh start, every file in the roster is blank again. Reward roles stay until people level past them or you remove them.', temp: true });
     }
     if (!sub || !['give', 'take', 'level', 'reset'].includes(sub) || !userId) {
       return ctx.reply(`Like this: \`${p} xp give @user 500\`, \`${p} xp take @user 200\`, \`${p} xp level @user 10\`, \`${p} xp reset @user\``);
@@ -194,17 +198,14 @@ const xp: Command = {
       if (now > was) await announce(store, member, was, now, null);
     }
     const diff = after - before;
-    return ctx.reply({ embeds: [card({
-      kind: 'levelSetup', title: 'File amended', emoji: '🖋️', gif: 'off',
-      body: `<@${userId}> · ${before.toLocaleString()} → **${after.toLocaleString()} xp** (${diff >= 0 ? '+' : ''}${diff.toLocaleString()})\nLevel ${was} → **${now}** · ${rankFor(now).emoji} ${rankFor(now).name}`,
-    })], private: false });
+    return ctx.reply({ content: `🖋️ <@${userId}> · ${before.toLocaleString()} → **${after.toLocaleString()} xp** (${diff >= 0 ? '+' : ''}${diff.toLocaleString()}) · level ${was} → **${now}** ${rankFor(now).emoji} ${rankFor(now).name}`, temp: true });
   },
 };
 
 export const levelsModule: Module = {
   name: 'levels',
   label: 'Levels and ranks',
-  about: 'Chat xp and Agency ranks from Stray to Living Legend. Reward roles, xp rates, boosts and no-xp zones are in /setup, admins move xp with /xp',
+  about: 'Chat xp and Agency ranks from Stray to Living Legend. Reward roles, xp rates, boosts and no-xp zones are in /setup, admins move xp with /levels xp',
   commands: [rank, levels, xp],
 };
 

@@ -77,7 +77,7 @@ const rolepicker: Command = {
       kind: 'roles', title: ctx.str('title')!, emoji: '🎭', gif: 'off',
       body: [ctx.str('about') ?? '', roles.map((r) => `<@&${r!.id}>`).join(' · ')].filter(Boolean).join('\n\n'),
     });
-    return ctx.reply({ embeds: [e], components: [row], private: false });
+    return ctx.reply({ embeds: [e], components: [row], public: true });
   },
 };
 

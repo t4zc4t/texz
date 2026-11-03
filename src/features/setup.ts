@@ -45,6 +45,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { name: '🛡️ Moderation', value: `logs ${ch(g.mod.logChannel)}\nautomod: ${[g.mod.invites && 'invites', g.mod.spam && 'spam', g.mod.mentions && 'mentions'].filter(Boolean).join(', ') || '*off*'}`, inline: true },
       { name: '🎖️ Levels', value: !store.rules(guild.id, 'levels').enabled ? '*off*' : `${g.levels.announce ? (g.levels.channel ? `posts in ${ch(g.levels.channel)}` : 'posts where people chat') : 'silent'}\n${Object.keys(g.levels.rewards).length} reward roles`, inline: true },
       { name: '⌨️ Prefix', value: `\`${g.prefix}\``, inline: true },
+      { name: '🧹 Auto-clean', value: g.autoclean ? `quick replies vanish after ${g.autoclean < 60 ? `${g.autoclean}s` : `${g.autoclean / 60}m`}` : '*off, replies stay*', inline: true },
       { name: '🎞️ Gifs', value: Object.keys(g.gifs).length ? Object.keys(g.gifs).join(', ') : 'my defaults', inline: true },
     );
     comps.push(row(new StringSelectMenuBuilder().setCustomId(id(owner, 'page')).setPlaceholder('🗂️ What should we set up?').addOptions(
@@ -56,6 +57,11 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { label: 'Birthday greetings and role', value: 'birthdays', emoji: '🎂' },
       { label: 'Gifs for each moment', value: 'gifs', emoji: '🎞️' },
       { label: 'Text prefix', value: 'prefix', emoji: '⌨️' },
+    )));
+    // short confirmations, errors and dice rolls from typed commands, cards and lists always stay
+    comps.push(row(new StringSelectMenuBuilder().setCustomId(id(owner, 'clean')).setPlaceholder('🧹 Auto-clean quick replies').addOptions(
+      [[0, 'Off, keep everything'], [10, 'After 10 seconds'], [30, 'After 30 seconds'], [60, 'After a minute'], [300, 'After 5 minutes']]
+        .map(([v, label]) => ({ label: `🧹 ${label}`, value: String(v), default: g.autoclean === v })),
     )));
   }
 
@@ -309,7 +315,7 @@ const pageOf: Record<string, string> = {
   mod: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome',
   arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
-  bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
+  clean: 'home', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
   noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
@@ -440,6 +446,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'noxpch') g.levels.noXpChannels = values;
     if (action === 'noxprole') g.levels.noXpRoles = values;
     if (action === 'stack') g.levels.stack = !g.levels.stack;
+    if (action === 'clean') g.autoclean = Number(values[0]) || 0;
     if (action === 'bdch') g.birthdays.channel = values[0] ?? null;
     if (action === 'bdrole') {
       if (values[0] && !(await canGive(i.guild, values[0]))) return fail('I can\'t hand out that role. Move my role above it in Server Settings → Roles, then try again.');

@@ -52,6 +52,15 @@ async function target(ctx: Ctx, perm: PermissionResolvable, need = true): Promis
   return { me, them };
 }
 
+// the reply in chat is one short line, the full card goes to the log channel
+function brief(e: EmbedBuilder) {
+  const d = e.toJSON();
+  const f = (name: string) => d.fields?.find((x) => x.name.includes(name))?.value;
+  const parts = [f('Who') && `${f('Who')}`, f('Until') && `until ${f('Until')}`, f('Back') && `back ${f('Back')}`, f('Warnings') && f('Warnings')].filter(Boolean);
+  const why = f('Reason');
+  return { content: `**${d.title}**${parts.length ? ` · ${parts.join(' · ')}` : ''}${why && why !== '-' ? `\n-# ${why}` : ''}`, temp: false };
+}
+
 function actionCard(kind: Kind, title: string, emoji: string, who: string, by: string, reason: string, extra: { name: string; value: string; inline?: boolean }[] = []) {
   return card({
     kind, title, emoji, color: RED,
@@ -74,6 +83,7 @@ const reason = (o: Builder) => o.addStringOption((x) => x.setName('reason').setD
 
 const warn: Command = {
   name: 'warn',
+  group: 'mod',
   data: reason(user(new SlashCommandBuilder().setName('warn').setDescription('Warn someone, it goes in their file')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).setDMPermission(false))).toJSON(),
   text: { args: ['user', 'reason'] },
@@ -86,17 +96,19 @@ const warn: Command = {
     await tellThem(t.them!, `⚠️ You were warned in **${ctx.guild!.name}**: ${why}`);
     const e = actionCard('warn', `Case #${num} · Warning`, '⚠️', `<@${t.them!.id}>`, ctx.userId, why, [{ name: '📒 Warnings', value: `${count} on file`, inline: true }]);
     await log(ctx.guild!.client, store, ctx.guildId!, e);
-    return ctx.reply({ embeds: [e], private: false });
+    return ctx.reply(brief(e));
   },
 };
 
 const timeout: Command = {
   name: 'timeout',
+  group: 'mod',
   data: reason(user(new SlashCommandBuilder().setName('timeout').setDescription('No Longer Human: mute someone for a while')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).setDMPermission(false))
-    .addStringOption((x) => x.setName('length').setDescription('Like 10m, 2h, 1d (max 28d)').setRequired(true))).toJSON(),
+    .addStringOption((x) => x.setName('length').setDescription('Like 10m, 2h, 1d (max 28d), or off to lift it').setRequired(true))).toJSON(),
   text: { aliases: ['mute', 'nullify', 'to'], args: ['user', 'length', 'reason'] },
   run: async (ctx, store) => {
+    if (/^(off|0|none|lift)$/i.test(ctx.str('length') ?? '')) return untimeout.run(ctx, store);
     const t = await target(ctx, PermissionFlagsBits.ModerateMembers);
     if (typeof t === 'string') return ctx.reply(t);
     const ms = parseLength(ctx.str('length'));
@@ -107,12 +119,14 @@ const timeout: Command = {
     await tellThem(t.them!, `🔇 You were timed out in **${ctx.guild!.name}** for ${human(ms)}: ${why}`);
     const e = actionCard('timeout', `Case #${num} · No Longer Human`, '🩹', `<@${t.them!.id}>`, ctx.userId, why, [{ name: '⏳ Until', value: `<t:${unix(Date.now() + ms)}:R>`, inline: true }]);
     await log(ctx.guild!.client, store, ctx.guildId!, e);
-    return ctx.reply({ embeds: [e], private: false });
+    return ctx.reply(brief(e));
   },
 };
 
 const untimeout: Command = {
   name: 'untimeout',
+  // "/mod timeout length:off" does the same on slash
+  hidden: true,
   data: user(new SlashCommandBuilder().setName('untimeout').setDescription('Give someone their voice back')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).setDMPermission(false)).toJSON(),
   text: { aliases: ['unmute'], args: ['user'] },
@@ -123,12 +137,13 @@ const untimeout: Command = {
     const num = store.addCase({ guild_id: ctx.guildId!, type: 'untimeout', user_id: t.them!.id, user_name: t.them!.user.username, mod_id: ctx.userId, reason: 'timeout lifted' });
     const e = actionCard('unban', `Case #${num} · Voice restored`, '🔊', `<@${t.them!.id}>`, ctx.userId, 'timeout lifted');
     await log(ctx.guild!.client, store, ctx.guildId!, e);
-    return ctx.reply({ embeds: [e], private: false });
+    return ctx.reply(brief(e));
   },
 };
 
 const kick: Command = {
   name: 'kick',
+  group: 'mod',
   data: reason(user(new SlashCommandBuilder().setName('kick').setDescription('Show someone the door')
     .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers).setDMPermission(false))).toJSON(),
   text: { args: ['user', 'reason'] },
@@ -141,12 +156,13 @@ const kick: Command = {
     const num = store.addCase({ guild_id: ctx.guildId!, type: 'kick', user_id: t.them!.id, user_name: t.them!.user.username, mod_id: ctx.userId, reason: why });
     const e = actionCard('kick', `Case #${num} · Shown the door`, '👢', `${t.them!.user.username} (\`${t.them!.id}\`)`, ctx.userId, why);
     await log(ctx.guild!.client, store, ctx.guildId!, e);
-    return ctx.reply({ embeds: [e], private: false });
+    return ctx.reply(brief(e));
   },
 };
 
 const ban: Command = {
   name: 'ban',
+  group: 'mod',
   data: reason(user(new SlashCommandBuilder().setName('ban').setDescription('Banish someone, for good or for a while')
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers).setDMPermission(false)))
     .addStringOption((x) => x.setName('length').setDescription('Temporary ban, like 1d or 2w (empty = forever)'))
@@ -172,12 +188,13 @@ const ban: Command = {
     const e = actionCard(ms ? 'tempban' : 'ban', `Case #${num} · ${ms ? 'Sent on holiday' : 'Banished'}`, '🔨', `${t.them!.user.username} (\`${t.them!.id}\`)`, ctx.userId, why,
       until ? [{ name: '⏳ Back', value: `<t:${unix(until)}:R>`, inline: true }] : []);
     await log(ctx.guild!.client, store, ctx.guildId!, e);
-    return ctx.reply({ embeds: [e], private: false });
+    return ctx.reply(brief(e));
   },
 };
 
 const unban: Command = {
   name: 'unban',
+  group: 'mod',
   data: new SlashCommandBuilder().setName('unban').setDescription('Pardon a banned user by their ID')
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers).setDMPermission(false)
     .addStringOption((x) => x.setName('id').setDescription('Their user ID').setRequired(true)).toJSON(),
@@ -192,12 +209,13 @@ const unban: Command = {
     const num = store.addCase({ guild_id: ctx.guild.id, type: 'unban', user_id: id, mod_id: ctx.userId, reason: 'pardoned' });
     const e = actionCard('unban', `Case #${num} · Pardoned`, '🕊️', `\`${id}\``, ctx.userId, 'unbanned');
     await log(ctx.guild.client, store, ctx.guild.id, e);
-    return ctx.reply({ embeds: [e], private: false });
+    return ctx.reply(brief(e));
   },
 };
 
 const purge: Command = {
   name: 'purge',
+  group: 'mod',
   data: new SlashCommandBuilder().setName('purge').setDescription('Delete recent messages here, optionally from one person')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages).setDMPermission(false)
     .addIntegerOption((x) => x.setName('amount').setDescription('How many, up to 100').setRequired(true).setMinValue(1).setMaxValue(100))
@@ -216,7 +234,7 @@ const purge: Command = {
     const gone = await ch.bulkDelete(fresh, true).catch(() => null);
     const count = gone?.size ?? 0;
     await log(ctx.guild.client, store, ctx.guild.id, actionCard('purge', 'Messages swept', '🧹', who ? `<@${who}>` : 'everyone', ctx.userId, `${count} in <#${ctx.channelId}>`));
-    const r = await ctx.reply({ embeds: [card({ kind: 'purge', title: `${count} message${count === 1 ? '' : 's'} gone`, emoji: '🧹', gif: 'off' })], private: false });
+    const r = await ctx.reply({ content: `🧹 **${count}** message${count === 1 ? '' : 's'} gone. ${say('purge')}`, temp: true });
     // the confirmation tidies itself away too
     if (ctx.viaText && r && 'delete' in (r as object)) setTimeout(() => void (r as { delete: () => Promise<unknown> }).delete().catch(() => {}), 5000);
     return r;
@@ -225,6 +243,7 @@ const purge: Command = {
 
 const lock: Command = {
   name: 'lock',
+  group: 'mod',
   data: new SlashCommandBuilder().setName('lock').setDescription('Lock or unlock this channel for everyone')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels).setDMPermission(false)
     .addBooleanOption((x) => x.setName('on').setDescription('Lock (true) or unlock (false)')).toJSON(),
@@ -237,12 +256,13 @@ const lock: Command = {
     await ch.permissionOverwrites.edit(ctx.guild.roles.everyone, { SendMessages: on ? false : null });
     const e = card({ kind: on ? 'lock' : 'unlock', title: on ? 'Channel locked' : 'Channel unlocked', emoji: on ? '🔒' : '🔓', gif: 'off' });
     await log(ctx.guild.client, store, ctx.guild.id, actionCard(on ? 'lock' : 'unlock', on ? 'Channel locked' : 'Channel unlocked', on ? '🔒' : '🔓', `<#${ch.id}>`, ctx.userId, '-'));
-    return ctx.reply({ embeds: [e], private: false });
+    return ctx.reply(brief(e));
   },
 };
 
 const slowmode: Command = {
   name: 'slowmode',
+  group: 'mod',
   data: new SlashCommandBuilder().setName('slowmode').setDescription('Set slowmode here, 0 turns it off')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels).setDMPermission(false)
     .addStringOption((x) => x.setName('length').setDescription('Like 5s, 1m, or 0').setRequired(true)).toJSON(),
@@ -255,7 +275,7 @@ const slowmode: Command = {
     const secs = raw.trim() === '0' ? 0 : Math.round((parseLength(raw) ?? Number(raw) * 1000) / 1000);
     if (!Number.isFinite(secs) || secs < 0 || secs > 21_600) return ctx.reply('Between 0 and 6 hours, please.');
     await ch.setRateLimitPerUser(secs);
-    return ctx.reply({ embeds: [card({ kind: 'slowmode', title: secs ? `Slowmode · ${human(secs * 1000)}` : 'Slowmode off', emoji: '🐢', gif: 'off' })], private: false });
+    return ctx.reply({ content: secs ? `🐢 Slowmode here is now **${human(secs * 1000)}**.` : '🐢 Slowmode off. Talk as fast as you like.', temp: true });
   },
 };
 
@@ -288,7 +308,7 @@ export function casePage(store: Store, guildId: string, owner: string, page: num
   const nav = (p: number, label: string, emoji: string) => new ButtonBuilder().setCustomId(`cs|${owner}|${p}|${key}`.slice(0, 100))
     .setLabel(label).setEmoji(emoji).setStyle(ButtonStyle.Secondary).setDisabled(p < 0 || p >= pages);
   const e = card({ kind: 'caseList', title: `Case archive · ${total}`, emoji: '🗄️', gif: 'off', body: `${what ? `${what}\n\n` : ''}${body}` });
-  e.setFooter({ text: `Page ${page + 1}/${pages} · /case view <number> opens one` });
+  e.setFooter({ text: `Page ${page + 1}/${pages} · /mod case view opens one` });
   return { embeds: [e], components: pages > 1 ? [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(nav(page - 1, 'Newer', '◀️'), nav(page + 1, 'Older', '▶️'))] : [] };
 }
 
@@ -296,7 +316,7 @@ export async function onCaseComponent(store: Store, i: Interaction): Promise<boo
   if (!i.isButton() || !i.customId.startsWith('cs|') || !i.guildId) return false;
   const [, owner, page, user, mod, type, text] = i.customId.split('|');
   if (i.user.id !== owner) {
-    await i.reply({ content: 'Open your own with `/case list`.', flags: MessageFlags.Ephemeral });
+    await i.reply({ content: 'Open your own with `/mod case list`.', flags: MessageFlags.Ephemeral });
     return true;
   }
   await i.update(casePage(store, i.guildId, owner, Number(page), { user: user || undefined, mod: mod || undefined, type: type || undefined, text: text || undefined }));
@@ -305,6 +325,7 @@ export async function onCaseComponent(store: Store, i: Interaction): Promise<boo
 
 const cases: Command = {
   name: 'case',
+  group: 'mod',
   data: new SlashCommandBuilder().setName('case').setDescription('The moderation archive: look up, search, edit cases')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).setDMPermission(false)
     .addSubcommand((c) => c.setName('view').setDescription('Open one case')
@@ -341,7 +362,7 @@ const cases: Command = {
     }
     if (sub === 'reason') {
       const why = ctx.str('reason');
-      if (!num || !why) return ctx.reply('Like this: `/case reason number:12 reason:...`');
+      if (!num || !why) return ctx.reply('Like this: `/mod case reason number:12 reason:...`');
       return ctx.reply(store.editCase(ctx.guildId, num, why) ? `🖋️ Case #${num} amended.` : 'No case with that number.');
     }
     if (sub === 'delete') {

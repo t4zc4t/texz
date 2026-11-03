@@ -94,6 +94,8 @@ const oops = (e: unknown) => card({ kind: 'error', title: 'AniList didn\'t answe
 
 const lookup = (type: 'ANIME' | 'MANGA'): Command => ({
   name: type === 'ANIME' ? 'anime' : 'manga',
+  group: 'anime',
+  as: type === 'ANIME' ? 'search' : 'manga',
   data: new SlashCommandBuilder().setName(type === 'ANIME' ? 'anime' : 'manga').setDescription(`Look up ${type === 'ANIME' ? 'an anime' : 'a manga'} on AniList`)
     .addStringOption((o) => o.setName('title').setDescription('Title to search').setRequired(true).setMaxLength(100)).toJSON(),
   text: { aliases: type === 'ANIME' ? ['ani'] : ['mg'], args: ['title'] },
@@ -110,6 +112,7 @@ const lookup = (type: 'ANIME' | 'MANGA'): Command => ({
 
 const character: Command = {
   name: 'character',
+  group: 'anime',
   data: new SlashCommandBuilder().setName('character').setDescription('Look up an anime or manga character')
     .addStringOption((o) => o.setName('name').setDescription('Character name').setRequired(true).setMaxLength(100)).toJSON(),
   text: { aliases: ['char'], args: ['name'] },
@@ -137,6 +140,7 @@ const character: Command = {
 
 const season: Command = {
   name: 'season',
+  group: 'anime',
   data: new SlashCommandBuilder().setName('season').setDescription('Most popular anime of a season')
     .addStringOption((o) => o.setName('season').setDescription('Season, this one if empty')
       .addChoices({ name: 'Winter', value: 'WINTER' }, { name: 'Spring', value: 'SPRING' }, { name: 'Summer', value: 'SUMMER' }, { name: 'Fall', value: 'FALL' }))
@@ -156,6 +160,7 @@ const season: Command = {
 
 const trend: Command = {
   name: 'trending',
+  group: 'anime',
   data: new SlashCommandBuilder().setName('trending').setDescription('What everyone is watching or reading right now')
     .addStringOption((o) => o.setName('type').setDescription('Anime or manga').addChoices({ name: 'Anime', value: 'ANIME' }, { name: 'Manga', value: 'MANGA' })).toJSON(),
   text: { aliases: ['trend', 'hot'], args: ['type'] },
@@ -170,6 +175,8 @@ const trend: Command = {
 
 const random: Command = {
   name: 'recommend',
+  group: 'anime',
+  as: 'random',
   data: new SlashCommandBuilder().setName('recommend').setDescription('A random popular anime or manga to try')
     .addStringOption((o) => o.setName('type').setDescription('Anime or manga').addChoices({ name: 'Anime', value: 'ANIME' }, { name: 'Manga', value: 'MANGA' })).toJSON(),
   text: { aliases: ['rec', 'suggest'], args: ['type'] },
@@ -185,6 +192,7 @@ const random: Command = {
 
 const alerts: Command = {
   name: 'alerts',
+  group: 'anime',
   data: new SlashCommandBuilder().setName('alerts').setDescription('Anime you get new-episode alerts for').toJSON(),
   text: { aliases: ['follows', 'watching'] },
   run: (ctx, store) => {

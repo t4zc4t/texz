@@ -59,6 +59,8 @@ export interface GuildSettings {
   welcome: { channel: string | null; message: string | null; goodbyeChannel: string | null; goodbyeMessage: string | null; autorole: string | null };
   levels: LevelRules;
   birthdays: { channel: string | null; role: string | null; message: string | null };
+  // seconds before quick typed answers clean themselves up, 0 keeps them
+  autoclean: number;
 }
 
 export interface LevelRules {
@@ -325,6 +327,7 @@ export class Store {
       welcome: { channel: null, message: null, goodbyeChannel: null, goodbyeMessage: null, autorole: null, ...saved.welcome },
       levels: { ...defaultLevels(), ...saved.levels },
       birthdays: { channel: null, role: null, message: null, ...saved.birthdays },
+      autoclean: saved.autoclean ?? 30,
     };
   }
 

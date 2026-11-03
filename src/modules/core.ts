@@ -1,6 +1,6 @@
 import { ActionRowBuilder, ChannelType, PermissionFlagsBits, SlashCommandBuilder, StringSelectMenuBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
 import { defaultRules, type Store } from '../db.js';
-import type { Command, Module } from '../core/module.js';
+import { slashPath, type Command, type Module } from '../core/module.js';
 import { card, say } from '../theme.js';
 import { isGifLink, resolve } from '../gifs.js';
 import { setupPanel } from '../features/setup.js';
@@ -37,7 +37,7 @@ function forms(c: Command, prefix: string) {
   const textArgs = (t.args ?? []).map((a) => (opts.find((o) => o.name === a)?.required ? `<${a}>` : `[${a}]`)).join(' ');
   const short = t.aliases?.length ? ` · short: ${t.aliases.slice(0, 3).map((a) => `\`${prefix} ${a}\``).join(' ')}` : '';
   return {
-    slash: `\`/${c.name}${slashArgs ? ` ${slashArgs}` : ''}\``,
+    slash: `\`/${slashPath(c)}${slashArgs ? ` ${slashArgs}` : ''}\``,
     text: `\`${prefix} ${c.name}${textArgs ? ` ${textArgs}` : ''}\`${short}`,
   };
 }
@@ -88,7 +88,7 @@ const help: Command = {
       const usage = subs.length
         ? subs.map((sc) => {
             const args = (t.subArgs?.[sc.name] ?? []).map((a) => `<${a}>`).join(' ');
-            return `\`${prefix} ${c.name} ${sc.name}${args ? ` ${args}` : ''}\`\n-# ${sc.description}`;
+            return `\`/${slashPath(c)} ${sc.name}\` · \`${prefix} ${c.name} ${sc.name}${args ? ` ${args}` : ''}\`\n-# ${sc.description}`;
           }).join('\n')
         : `${forms(c, prefix).slash}\n${forms(c, prefix).text}`;
       return page(card({
@@ -118,10 +118,10 @@ const help: Command = {
     }
     return page(card({
       kind: 'help', title: 'At your service', emoji: '🕵️', gif,
-      body: `Slash works, and so does the lazy way: \`${prefix} <command>\`.\nPick a feature below, I'll walk you through it.`,
+      body: `Slash works, and so does the lazy way: \`${prefix} <command>\`. Slash answers are only shown to you, typed ones to everyone.\nPick a feature below, I'll walk you through it.`,
       fields: mods.map((m) => ({
         name: `${icons[m.name] ?? '📁'} ${m.label}`,
-        value: m.commands.filter((c) => !c.hidden).map((c) => `\`${c.name}\``).join(' '),
+        value: m.commands.filter((c) => !c.hidden).map((c) => `\`${c.name}\``).join(' ') + (m.commands.some((c) => c.group) ? `\n-# slash: /${[...new Set(m.commands.filter((c) => c.group && !c.hidden).map((c) => c.group))].join(', /')}` : ''),
         inline: false,
       })),
     }));

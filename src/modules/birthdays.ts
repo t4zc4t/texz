@@ -113,10 +113,7 @@ const birthday: Command = {
       if (!date) return ctx.reply('That date doesn\'t exist, even in my calendar. Like this: `tz bday set 14 feb`');
       store.setBirthday(ctx.userId, date.month, date.day);
       const tz = store.settings(ctx.userId).timezone;
-      return ctx.reply({ embeds: [card({
-        kind: 'birthdaySet', title: `Birthday · ${fmtDate(date.month, date.day)}`, emoji: '🎂', gif: 'off',
-        body: `I'll celebrate on the day, going by your timezone (**${tz}**). Wrong zone? \`/settings\` fixes it.`,
-      })] });
+      return ctx.reply({ content: `🎂 **${fmtDate(date.month, date.day)}**, noted. ${say('birthdaySet')}\n-# I go by your timezone (${tz}), \`/owo remind\` → Settings changes it.`, temp: true });
     }
     if (sub === 'remove') return ctx.reply(store.removeBirthday(ctx.userId) ? '🎂 Forgotten. Ageless, like me.' : 'I didn\'t have it anyway.');
     if (sub === 'check') {
@@ -124,7 +121,7 @@ const birthday: Command = {
       const b = store.birthday(id);
       if (!b) return ctx.reply(id === ctx.userId ? 'You haven\'t told me. `tz bday set 14 feb`' : 'They haven\'t told me theirs. Very mysterious.');
       const n = daysUntil(b, localDate(store.settings(id).timezone));
-      return ctx.reply({ content: `🎂 <@${id}>'s birthday is **${fmtDate(b.month, b.day)}**, ${n === 0 ? '**today**!' : `in ${n} day${n === 1 ? '' : 's'}.`}`, private: false });
+      return ctx.reply({ content: `🎂 <@${id}>'s birthday is **${fmtDate(b.month, b.day)}**, ${n === 0 ? '**today**!' : `in ${n} day${n === 1 ? '' : 's'}.`}`, temp: true });
     }
     if (!ctx.guild) return ctx.reply('The list is per server.');
     // only people who are actually in this server

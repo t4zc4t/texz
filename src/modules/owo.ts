@@ -22,10 +22,9 @@ const gifFor = (store: Store, ctx: Ctx, kind: string) => (ctx.guildId ? store.gu
 
 const show = (ctx: Ctx, store: Store, o: CardOptions) => ctx.reply(card({ ...o, gif: o.gif ?? gifFor(store, ctx, o.kind) }));
 
-const missing = (ctx: Ctx, store: Store, cmd: string, title: string) => show(ctx, store, {
-  kind: 'missing', title, emoji: '🔍', color: RED,
-  body: `Run \`${cmd}\` somewhere I can read it, then ask me again.`,
-});
+// nothing seen yet is a one-liner, not a whole card
+const missing = (ctx: Ctx, _store: Store, cmd: string, title: string) =>
+  ctx.reply({ content: `🔍 **${title}**: I haven't seen it yet. Run \`${cmd}\` somewhere I can read it, then ask me again.`, temp: true });
 
 const weaponsOf = (store: Store, userId: string) =>
   new Map((store.snapshot<[string, Weapon][]>(userId, 'weapons')?.data ?? []).map(([id, w]) => [id, refresh(w)]));
@@ -34,6 +33,7 @@ const weaponsOf = (store: Store, userId: string) =>
 
 const status: Command = {
   name: 'status',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('status').setDescription('Your case file: timers, today\'s list, wallet and huntbot').toJSON(),
   text: { aliases: ['s', 'st'] },
   run: (ctx, store) => {
@@ -73,6 +73,7 @@ const status: Command = {
 
 const huntbot: Command = {
   name: 'huntbot',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('huntbot').setDescription('Your huntbot traits and what to upgrade next').toJSON(),
   text: { aliases: ['hb'] },
   run: (ctx, store) => {
@@ -98,6 +99,7 @@ const huntbot: Command = {
 
 const gems: Command = {
   name: 'gems',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('gems').setDescription('Which gems to use together, from your last owo inv').toJSON(),
   text: { aliases: ['g'] },
   run: (ctx, store) => {
@@ -121,6 +123,7 @@ const gems: Command = {
 
 const zoo: Command = {
   name: 'zoo',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('zoo').setDescription('What to sacrifice or sell from your zoo').toJSON(),
   text: { aliases: ['z'] },
   run: (ctx, store) => {
@@ -136,6 +139,7 @@ const zoo: Command = {
 
 const armoury: Command = {
   name: 'armoury',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('armoury').setDescription('Your whole weapon collection with best picks, clean-up, filters and pages')
     .addStringOption((o) => o.setName('filter').setDescription('Start on a filter')
       .addChoices(...Object.entries(filters).map(([value, f]) => ({ name: f.label, value })))).toJSON(),
@@ -155,6 +159,7 @@ const armoury: Command = {
 
 const team: Command = {
   name: 'team',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('team').setDescription('Your team stats and weapon fit').toJSON(),
   text: { aliases: ['t'] },
   run: (ctx, store) => {
@@ -186,6 +191,7 @@ const team: Command = {
 
 const weapon: Command = {
   name: 'weapon',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('weapon').setDescription('Damage of a weapon on each pet in your team')
     .addStringOption((o) => o.setName('id').setDescription('Weapon ID, leave empty for the last one you looked at')).toJSON(),
   text: { aliases: ['w', 'wep'], args: ['id'] },
@@ -214,12 +220,13 @@ const weapon: Command = {
 
 const quests: Command = {
   name: 'quests',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('quests').setDescription('Your OwO quests from the last owo quest').toJSON(),
   text: { aliases: ['q'] },
   run: (ctx, store) => {
     const q = store.snapshot<{ allDone: boolean; lines: string[] }>(ctx.userId, 'quests');
     if (!q) return missing(ctx, store, 'owo quest', 'Quests');
-    if (q.data.allDone) return show(ctx, store, { kind: 'questsDone', title: 'Quests', emoji: '📜', body: '🏁 Nothing left for today.', at: q.at });
+    if (q.data.allDone) return ctx.reply({ content: `📜 Every quest done for today. ${say('questsDone')}`, temp: true });
     const body = q.data.lines.map((l) => `▫️ ${l}`).join('\n') || 'Nothing readable in it.';
     const social = /cookie|pray|curse|battle/i.test(body);
     return show(ctx, store, {
@@ -231,6 +238,7 @@ const quests: Command = {
 
 const shop: Command = {
   name: 'shop',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('shop').setDescription('Today\'s OwO weapon shop, checked against your armoury').toJSON(),
   text: { aliases: ['deals'] },
   run: (ctx, store) => {
@@ -276,6 +284,8 @@ const stats: Command = {
 
 const leaderboard: Command = {
   name: 'leaderboard',
+  group: 'owo',
+  as: 'top',
   data: new SlashCommandBuilder().setName('leaderboard').setDescription('Top hunters and battlers in this server this week').toJSON(),
   text: { aliases: ['lb', 'top'] },
   run: (ctx, store) => {
@@ -291,6 +301,7 @@ const leaderboard: Command = {
 
 const remind: Command = {
   name: 'remind',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('remind').setDescription('Your reminders, or add one straight away')
     .addIntegerOption((o) => o.setName('minutes').setDescription('Remind me in this many minutes').setMinValue(1).setMaxValue(10080))
     .addStringOption((o) => o.setName('note').setDescription('What about').setMaxLength(200)).toJSON(),
@@ -302,7 +313,7 @@ const remind: Command = {
     if (mins && note) {
       const at = new Date(Date.now() + Math.min(Math.max(mins, 1), 10080) * 60_000);
       const id = store.addReminder(ctx.userId, 'custom', at, note.slice(0, 200), ctx.channelId);
-      return show(ctx, store, { kind: 'remindAdd', title: `Promise #${id}`, emoji: '📝', body: `**${note}**\n⏰ <t:${unix(at)}:R>` });
+      return ctx.reply({ content: `📝 Promise #${id}: **${note}**, <t:${unix(at)}:R>. ${say('remindAdd')}`, temp: true });
     }
     return ctx.reply(panel(store, ctx.userId, 'list'));
   },
@@ -310,6 +321,8 @@ const remind: Command = {
 
 const settings: Command = {
   name: 'settings',
+  // opened from the Settings button on /owo remind, the text form still works
+  hidden: true,
   data: new SlashCommandBuilder().setName('settings').setDescription('Your reminder control room: what, where and when').toJSON(),
   text: { aliases: ['set', 'reminders'] },
   run: (ctx, store) => ctx.reply(panel(store, ctx.userId, 'settings')),
@@ -317,6 +330,7 @@ const settings: Command = {
 
 const buddy: Command = {
   name: 'buddy',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('buddy').setDescription('Quest buddies trade cookies, prays and curses')
     .addSubcommand((s) => s.setName('join').setDescription('Get pinged when someone needs a cookie, pray or curse'))
     .addSubcommand((s) => s.setName('leave').setDescription('Stop getting pinged'))
@@ -325,8 +339,8 @@ const buddy: Command = {
   run: (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Buddies live in servers.');
     const sub = ctx.sub() ?? 'list';
-    if (sub === 'join') { store.setBuddy(ctx.guildId, ctx.userId, true); return show(ctx, store, { kind: 'buddyJoin', title: 'Welcome to the network', emoji: '🕵️', body: 'You\'ll get pinged when someone needs a cookie, pray, curse or battle.' }); }
-    if (sub === 'leave') { store.setBuddy(ctx.guildId, ctx.userId, false); return show(ctx, store, { kind: 'buddyLeave', title: 'Off the network', emoji: '🚪' }); }
+    if (sub === 'join') { store.setBuddy(ctx.guildId, ctx.userId, true); return ctx.reply({ content: `🕵️ You're on the network, I'll ping you when someone needs a cookie, pray, curse or battle. ${say('buddyJoin')}`, temp: true }); }
+    if (sub === 'leave') { store.setBuddy(ctx.guildId, ctx.userId, false); return ctx.reply({ content: `🚪 Off the network. ${say('buddyLeave')}`, temp: true }); }
     const list = store.buddies(ctx.guildId);
     return show(ctx, store, { kind: 'buddyJoin', title: `The network · ${list.length}`, emoji: '🕵️', body: list.length ? list.map((u) => `<@${u}>`).join(' ') : 'Nobody yet, `tz buddy join` to start.' });
   },
@@ -334,6 +348,7 @@ const buddy: Command = {
 
 const ask: Command = {
   name: 'ask',
+  group: 'owo',
   data: new SlashCommandBuilder().setName('ask').setDescription('Ask the quest buddies for a cookie, pray, curse or battle')
     .addStringOption((o) => o.setName('what').setDescription('What you need').setRequired(true)
       .addChoices({ name: 'cookie', value: 'cookie' }, { name: 'pray', value: 'pray' }, { name: 'curse', value: 'curse' }, { name: 'battle', value: 'battle' })).toJSON(),
@@ -349,11 +364,11 @@ const ask: Command = {
     if (!others.length) return ctx.reply('No other quest buddies here yet. Get a friend to run `tz buddy join`.');
     store.setCooldown(ctx.userId, 'ask', new Date());
     const icon: Record<string, string> = { cookie: '🍪', pray: '🙏', curse: '🧿', battle: '⚔️' };
+    // buddies have to see this one, so it's public even from slash
     return ctx.reply({
-      content: others.map((u) => `<@${u}>`).join(' '),
-      embeds: [card({ kind: 'ask', title: `${what} wanted`, emoji: icon[what], body: `<@${ctx.userId}> needs a **${what}** for a quest.\n\`${cmd[what]} @them\``, gif: gifFor(store, ctx, 'ask') })],
-      private: false,
+      content: `${icon[what]} ${others.map((u) => `<@${u}>`).join(' ')}\n<@${ctx.userId}> needs a **${what}** for a quest: \`${cmd[what]} @them\`\n-# ${say('ask')}`,
       ping: others,
+      public: true,
     });
   },
 };

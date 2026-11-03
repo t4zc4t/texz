@@ -147,7 +147,9 @@ export function startScheduler(client: Client, store: Store) {
       if (ch?.isTextBased()) await ch.messages.delete(d.message_id).catch(() => {});
     }
   };
-  setInterval(() => { void tick(); void sweep(); }, 20_000);
+  setInterval(() => void tick(), 20_000);
+  // deletes run more often so a 10 second auto-clean really is about 10 seconds
+  setInterval(() => void sweep(), 5_000);
   void tick();
   void sweep();
 }

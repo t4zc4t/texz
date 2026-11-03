@@ -4,7 +4,11 @@ import {
 } from 'discord.js';
 
 export type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
-export type Reply = string | EmbedBuilder | { content?: string; embeds?: EmbedBuilder[]; private?: boolean; ping?: string[]; components?: Row[]; files?: AttachmentBuilder[] };
+// slash answers are only shown to whoever asked, unless public is set (polls, buddy pings)
+// temp marks a throwaway answer, typed ones get cleaned up after the server's timer
+export type Reply = string | EmbedBuilder | {
+  content?: string; embeds?: EmbedBuilder[]; private?: boolean; public?: boolean; temp?: boolean; ping?: string[]; components?: Row[]; files?: AttachmentBuilder[];
+};
 
 // one shape for both slash commands and "tz" text commands, so each command is written once
 export interface Ctx {
@@ -28,12 +32,13 @@ export interface Ctx {
 
 function normalise(r: Reply) {
   const files = [] as AttachmentBuilder[];
-  if (typeof r === 'string') return { content: r, embeds: [] as EmbedBuilder[], private: true, ping: [] as string[], components: [] as Row[], files };
-  if (r instanceof EmbedBuilder) return { content: undefined, embeds: [r], private: true, ping: [] as string[], components: [] as Row[], files };
-  return { content: r.content, embeds: r.embeds ?? [], private: r.private ?? true, ping: r.ping ?? [], components: r.components ?? [], files: r.files ?? files };
+  if (typeof r === 'string') return { content: r, embeds: [] as EmbedBuilder[], public: false, temp: true, ping: [] as string[], components: [] as Row[], files };
+  if (r instanceof EmbedBuilder) return { content: undefined, embeds: [r], public: false, temp: false, ping: [] as string[], components: [] as Row[], files };
+  return { content: r.content, embeds: r.embeds ?? [], public: !!r.public, temp: r.temp ?? (!r.embeds?.length && !r.files?.length && !r.components?.length), ping: r.ping ?? [], components: r.components ?? [], files: r.files ?? files };
 }
 
-export function fromSlash(i: ChatInputCommandInteraction): Ctx {
+// sub is passed in for grouped commands, where discord's own subcommand is the command itself
+export function fromSlash(i: ChatInputCommandInteraction, sub?: string | null): Ctx {
   const member = (i.member && 'permissions' in i.member && typeof i.member.permissions !== 'string') ? (i.member as GuildMember) : null;
   return {
     userId: i.user.id,
@@ -44,7 +49,7 @@ export function fromSlash(i: ChatInputCommandInteraction): Ctx {
     isAdmin: !!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild),
     viaText: false,
     latency: () => i.client.ws.ping,
-    sub: () => i.options.getSubcommand(false),
+    sub: () => (sub === undefined ? i.options.getSubcommand(false) : sub),
     str: (n) => i.options.getString(n),
     int: (n) => i.options.getInteger(n),
     bool: (n) => i.options.getBoolean(n),
@@ -53,7 +58,7 @@ export function fromSlash(i: ChatInputCommandInteraction): Ctx {
     role: (n) => i.options.getRole(n)?.id ?? null,
     reply: (r) => {
       const n = normalise(r);
-      const payload = n.private
+      const payload = !n.public
         ? { content: n.content, embeds: n.embeds, components: n.components, files: n.files, flags: MessageFlags.Ephemeral as const, allowedMentions: { parse: [] } }
         : { content: n.content, embeds: n.embeds, components: n.components, files: n.files, allowedMentions: { parse: [], users: n.ping } };
       return i.replied || i.deferred ? i.followUp(payload) : i.reply({ ...payload, withResponse: true });
@@ -99,7 +104,7 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
 }
 
 // text args are positional, the last named arg soaks up the rest of the line
-export function fromText(m: Message, tokens: string[], argNames: string[], hasSub: boolean): Ctx {
+export function fromText(m: Message, tokens: string[], argNames: string[], hasSub: boolean, afterSend?: (sent: Message, temp: boolean) => void): Ctx {
   const rest = [...tokens];
   const sub = hasSub ? (rest.shift()?.toLowerCase() ?? null) : null;
   const values = new Map<string, string>();
@@ -133,7 +138,8 @@ export function fromText(m: Message, tokens: string[], argNames: string[], hasSu
     role: (n) => id(n, /^<@&(\d+)>$/) ?? values.get(n)?.match(/^(\d{15,})$/)?.[1] ?? null,
     reply: (r) => {
       const n = normalise(r);
-      return m.reply({ content: n.content, embeds: n.embeds, components: n.components, files: n.files, allowedMentions: { repliedUser: false, parse: [], users: n.ping } });
+      return m.reply({ content: n.content, embeds: n.embeds, components: n.components, files: n.files, allowedMentions: { repliedUser: false, parse: [], users: n.ping } })
+        .then((sent) => { afterSend?.(sent, n.temp); return sent; });
     },
   };
 }

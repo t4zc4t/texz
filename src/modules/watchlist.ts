@@ -115,7 +115,7 @@ export async function onWatchlist(store: Store, i: Interaction): Promise<boolean
 
   // the list itself only turns pages for whoever opened it
   if ((tag === 'wl' || tag === 'wlf' || tag === 'wle') && a !== me) {
-    await i.reply({ content: 'Open your own with `/watchlist`.', flags: MessageFlags.Ephemeral });
+    await i.reply({ content: 'Open your own with `/anime list view`.', flags: MessageFlags.Ephemeral });
     return true;
   }
   if (tag === 'wl' && i.isButton()) { await i.update(listPage(store, a, b, c, Number(d))); return true; }
@@ -170,6 +170,8 @@ export async function onWatchlist(store: Store, i: Interaction): Promise<boolean
 
 export const watchlist: Command = {
   name: 'watchlist',
+  group: 'anime',
+  as: 'list',
   data: new SlashCommandBuilder().setName('watchlist').setDescription('Your anime and manga list, with a status for each')
     .addSubcommand((s) => s.setName('view').setDescription('Open a list')
       .addStringOption((o) => o.setName('status').setDescription('Only one status').addChoices(...statuses.map((x) => ({ name: x, value: x }))))

@@ -1,4 +1,7 @@
-import { MessageFlags, type ChatInputCommandInteraction, type Interaction, type Message } from 'discord.js';
+import {
+  ApplicationCommandOptionType, InteractionContextType, MessageFlags, PermissionFlagsBits,
+  type ChatInputCommandInteraction, type Interaction, type Message, type RESTPostAPIChatInputApplicationCommandsJSONBody,
+} from 'discord.js';
 import { armouryPage, parseArmId, filters, sorts, type Filter, type Sort } from '../features/armoury-pages.js';
 import { apply, modalFor, panel, parseRp } from '../features/panel.js';
 import type { Store } from '../db.js';
@@ -15,20 +18,58 @@ import { birthdays } from '../modules/birthdays.js';
 import { onSetup, useModules } from '../features/setup.js';
 import { RED, card, type Kind } from '../theme.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
-import type { Command, Module } from './module.js';
+import { slashPath, type Command, type Module } from './module.js';
 
 export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays];
 allModules.push(...modules);
 useModules(modules);
 
-const bySlash = new Map<string, { mod: Module; cmd: Command }>();
-const byText = new Map<string, { mod: Module; cmd: Command }>();
+// the grouped slash commands and who can see them by default
+const groups: Record<string, { description: string; perms?: bigint }> = {
+  owo: { description: 'OwO helper: timers, huntbot, gems, zoo, weapons, quests, shop and reminders' },
+  anime: { description: 'Anime and manga: search, characters, seasons, trending, alerts and your list' },
+  mod: { description: 'Moderation: warn, timeout, kick, ban, purge, lock, slowmode and the case archive', perms: PermissionFlagsBits.ModerateMembers },
+  levels: { description: 'Rank cards, the level leaderboard and xp tools' },
+  info: { description: 'Profiles, avatars and the server' },
+  fun: { description: 'Dice, coins, the 8ball and hard decisions' },
+};
+
+type Hit = { mod: Module; cmd: Command };
+const byName = new Map<string, Hit>();
+const bySlash = new Map<string, Hit>();
+const byText = new Map<string, Hit>();
 for (const mod of modules) for (const cmd of mod.commands) {
-  bySlash.set(cmd.name, { mod, cmd });
+  byName.set(cmd.name, { mod, cmd });
+  if (!cmd.hidden) bySlash.set(slashPath(cmd), { mod, cmd });
   for (const name of [cmd.name, ...(cmd.text?.aliases ?? [])]) byText.set(name, { mod, cmd });
 }
 
-export const definitions = modules.flatMap((m) => m.commands.filter((c) => !c.hidden).map((c) => c.data));
+type Json = RESTPostAPIChatInputApplicationCommandsJSONBody;
+type Opt = NonNullable<Json['options']>[number];
+
+// a command with its own subcommands becomes a subcommand group, anything else a plain subcommand
+function asMember(c: Command): Opt {
+  const opts = (c.data.options ?? []) as Opt[];
+  const nested = opts.some((o) => o.type === ApplicationCommandOptionType.Subcommand);
+  return {
+    type: nested ? ApplicationCommandOptionType.SubcommandGroup : ApplicationCommandOptionType.Subcommand,
+    name: c.as ?? c.name,
+    description: c.data.description,
+    options: opts,
+  } as Opt;
+}
+
+const visible = modules.flatMap((m) => m.commands.filter((c) => !c.hidden));
+export const definitions: Json[] = [
+  ...visible.filter((c) => !c.group).map((c) => c.data),
+  ...Object.entries(groups).map(([name, g]) => ({
+    name,
+    description: g.description,
+    contexts: [InteractionContextType.Guild, InteractionContextType.BotDM],
+    ...(g.perms ? { default_member_permissions: g.perms.toString() } : {}),
+    options: visible.filter((c) => c.group === name).map(asMember),
+  })).filter((d) => d.options.length),
+];
 
 // the on/off switch, channel limits and role limits, checked before every command
 type Block = { kind: Kind; vars?: Record<string, string> };
@@ -47,16 +88,23 @@ function gate(store: Store, ctx: Ctx, mod: Module, cmd: Command): Block | null {
 
 async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command) {
   const blocked = gate(store, ctx, mod, cmd);
-  if (blocked) return ctx.reply(card({ ...blocked, title: 'Not this time', emoji: '🚫', color: RED }));
+  if (blocked) return ctx.reply({ embeds: [card({ ...blocked, title: 'Not this time', emoji: '🚫', color: RED, gif: 'off' })], temp: true });
   try {
     await cmd.run(ctx, store);
   } catch (e) {
     console.error(`${cmd.name} failed`, e);
-    await ctx.reply(card({ kind: 'error', title: 'Well, that slipped', emoji: '🩹', color: RED })).catch(() => {});
+    await ctx.reply({ embeds: [card({ kind: 'error', title: 'Well, that slipped', emoji: '🩹', color: RED })], temp: true }).catch(() => {});
   }
 }
 
 export function onSlash(store: Store, i: ChatInputCommandInteraction) {
+  if (groups[i.commandName]) {
+    const group = i.options.getSubcommandGroup(false);
+    const sub = i.options.getSubcommand(false);
+    const hit = bySlash.get(`${i.commandName} ${group ?? sub}`);
+    if (hit) return run(store, fromSlash(i, group ? sub : null), hit.mod, hit.cmd);
+    return;
+  }
   const hit = bySlash.get(i.commandName);
   if (hit) return run(store, fromSlash(i), hit.mod, hit.cmd);
 }
@@ -72,16 +120,27 @@ export function onText(store: Store, m: Message): boolean {
   if (!text.toLowerCase().startsWith(prefix)) return false;
   const body = text.slice(prefix.length);
   const tokens = body.trim().split(/\s+/).filter(Boolean);
-  const name = tokens.shift()?.toLowerCase();
+  let name = tokens.shift()?.toLowerCase();
   if (!name) return false;
-  const hit = byText.get(name);
+  // "tz mod warn @x" works like "/mod warn", but "tz anime frieren" is still a search
+  const next = tokens[0]?.toLowerCase();
+  const member = groups[name] && next
+    ? bySlash.get(`${name} ${next}`) ?? (byText.get(next)?.cmd.group === name ? byText.get(next) : undefined)
+    : undefined;
+  if (member) { tokens.shift(); name = member.cmd.name; }
+  const hit = member ?? byText.get(name);
   if (!hit) return false;
   // "tzatziki" shouldn't trigger anything, only a space or a real command name after the prefix
   if (!/^\s/.test(body) && !byText.has(body.split(/\s+/)[0].toLowerCase())) return false;
   const t = hit.cmd.text ?? {};
   const sub = t.sub ? tokens[0]?.toLowerCase() : undefined;
   const args = t.sub ? (t.subArgs?.[sub ?? ''] ?? []) : (t.args ?? []);
-  void run(store, fromText(m, tokens, args, !!t.sub), hit.mod, hit.cmd);
+  // quick answers to typed commands clean themselves up, the server picks how long in /setup
+  const clean = m.guildId ? store.guild(m.guildId).autoclean : 0;
+  const after = (sent: Message, temp: boolean) => {
+    if (temp && clean > 0 && sent?.id) store.deleteLater(sent.channelId, sent.id, Date.now() + clean * 1000);
+  };
+  void run(store, fromText(m, tokens, args, !!t.sub, after), hit.mod, hit.cmd);
   return true;
 }
 
@@ -110,7 +169,7 @@ export async function onComponent(store: Store, i: Interaction) {
     const opts: Record<string, string> = {};
     if (extra) for (const pair of extra.split(',')) { const [k, v] = pair.split('='); opts[k] = v; }
     if (i.isStringSelectMenu()) opts[opts.as ?? 'value'] = i.values[0];
-    const hit = bySlash.get(name);
+    const hit = byName.get(name);
     if (!hit) return;
     // pages that belong to whoever opened them change in place, anyone else gets their own copy
     const edit = !!opts.owner && opts.owner === i.user.id;
