@@ -12,7 +12,7 @@ It also reads a few OwO screens when I open them and turns them into advice:
 - `owo inv` goes into `/gems`, which groups my gems into same-tier sets so they run out together
 - `owo team` and `owo weapon <id>` go into `/weapon` and `/team`, which work out how much damage a weapon does on each of my pets and flag a pet holding a weapon that uses its weaker stat
 
-It reads a few more screens too. `owo zoo` feeds `/zoo`, which works out what to sacrifice or sell and how much essence or cowoncy that gives (the pets themselves always stay). Flipping through `owo weapon` feeds `/armoury`, one screen with pages, filters and sorting (`tz a`, `tz a held`, `tz a mythic`, `tz a junk`) that also picks the best damage weapon for each pet by its stronger stat and lists the weaker rare duplicates that are safe to dismantle, never touching anything equipped, empowered or epic and up. `owo quest`, `owo cl`, `owo daily`, `owo vote` and `owo cookie` tick off today's list on their own, and `owo cash` and `owo ws` show up in `/status`.
+It reads a few more screens too. `owo zoo` feeds `/zoo`, which works out what to sacrifice or sell and how much essence or cowoncy that gives (the pets themselves always stay). Flipping through `owo weapon` feeds `/armoury`, one screen with pages, filters and sorting (`tz a`, `tz a held`, `tz a mythic`, `tz a junk`) that also picks the best damage weapon for each pet by its stronger stat and lists the weaker rare duplicates that are safe to dismantle, never touching anything equipped, empowered or epic and up. `owo quest`, `owo cl`, `owo daily`, `owo vote` and `owo cookie` tick off today's list on their own, and `owo cash` and `owo ws` show up in `/status`. Opening the weapon page of `owo shop` feeds `tz shop`, which goes through the day's stock against my armoury and marks what's a type I don't have yet and what beats my best copy, with the shard price and when the stock changes.
 
 Some quests need other people, so there are quest buddies: `tz buddy join` to opt in, and `tz ask pray` pings the buddies in the server when you need a pray, curse, cookie or battle. `/leaderboard` ranks the week's hunters and battlers in the server.
 
@@ -22,6 +22,8 @@ Some quests need other people, so there are quest buddies: `tz buddy join` to op
 
 `tz anime <title>` and `tz manga <title>` pull the full card from AniList (score, episodes or chapters, studio, genres, a spoiler-free blurb and the next episode countdown), with a menu for other matches if it picked the wrong one. `tz char <name>` looks up characters, `tz season` shows the season's most popular shows, `tz trending` what everyone is watching or reading, and `tz rec` throws a random popular pick at you. Pressing 🔔 on a show that's airing gets you an alert when each new episode comes out, `tz alerts` lists them.
 
+Every card also has a 📋 menu to put the show on your own list as watching (or reading), planning, completed, paused or dropped. `tz wl` opens the list with a filter by status and pages, `tz wl completed` or `tz wl @someone` go straight there, and picking a show from it opens a small panel with +1 episode, an exact progress number, a status change or removing it. The last episode moves it to completed by itself. `tz wl add watching frieren` adds one without opening the card.
+
 AniList's api is free with no key, but it only allows 30 requests a minute right now, so Texz paces itself and keeps answers for half an hour.
 
 ## Utility
@@ -30,7 +32,17 @@ AniList's api is free with no key, but it only allows 30 requests a minute right
 
 ## Moderation
 
-`tz warn @someone reason`, `tz warns @someone` (or `/warnings` with a number to remove one), `tz timeout @someone 10m reason` (Texz calls it No Longer Human), `tz unmute`, `tz kick`, `tz ban`, `/unban <id>`, `tz purge 20` or `tz purge 20 @someone`, `tz lock` / `tz lock off`, and `tz slow 10s`. Each one checks that whoever runs it has the permission and sits above the person, and the person gets a DM saying what happened. A log channel (joins, leaves, deleted and edited messages, bans and every action above) and the automod rules, each off by default (invite links, spam where six messages in five seconds gets a five minute timeout, and mass mentions), are set in `/setup`. Mods are never caught by automod. When a mod doesn't give a reason, Texz makes one up.
+`tz warn @someone reason`, `tz timeout @someone 10m reason` (Texz calls it No Longer Human), `tz unmute`, `tz kick`, `tz ban` (`tz ban @someone 3d reason` makes it a temporary ban that lifts itself), `/unban <id>`, `tz purge 20` or `tz purge 20 @someone`, `tz lock` / `tz lock off`, and `tz slow 10s`. Each one checks that whoever runs it has the permission and sits above the person, and the person gets a DM saying what happened. A log channel (joins, leaves, deleted and edited messages, bans and every action above) and the automod rules, each off by default (invite links, spam where six messages in five seconds gets a five minute timeout, and mass mentions), are set in `/setup`. Mods are never caught by automod. When a mod doesn't give a reason, Texz makes one up.
+
+Every warn, timeout, kick, ban and unban is filed as a numbered case. `tz case 12` opens one, `tz case @someone` (or `tz warnings @someone`) shows their record, and `/case list` searches by person, by mod, by type or by words in the reason, with pages. `/case reason` fixes a reason after the fact and `/case delete` takes one off the record.
+
+## Giveaways
+
+`/giveaway start` posts a giveaway with an Enter button, ends it on time and draws the winners itself. It can be limited to people with a certain role, keep a role out, or ask for a minimum level, a number of messages in the server, an account or membership age, and it can give server boosters or a chosen role a few times the chance. Conditions are checked when someone enters and again at the draw. `tz gw start 1d 2 Nitro` is the quick version, and `/giveaway end`, `reroll`, `cancel` and `list` handle the rest.
+
+## Birthdays
+
+`tz bday set 14 feb` saves a birthday (no year). On the day, going by the person's own timezone from `/settings`, Texz greets them in the birthday channel and gives them the birthday role for 24 hours. Both are picked in `/setup`, along with an optional greeting of your own. `tz bday` lists who's next in the server.
 
 ## Welcome and roles
 
@@ -38,7 +50,7 @@ Greetings, goodbyes and the autorole are set in `/setup`: pick the channels and 
 
 ## Levels
 
-One message a minute earns 15 to 25 xp, so chatting counts and spam doesn't. Levels come with Agency ranks, from Stray and Agency Visitor up through Junior Detective, Ability User and Strategist to Living Legend of Yokohama. `tz rank` shows your card, `tz levels` the server's top ten, and `/setup` picks where level-ups get posted (or turns them off) and handles reward roles: one button makes a role for every Agency rank, another makes a single role with your own name, colour and level, an existing role can be used too, and any reward can be renamed or moved to another level from a menu.
+Levels are off until an admin switches them on in `/setup`. Then one message a minute earns 15 to 25 xp, so chatting counts and spam doesn't. Levels come with Agency ranks, from Stray and Agency Visitor up through Junior Detective, Ability User and Strategist to Living Legend of Yokohama. `tz rank` draws your rank card as an image, with your avatar, rank, position and progress bar, `tz levels` the server's top ten, and `/setup` picks where level-ups get posted (or turns them off) and handles reward roles: one button makes a role for every Agency rank, another makes a single role with your own name, colour and level, an existing role can be used too, and any reward can be renamed or moved to another level from a menu.
 
 The **Xp and boosts** page in `/setup` covers the rest: how much xp a message gives and how often it counts, channels and roles that earn nothing, a multiplier for certain roles (boosters, say) or channels, a standing weekend multiplier, and a timed boost event that can start now, in a few hours or at an exact `<t:unix>` time. Boosts multiply each other up to 10x and show on rank cards while they're live. Reward roles can stack or be swapped so only the highest stays, and the level-up line can be your own with `{user}`, `{level}`, `{rank}` and friends. Admins can also move xp by hand with `/xp give`, `/xp take`, `/xp level` and `/xp reset` (`tz xp give @user 500` works too).
 
@@ -46,7 +58,7 @@ The **Xp and boosts** page in `/setup` covers the rest: how much xp a message gi
 
 Every command works as a slash command and with the short prefix, so `/status` and `tz status` do the same thing, and most have a shorter alias too (`tz hb`, `tz s`, `tz w <id>`). `tz help` lists everything switched on in the server.
 
-Server admins (Manage Server) run `/setup` (or `tz setup`) to get the front desk, a panel where everything is done with menus and buttons: each feature on or off and limited to certain channels or roles, welcome and goodbye, the autorole, logs and automod, levels and reward roles, gifs and the prefix.
+Server admins (Manage Server) run `/setup` (or `tz setup`) to get the front desk, a panel where everything is done with menus and buttons: each feature on or off and limited to certain channels or roles, welcome and goodbye, the autorole, logs and automod, levels, xp and reward roles, birthdays, gifs and the prefix.
 
 Texz comes with default Dazai gifs for some moments, and the gif slots let a server swap them for moments like help, ping, level-ups, welcomes and bans. A Giphy link works straight away since the gif file can be worked out from the link itself, and Tenor share links still work by reading the public page (Tenor shut its API down in June 2026). `default` puts the built-in one back and `off` hides it.
 
@@ -66,7 +78,7 @@ npm run deploy
 npm start
 ```
 
-It needs Node 24 or newer. Everything is stored in one SQLite file (`texz.db`), using Node's built-in sqlite, so there's nothing else to install.
+It needs Node 24 or newer. Everything is stored in one SQLite file (`texz.db`), using Node's built-in sqlite. Rank cards are drawn with `@napi-rs/canvas`, which comes as a ready-made build for Windows, macOS and Linux, and the fonts ship in `assets/fonts` (Inter and Cinzel, both under the SIL Open Font License).
 
 ## Keeping it online
 
