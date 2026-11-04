@@ -81,6 +81,7 @@ export async function onBulletinButton(i: Interaction, store: Store): Promise<bo
 
 // at most this many posts per channel an hour, and at most a few role pings, so a bad data day can't flood it
 const sentLog = new Map<string, number[]>();
+const lostLog = new Map<string, string>();
 function allowed(channel: string, ping: boolean) {
   const now = Date.now();
   const recent = (sentLog.get(channel) ?? []).filter((t) => now - t < HOUR);
@@ -98,7 +99,12 @@ async function post(client: Client, feed: Feed, content: { text?: string; embed:
   const ok = allowed(feed.channel, !!content.ping);
   if (!ok.post) return;
   const ch = await client.channels.fetch(feed.channel).catch(() => null);
-  if (!ch?.isSendable()) return;
+  if (!ch?.isSendable()) {
+    // never falls back to another channel, it says so once a day and waits for /setup to repair it
+    const day = new Date().toISOString().slice(0, 10);
+    if (lostLog.get(feed.channel) !== day) { lostLog.set(feed.channel, day); report('bulletins', new Error(`channel ${feed.channel} is gone or I can't post there, press Set up the board in /setup to repair it`)); }
+    return;
+  }
   const ping = ok.ping && feed.role ? `<@&${feed.role}>` : '';
   remember(feed.channel, !!ping);
   const sent = await ch.send({
