@@ -339,9 +339,13 @@ const profile: Command = {
       .addStringOption((o) => o.setName('text').setDescription('About you, "clear" removes it').setRequired(true).setMaxLength(180)))
     .addSubcommand((s) => s.setName('favourite').setDescription('Set your favourite anime')
       .addStringOption((o) => o.setName('title').setDescription('Title, "clear" removes it').setRequired(true).setMaxLength(60)))
+    .addSubcommand((s) => s.setName('club').setDescription('Your football club, shown on the card')
+      .addStringOption((o) => o.setName('name').setDescription('Club, "clear" removes it').setRequired(true).setMaxLength(40)))
+    .addSubcommand((s) => s.setName('team').setDescription('Your F1 team, shown on the card')
+      .addStringOption((o) => o.setName('name').setDescription('Team, "clear" removes it').setRequired(true).setMaxLength(30)))
     .toJSON(),
   // tz profile, tz profile @user, tz profile bio ..., tz profile favourite ...
-  text: { aliases: ['pf', 'card'], sub: true, subArgs: { view: ['user'], bio: ['text'], favourite: ['title'], fav: ['title'] } },
+  text: { aliases: ['pf', 'card'], sub: true, subArgs: { view: ['user'], bio: ['text'], favourite: ['title'], fav: ['title'], club: ['name'], team: ['name'] } },
   run: async (ctx, store) => {
     let sub = ctx.sub() ?? 'view';
     let who = ctx.user('user');
@@ -355,6 +359,13 @@ const profile: Command = {
       const t = ctx.str('title')?.trim() ?? '';
       store.setProfile(ctx.userId, { favourite: !t || t.toLowerCase() === 'clear' ? null : t.slice(0, 60) });
       return ctx.reply({ content: '⭐ Favourite saved.', temp: true });
+    }
+    if (sub === 'club' || sub === 'team') {
+      const t = ctx.str('name')?.trim() ?? '';
+      const picks = JSON.parse(store.getKv(`picks:${ctx.userId}`) ?? '{}') as Record<string, string>;
+      if (!t || t.toLowerCase() === 'clear') delete picks[sub]; else picks[sub] = t.slice(0, 40);
+      store.setKv(`picks:${ctx.userId}`, JSON.stringify(picks));
+      return ctx.reply({ content: `${sub === 'club' ? '⚽' : '🏎️'} Saved. It shows on your card now.`, temp: true });
     }
     const id = who ?? ctx.userId;
     const m = ctx.guild ? await ctx.guild.members.fetch(id).catch(() => null) : null;
@@ -371,7 +382,10 @@ const profile: Command = {
     if (b) chips.push({ label: 'Birthday', value: fmtDate(b.month, b.day) });
     const done = store.watchlist(id, 'completed').length;
     if (done) chips.push({ label: 'Anime done', value: String(done) });
-    if (p.favourite) chips.push({ label: 'Favourite', value: p.favourite });
+    const picks = JSON.parse(store.getKv(`picks:${id}`) ?? '{}') as Record<string, string>;
+    if (picks.club) chips.push({ label: 'Club', value: picks.club });
+    if (picks.team) chips.push({ label: 'F1 team', value: picks.team });
+    if (p.favourite) chips.push({ label: 'Anime', value: p.favourite });
     const png = await profileCard({
       name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: p.bio, chips,
       avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null,
