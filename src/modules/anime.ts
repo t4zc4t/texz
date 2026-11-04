@@ -313,7 +313,9 @@ export function startDailyCharacter(client: import('discord.js').Client, store: 
     if (now.getUTCHours() < 3 || (now.getUTCHours() === 3 && now.getUTCMinutes() < 30)) return;
     const day = now.toISOString().slice(0, 10);
     for (const guild of client.guilds.cache.values()) {
-      const chId = store.guild(guild.id).daily.channel;
+      const g = store.guild(guild.id);
+      // its own channel if one was picked, otherwise the screenings channel
+      const chId = g.daily.channel ?? (g.bulletins.anime.on ? g.bulletins.anime.channel : null);
       if (!chId || !store.rules(guild.id, 'anime').enabled || store.getKv(`cotd:${guild.id}`) === day) continue;
       store.setKv(`cotd:${guild.id}`, day);
       const c = await characterOfDay(day).catch(() => null);

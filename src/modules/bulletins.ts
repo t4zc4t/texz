@@ -41,25 +41,26 @@ export async function buildBoard(store: Store, guild: Guild): Promise<string> {
     let role = feed.role ? guild.roles.cache.get(feed.role) ?? null : null;
     role ??= guild.roles.cache.find((r) => r.name === n.role) ?? await guild.roles.create({ name: n.role, colors: { primaryColor: n.color }, mentionable: false, reason: 'bulletin pings from /setup' });
     feed.role = role.id;
+    // saved id first, so renames and moves don't matter, then the name, then a fresh one
     let ch = feed.channel ? await guild.channels.fetch(feed.channel).catch(() => null) : null;
-    if (!ch) {
-      // members read, only Texz and staff post
-      ch = await guild.channels.create({
-        name: n.channel, type: ChannelType.GuildText, parent: cat.id, topic: n.topic, reason: 'bulletin board from /setup',
-        permissionOverwrites: [
-          { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.SendMessages] },
-          { id: me.id, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.MentionEveryone] },
-        ],
-      });
-      if (ch.isSendable()) {
-        await ch.send({
-          embeds: [card({ kind: 'bulletin', title: `${n.emoji} ${n.channel.split('┃')[1].replace(/-/g, ' ')}`, emoji: '', gif: 'off', body: `${n.topic}.\nPress the button to get the **${n.role}** role and a ping when it matters. Press again to drop it.` })],
-          components: [pingRow(kind)],
-        }).then((m) => m.pin().catch(() => {})).catch(() => {});
-      }
+    ch ??= guild.channels.cache.find((c) => c.type === ChannelType.GuildText && c.name === n.channel) ?? null;
+    const fresh = !ch;
+    ch ??= await guild.channels.create({ name: n.channel, type: ChannelType.GuildText, parent: cat.id, topic: n.topic, reason: 'bulletin board from /setup' });
+    // members read and react, only Texz posts, this is reapplied every time so old channels get it too
+    if ('permissionOverwrites' in ch) {
+      await ch.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false, SendMessagesInThreads: false, CreatePublicThreads: false, CreatePrivateThreads: false, AddReactions: true }).catch(() => {});
+      await ch.permissionOverwrites.edit(me.id, { SendMessages: true, EmbedLinks: true, MentionEveryone: true, AddReactions: true }).catch(() => {});
+    }
+    if (fresh && ch.isSendable()) {
+      await ch.send({
+        embeds: [card({ kind: 'bulletin', title: `${n.emoji} ${n.channel.split('┃')[1].replace(/-/g, ' ')}`, emoji: '', gif: 'off', body: `${n.topic}.\nPress the button to get the **${n.role}** role and a ping when it matters. Press again to drop it.` })],
+        components: [pingRow(kind)],
+      }).then((m) => m.pin().catch(() => {})).catch(() => {});
     }
     feed.channel = ch.id;
   }
+  // the character of the day belongs with the screenings
+  g.daily.channel = b.anime.channel;
   store.saveGuild(guild.id, g);
   return `🕵️ The board is up under **${CATEGORY}**: <#${b.f1.channel}>, <#${b.football.channel}> and <#${b.anime.channel}>.`;
 }

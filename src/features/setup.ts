@@ -296,7 +296,9 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
     title = 'Bulletins';
     const b = g.bulletins;
     body = 'Three notice channels under one category, each with its own role people pick up from a button: Grand Prix results and race day pings from Parc Fermé, big football matches and your clubs, and new anime episodes. **Set up the board** makes whatever is missing.';
-    const line = (f: { on: boolean; channel: string | null; role: string | null }) => `${f.on ? '🟢' : '⚫'} ${ch(f.channel)}${f.role ? ` · <@&${f.role}>` : ''}`;
+    // green only once the channel and role really exist
+    const ready = (f: { channel: string | null; role: string | null }) => !!f.channel && guild.channels.cache.has(f.channel) && !!f.role && guild.roles.cache.has(f.role);
+    const line = (f: { on: boolean; channel: string | null; role: string | null }) => !ready(f) ? '⚪ *not set up yet*' : `${f.on ? '🟢' : '⚫'} ${ch(f.channel)} · <@&${f.role}>`;
     fields.push(
       { name: '🏎️ Grand Prix', value: `${line(b.f1)}\nfacts: ${b.f1.facts ? 'daily' : 'off'}`, inline: true },
       { name: '⚽ Football', value: `${line(b.football)}\nclubs: ${b.football.favs.join(', ') || '*none*'}\nbig matches: ${b.football.big ? 'on' : 'off'}`, inline: true },
