@@ -66,6 +66,16 @@ The **Xp and boosts** page in `/setup` covers the rest: how much xp a message gi
 
 Starboard, tickets and the character of the day are all set in `/setup`.
 
+## Bulletins
+
+`/setup` → Bulletins → **Set up the board** makes a category called *Agency Bulletin Board* with three channels and a role for each, with a pinned button to pick the role up:
+
+- **🏎️ paddock gossip:** the race week schedule a day before, a ping an hour before qualifying, sprints and the race, the podium and championship after each one, and a bit of paddock trivia every evening. It all comes from [Parc Fermé](https://parc-ferme.pages.dev), so nothing here needs an API key. `tz f1`, `tz f1 standings` and `tz f1 last` work any time.
+- **⚽ pitch side reports:** the morning's list of matches worth watching, a ping 30 minutes before kick-off and the full-time score with scorers. Big games are the World Cup and Euros, two big clubs meeting, or a big club in Europe, plus every match of the server's favourite clubs (`/football fav Real Madrid`). Scores come from ESPN's public scoreboard.
+- **📺 yokohama screenings:** the day's airing schedule in the morning and a ping when a new episode is out, with official watch links. Popular shows are posted on their own, and admins add any other show with `/anime track`.
+
+Each feed can be switched off on its own, and so can the trivia, big matches and popular shows.
+
 ## Economy and games
 
 Yen comes from `tz daily` (more for every day in a row, up to a week), a little for chatting, and from `tz guess`, which shows a picture from a popular anime with four names to choose from. The first right answer wins. `tz bal`, `tz give @someone 100` and `/eco top` cover the rest, and admins stock a role shop with `/eco shop add` that people buy from with `tz market buy <id>`.

@@ -27,7 +27,7 @@ function rulesText(store: Store, guildId: string) {
   return out.join('\n');
 }
 
-const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '🎖️', utility: '🧰', anime: '📺', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴' };
+const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '🎖️', utility: '🧰', anime: '📺', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴', bulletins: '🗞️' };
 
 // both ways to run a command, written the same way everywhere in help
 function forms(c: Command, prefix: string) {

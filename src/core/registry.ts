@@ -9,6 +9,7 @@ import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
 import { anime, onAnimeComponent, onGuess } from '../modules/anime.js';
 import { economy } from '../modules/economy.js';
+import { bulletins, onBulletinButton } from '../modules/bulletins.js';
 import { onWatchlist } from '../modules/watchlist.js';
 import { onAvatarButton, onPollButton, utility } from '../modules/utility.js';
 import { moderation, onCaseComponent } from '../modules/moderation.js';
@@ -23,7 +24,7 @@ import { report } from '../ops.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
 
-export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy];
+export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins];
 allModules.push(...modules);
 useModules(modules);
 
@@ -162,6 +163,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onGiveawayButton(store, i)) return;
     if (await onServerComponent(store, i)) return;
     if (await onGuess(store, i)) return;
+    if (await onBulletinButton(i, store)) return;
   } catch (e) {
     report('component', e);
   }

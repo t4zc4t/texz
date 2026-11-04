@@ -14,6 +14,7 @@ import { watch } from './watch.js';
 import { startOps } from './ops.js';
 import { startServerTimers } from './modules/server.js';
 import { startDailyCharacter } from './modules/anime.js';
+import { startBulletins } from './modules/bulletins.js';
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) throw new Error('DISCORD_TOKEN is missing, copy .env.example to .env and fill it in');
@@ -48,6 +49,7 @@ client.once(Events.ClientReady, (c) => {
   startOps(client, store);
   startServerTimers(client, store);
   startDailyCharacter(client, store);
+  startBulletins(client, store);
   // knowing the owner lets /setup offer the error channel to them only
   void c.application.fetch().catch(() => {});
   // rotating status, so the profile looks alive

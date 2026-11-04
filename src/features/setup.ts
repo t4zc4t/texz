@@ -9,6 +9,7 @@ import type { Module } from '../core/module.js';
 import { card } from '../theme.js';
 import { welcomeCard } from '../modules/welcome.js';
 import { ticketPanel } from '../modules/server.js';
+import { buildBoard } from '../modules/bulletins.js';
 import { ranks } from '../modules/levels.js';
 import { parseLength } from '../modules/moderation.js';
 
@@ -28,7 +29,7 @@ export const gifMoments = ['help', 'ping', 'welcome', 'goodbye', 'levelup', 'bir
 let modulesRef: Module[] = [];
 export const useModules = (m: Module[]) => { modulesRef = m; };
 const switchable = () => modulesRef.filter((m) => !m.locked);
-const icon: Record<string, string> = { owo: '🐾', anime: '📺', utility: '🧰', moderation: '🛡️', welcome: '🌸', levels: '🎖️', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴' };
+const icon: Record<string, string> = { owo: '🐾', anime: '📺', utility: '🧰', moderation: '🛡️', welcome: '🌸', levels: '🎖️', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴', bulletins: '🗞️' };
 
 export function setupPanel(store: Store, guild: Guild, owner: string, page: string) {
   const g = store.guild(guild.id);
@@ -56,6 +57,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { label: 'Log channel and automod', value: 'mod', emoji: '🛡️' },
       { label: 'Levels, xp and reward roles', value: 'levels', emoji: '🎖️' },
       { label: 'Birthday greetings and role', value: 'birthdays', emoji: '🎂' },
+      { label: 'Bulletins: F1, football, anime', value: 'bulletins', emoji: '🗞️' },
       { label: 'Starboard', value: 'starboard', emoji: '⭐' },
       { label: 'Character of the day', value: 'cotd', emoji: '🎭' },
       { label: 'Tickets', value: 'tickets', emoji: '🎫' },
@@ -290,6 +292,33 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
     );
   }
 
+  if (page === 'bulletins') {
+    title = 'Bulletins';
+    const b = g.bulletins;
+    body = 'Three notice channels under one category, each with its own role people pick up from a button: Grand Prix results and race day pings from Parc Fermé, big football matches and your clubs, and new anime episodes. **Set up the board** makes whatever is missing.';
+    const line = (f: { on: boolean; channel: string | null; role: string | null }) => `${f.on ? '🟢' : '⚫'} ${ch(f.channel)}${f.role ? ` · <@&${f.role}>` : ''}`;
+    fields.push(
+      { name: '🏎️ Grand Prix', value: `${line(b.f1)}\nfacts: ${b.f1.facts ? 'daily' : 'off'}`, inline: true },
+      { name: '⚽ Football', value: `${line(b.football)}\nclubs: ${b.football.favs.join(', ') || '*none*'}\nbig matches: ${b.football.big ? 'on' : 'off'}`, inline: true },
+      { name: '📺 Anime', value: `${line(b.anime)}\nshows: ${b.anime.shows.length}\npopular: ${b.anime.popular ? 'on' : 'off'}`, inline: true },
+    );
+    comps.push(
+      row(
+        new ButtonBuilder().setCustomId(id(owner, 'bulbuild')).setLabel('Set up the board').setEmoji('🗞️').setStyle(ButtonStyle.Success),
+        toggle(owner, 'bulon', 'f1', 'F1', b.f1.on, '🏎️'),
+        toggle(owner, 'bulon', 'football', 'Football', b.football.on, '⚽'),
+        toggle(owner, 'bulon', 'anime', 'Anime', b.anime.on, '📺'),
+        back(owner),
+      ),
+      row(
+        toggle(owner, 'bulopt', 'facts', 'F1 facts', b.f1.facts, '🗞️'),
+        toggle(owner, 'bulopt', 'big', 'Big matches', b.football.big, '🏟️'),
+        toggle(owner, 'bulopt', 'popular', 'Popular anime', b.anime.popular, '🔥'),
+        new ButtonBuilder().setCustomId(id(owner, 'bulfav')).setLabel('Add or remove a club').setEmoji('⭐').setStyle(ButtonStyle.Secondary),
+      ),
+    );
+  }
+
   if (page === 'cotd') {
     title = 'Character of the day';
     body = 'Every morning (about 9:00 in India) I post one well-loved anime character from AniList in this channel. Anyone can see today\'s with `tz cotd`.';
@@ -388,7 +417,7 @@ const pageOf: Record<string, string> = {
   arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
   clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
-  cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
+  bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
   noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
@@ -482,6 +511,19 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       ]));
       return true;
     }
+    if (action === 'bulbuild') {
+      await i.deferUpdate();
+      const msg = await buildBoard(store, i.guild).catch((e) => `Something went wrong: ${e instanceof Error ? e.message : e}`);
+      await i.editReply(setupPanel(store, i.guild, owner, 'bulletins'));
+      await i.followUp({ content: msg, flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    if (action === 'bulfav') {
+      await i.showModal(formModal(owner, 'bulfav', '', 'Favourite club', [
+        { id: 'v', label: 'Club name (again to remove it)', value: '', required: true, max: 40, hint: 'Real Madrid' },
+      ]));
+      return true;
+    }
     if (action === 'sbemoji') {
       await i.showModal(formModal(owner, 'sbemoji', '', 'Starboard emoji', [
         { id: 'v', label: 'One emoji, like ⭐ or 🔥 or a server emoji', value: g.starboard.emoji, required: true, max: 60 },
@@ -535,6 +577,12 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'clean') g.autoclean = Number(values[0]) || 0;
     if (action === 'sbch') g.starboard.channel = values[0] ?? null;
     if (action === 'cotdch') g.daily.channel = values[0] ?? null;
+    if (action === 'bulon' && (arg === 'f1' || arg === 'football' || arg === 'anime')) g.bulletins[arg].on = !g.bulletins[arg].on;
+    if (action === 'bulopt') {
+      if (arg === 'facts') g.bulletins.f1.facts = !g.bulletins.f1.facts;
+      if (arg === 'big') g.bulletins.football.big = !g.bulletins.football.big;
+      if (arg === 'popular') g.bulletins.anime.popular = !g.bulletins.anime.popular;
+    }
     if (action === 'sbmin') g.starboard.min = Number(values[0]) || 3;
     if (action === 'sbself') g.starboard.self = !g.starboard.self;
     if (action === 'tkcat') g.tickets.category = values[0] ?? null;
@@ -615,6 +663,12 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       }
     }
     if (action === 'lvmsg') g.levels.message = i.fields.getTextInputValue('v').trim() || null;
+    if (action === 'bulfav') {
+      const club = i.fields.getTextInputValue('v').trim();
+      const favs = g.bulletins.football.favs;
+      const at = favs.findIndex((f) => f.toLowerCase() === club.toLowerCase());
+      if (at >= 0) favs.splice(at, 1); else if (club) favs.push(club.slice(0, 40));
+    }
     if (action === 'sbemoji') {
       // a plain emoji, or a server one written as <:name:id>
       const v = i.fields.getTextInputValue('v').trim();

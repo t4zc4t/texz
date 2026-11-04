@@ -36,7 +36,7 @@ test('every setup page fits discord limits', async () => {
   g.levels.rewards = { '5': '111111111111111111' };
   store.saveGuild('g1', g);
   const guild = { id: 'g1', roles: { cache: new Map() }, client: { application: { owner: { id: '123456789012345678' } } } } as never;
-  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'rewards', 'lvxp', 'birthdays', 'starboard', 'tickets', 'cotd', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
+  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'rewards', 'lvxp', 'birthdays', 'starboard', 'tickets', 'cotd', 'bulletins', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
   for (const p of pages) {
     const v = setupPanel(store, guild, '123456789012345678', p);
     assert.ok(v.components.length >= 1 && v.components.length <= 5, `${p}: rows`);
@@ -179,4 +179,17 @@ test('daily yen grows with the streak and the wallet never goes negative', async
   assert.equal(store.pay('g', 'u', -1_000_000), false);
   assert.ok(store.pay('g', 'u', -100));
   assert.equal(store.wallet('g', 'u').yen, DAILY_BASE + 3 * DAILY_STEP - 100);
+});
+
+test('which football matches get posted', async () => {
+  const { interesting } = await import('../src/feeds/football.ts');
+  const m = (league: string, a: string, b: string) => ({ id: '1', league, date: 0, state: 'pre', detail: '', venue: null, goals: [],
+    home: { id: '1', name: a, short: '', score: '0', winner: false, home: true }, away: { id: '2', name: b, short: '', score: '0', winner: false, home: false } }) as never;
+  assert.ok(interesting(m('eng.1', 'Liverpool', 'Arsenal'), [], true));
+  assert.ok(!interesting(m('eng.1', 'Liverpool', 'Brentford'), [], true));
+  assert.ok(interesting(m('uefa.champions', 'Liverpool', 'Brentford'), [], true));
+  assert.ok(interesting(m('ind.1', 'Mohun Bagan', 'East Bengal'), ['mohun bagan'], false));
+  assert.ok(interesting(m('fifa.world', 'Japan', 'Ghana'), [], true));
+  assert.ok(!interesting(m('eng.1', 'Liverpool', 'Arsenal'), [], false));
+  assert.ok(interesting(m('esp.1', 'Atlético Madrid', 'Real Madrid'), [], true));
 });

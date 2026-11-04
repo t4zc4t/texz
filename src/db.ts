@@ -68,7 +68,22 @@ export interface GuildSettings {
   tickets: { category: string | null; staff: string | null; log: string | null };
   // channel for the character of the day
   daily: { channel: string | null };
+  bulletins: Bulletins;
 }
+
+export interface Feed { on: boolean; channel: string | null; role: string | null }
+export interface Bulletins {
+  category: string | null;
+  f1: Feed & { facts: boolean };
+  football: Feed & { favs: string[]; big: boolean };
+  anime: Feed & { shows: { id: number; title: string }[]; popular: boolean };
+}
+export const defaultBulletins = (): Bulletins => ({
+  category: null,
+  f1: { on: true, channel: null, role: null, facts: true },
+  football: { on: true, channel: null, role: null, favs: [], big: true },
+  anime: { on: true, channel: null, role: null, shows: [], popular: true },
+});
 
 export interface LevelRules {
   channel: string | null;
@@ -404,6 +419,11 @@ export class Store {
       starboard: { channel: null, emoji: '⭐', min: 3, self: false, ...saved.starboard },
       tickets: { category: null, staff: null, log: null, ...saved.tickets },
       daily: { channel: null, ...saved.daily },
+      bulletins: (() => {
+        const d = defaultBulletins();
+        const b: Partial<Bulletins> = saved.bulletins ?? {};
+        return { category: b.category ?? null, f1: { ...d.f1, ...b.f1 }, football: { ...d.football, ...b.football }, anime: { ...d.anime, ...b.anime } };
+      })(),
     };
   }
 
@@ -499,6 +519,20 @@ export class Store {
   setKv(key: string, value: string | null) {
     if (value === null) this.db.prepare('DELETE FROM kv WHERE key = ?').run(key);
     else this.db.prepare('INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+  }
+
+  // ---------- bulletins ----------
+
+  // true the first time a key is seen, so each alert goes out once per server
+  firstTime(guildId: string, key: string): boolean {
+    const k = `sent:${guildId}:${key}`;
+    if (this.getKv(k)) return false;
+    this.setKv(k, String(Date.now()));
+    return true;
+  }
+
+  forgetOldSent(before: number) {
+    this.db.prepare("DELETE FROM kv WHERE key LIKE 'sent:%' AND CAST(value AS INTEGER) < ?").run(before);
   }
 
   // ---------- economy ----------
