@@ -180,8 +180,20 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
   const d = new Date();
   if (d.getUTCHours() === 12) {
     const qs = (await questions().catch(() => null))?.questions ?? [];
+    // the site's questions mixed with a few worked out from the latest standings, so the evenings don't repeat as fast
+    const h = await home().catch(() => null);
+    const made: { q: string; answer: string; body: string }[] = [];
+    if (h?.standings.length) {
+      const [a, b2] = h.standings;
+      const most = [...h.standings].sort((x, y) => y.wins - x.wins)[0];
+      if (b2) made.push({ q: 'How big is the lead?', answer: `${a.driver} leads ${b2.driver} by ${a.points - b2.points} points.`, body: `After round ${h.afterRound}, ${a.driver} has ${a.points} points and ${a.wins} wins for ${a.team}.` });
+      if (most) made.push({ q: 'Who wins the most this year?', answer: `${most.driver}, with ${most.wins} wins.`, body: `That's ${most.wins} of the ${h.afterRound} rounds so far.` });
+      const climb = [...h.lastRace.results].filter((d) => d.grid > 0).sort((x, y) => (y.grid - Number(y.pos)) - (x.grid - Number(x.pos)))[0];
+      if (climb && climb.grid - Number(climb.pos) > 3) made.push({ q: `Who climbed the most in ${h.lastRace.name}?`, answer: `${climb.driver}, from P${climb.grid} to P${climb.pos}.`, body: `${climb.grid - Number(climb.pos)} places gained in one afternoon for ${climb.team}.` });
+    }
+    const pool = [...qs, ...made];
     const day = Math.floor(now / (24 * HOUR));
-    const q = qs.length ? qs[day % qs.length] : null;
+    const q = pool.length ? pool[day % pool.length] : null;
     if (q) {
       for (const [gid, b] of live) {
         if (!b.f1.facts || !store.firstTime(gid, `f1:fact:${day}`)) continue;
