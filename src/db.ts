@@ -525,6 +525,19 @@ export class Store {
 
   // ---------- bulletins ----------
 
+  // people who follow a show, from episode alerts or their list
+  watchersOf(mediaId: number): string[] {
+    const rows = this.db.prepare(`SELECT user_id FROM follows WHERE media_id = ?
+      UNION SELECT user_id FROM watchlist WHERE media_id = ? AND status = 'watching'`).all(mediaId, mediaId) as { user_id: string }[];
+    return rows.map((r) => r.user_id);
+  }
+
+  // everyone's personal picks, for club pings
+  allPicks(): { user: string; club?: string; ping?: boolean }[] {
+    return (this.db.prepare("SELECT key, value FROM kv WHERE key LIKE 'picks:%'").all() as { key: string; value: string }[])
+      .map((r) => ({ user: r.key.slice(6), ...(JSON.parse(r.value) as { club?: string; ping?: boolean }) }));
+  }
+
   // true the first time a key is seen, so each alert goes out once per server
   firstTime(guildId: string, key: string): boolean {
     const k = `sent:${guildId}:${key}`;

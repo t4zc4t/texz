@@ -94,7 +94,7 @@ function remember(channel: string, ping: boolean) {
   if (ping) sentLog.set(`${channel}:ping`, [...(sentLog.get(`${channel}:ping`) ?? []), Date.now()].slice(-20));
 }
 
-async function post(client: Client, feed: Feed, content: { text?: string; embed: EmbedBuilder; ping?: boolean; buttons?: ButtonBuilder[]; react?: string[] }) {
+async function post(client: Client, feed: Feed, content: { text?: string; embed: EmbedBuilder; ping?: boolean; buttons?: ButtonBuilder[]; react?: string[]; users?: string[] }) {
   if (!feed.channel) return;
   const ok = allowed(feed.channel, !!content.ping);
   if (!ok.post) return;
@@ -106,12 +106,14 @@ async function post(client: Client, feed: Feed, content: { text?: string; embed:
     return;
   }
   const ping = ok.ping && feed.role ? `<@&${feed.role}>` : '';
-  remember(feed.channel, !!ping);
+  // personal picks get their own mention, a handful at most
+  const users = (content.users ?? []).slice(0, 15);
+  remember(feed.channel, !!ping || users.length > 0);
   const sent = await ch.send({
-    content: [ping, content.text].filter(Boolean).join(' ') || undefined,
+    content: [ping, users.map((u) => `<@${u}>`).join(' '), content.text].filter(Boolean).join(' ') || undefined,
     embeds: [content.embed],
     components: content.buttons?.length ? [row(...content.buttons)] : [],
-    allowedMentions: { roles: ping && feed.role ? [feed.role] : [] },
+    allowedMentions: { roles: ping && feed.role ? [feed.role] : [], users },
   }).catch((e) => { report('bulletin post', e); return null; });
   // a reaction or two so people can follow along
   for (const r of content.react ?? []) await sent?.react(r).catch(() => {});
@@ -206,6 +208,14 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
   }
 }
 
+// only people who are actually in that server, and haven't switched personal pings off
+async function membersAmong(client: Client, guildId: string, ids: string[]) {
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild || !ids.length) return [];
+  const found = await guild.members.fetch({ user: ids.slice(0, 50) }).catch(() => null);
+  return found ? [...found.keys()] : [];
+}
+
 const leagueOf = (m: Match) => leagues[m.league]?.name ?? m.league;
 
 async function footballTick(client: Client, store: Store, guilds: [string, Bulletins][]) {
@@ -219,7 +229,9 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
   }
   const today = new Date().toISOString().slice(0, 10);
   for (const [gid, b] of live) {
-    const mine = all.filter((m) => interesting(m, b.football.favs, b.football.big));
+    // the server's clubs plus everyone's own picks
+    const clubs = [...b.football.favs, ...store.allPicks().filter((p) => p.club && p.ping !== false).map((p) => p.club!)];
+    const mine = all.filter((m) => interesting(m, clubs, b.football.big));
     // the morning list, around 9 in India
     if (new Date().getUTCHours() >= 3 && store.firstTime(gid, `fb:day:${today}`)) {
       const upcoming = mine.filter((m) => m.state === 'pre' && m.date - now < 24 * HOUR).sort((a, c) => a.date - c.date);
@@ -232,7 +244,10 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
     }
     for (const m of mine) {
       if (m.state === 'pre' && m.date - now < 30 * 60_000 && m.date > now && store.firstTime(gid, `fb:ko:${m.id}`)) {
+        const norm = (x: string) => x.toLowerCase();
+        const fans = store.allPicks().filter((p) => p.club && p.ping !== false && [m.home.name, m.away.name].some((n) => norm(n).includes(norm(p.club!)))).map((p) => p.user);
         await post(client, b.football, {
+          users: await membersAmong(client, gid, fans),
           ping: true, text: `kick-off <t:${unix(m.date)}:R>`, react: [clubDot(m.home), clubDot(m.away), '⚽'].filter((x, i, a) => a.indexOf(x) === i),
           embed: card({ kind: 'fbSoon', title: `${m.home.name} vs ${m.away.name}`, emoji: '⚽', color: names.football.color, gif: 'off', body: `${leagueOf(m)}${m.venue ? ` · ${m.venue}` : ''}` }),
         });
@@ -259,7 +274,7 @@ async function animeTick(client: Client, store: Store, guilds: [string, Bulletin
   // the day's schedule, once, around 9 in India
   let schedule: { episode: number; airingAt: number; media: Media }[] | null = null;
   for (const [gid, b] of live) {
-    const wanted = (m: Media) => b.anime.shows.some((s) => s.id === m.id) || (b.anime.popular && (m.popularity ?? 0) >= 60_000);
+    const wanted = (m: Media) => b.anime.shows.some((s) => s.id === m.id) || (b.anime.popular && (m.popularity ?? 0) >= 60_000) || store.watchersOf(m.id).length > 0;
     if (new Date().getUTCHours() >= 3 && store.firstTime(gid, `an:day:${today}`)) {
       schedule ??= await airingOn(unix(now), unix(now) + 24 * 3600).catch(() => []);
       const list = schedule.filter((a) => wanted(a.media));
@@ -276,7 +291,7 @@ async function animeTick(client: Client, store: Store, guilds: [string, Bulletin
         body: `Out now${a.media.episodes ? `, ${a.episode} of ${a.media.episodes}` : ''}.` }).setURL(a.media.siteUrl);
       if (a.media.coverImage.large) e.setThumbnail(a.media.coverImage.large);
       const watch = (a.media.externalLinks ?? []).filter((l) => l.type === 'STREAMING' && !l.isDisabled && l.url.startsWith('https://')).slice(0, 3);
-      await post(client, b.anime, { ping: true, react: ['📺', '🔥'], embed: e, buttons: watch.map((l) => link(l.url, `Watch on ${l.site}`.slice(0, 80))) });
+      await post(client, b.anime, { users: await membersAmong(client, gid, store.watchersOf(a.media.id)), ping: true, react: ['📺', '🔥'], embed: e, buttons: watch.map((l) => link(l.url, `Watch on ${l.site}`.slice(0, 80))) });
     }
   }
 }

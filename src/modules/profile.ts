@@ -23,7 +23,7 @@ const parts = {
   level: 'Level and rank', yen: 'Yen', birthday: 'Birthday', done: 'Anime finished',
 } as const;
 type Part = keyof typeof parts;
-interface Picks { club?: string; team?: string; anime?: string; manga?: string; color?: string; show: Part[] }
+interface Picks { club?: string; team?: string; anime?: string; manga?: string; color?: string; show: Part[]; ping?: boolean }
 
 export function picksOf(store: Store, userId: string): Picks {
   const saved = JSON.parse(store.getKv(`picks:${userId}`) ?? '{}') as Partial<Picks>;
@@ -55,7 +55,10 @@ function editPanel(store: Store, userId: string) {
         new ButtonBuilder().setCustomId(id('bio')).setLabel('Bio').setEmoji('🖋️').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(id('color')).setLabel('Accent').setEmoji('🎨').setStyle(ButtonStyle.Secondary),
       ),
-      row(new ButtonBuilder().setCustomId(id('preview')).setLabel('Preview my card').setEmoji('🖼️').setStyle(ButtonStyle.Primary)),
+      row(
+        new ButtonBuilder().setCustomId(id('preview')).setLabel('Preview my card').setEmoji('🖼️').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(id('ping')).setLabel(`Pings for my club: ${p.ping === false ? 'off' : 'on'}`).setEmoji('🔔').setStyle(p.ping === false ? ButtonStyle.Secondary : ButtonStyle.Success),
+      ),
     ],
   };
 }
@@ -100,6 +103,7 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
     if (i.isStringSelectMenu() && what === 'show') { p.show = i.values as Part[]; savePicks(store, owner, p); await i.update(editPanel(store, owner)); return true; }
     if (i.isStringSelectMenu() && what === 'team') { p.team = i.values[0] === '-' ? undefined : i.values[0]; if (p.team && !p.show.includes('team')) p.show.push('team'); savePicks(store, owner, p); await i.update(editPanel(store, owner)); return true; }
     if (!i.isButton()) return true;
+    if (what === 'ping') { p.ping = p.ping === false; savePicks(store, owner, p); await i.update(editPanel(store, owner)); return true; }
     if (what === 'preview') {
       await i.deferReply({ flags: MessageFlags.Ephemeral });
       const m = i.guild ? await i.guild.members.fetch(owner).catch(() => null) : null;
