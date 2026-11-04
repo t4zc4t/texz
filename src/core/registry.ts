@@ -29,13 +29,13 @@ allModules.push(...modules);
 useModules(modules);
 
 // the grouped slash commands and who can see them by default
-const groups: Record<string, { description: string; perms?: bigint }> = {
-  owo: { description: 'OwO helper: timers, huntbot, gems, zoo, weapons, quests, shop and reminders' },
-  anime: { description: 'Anime and manga: search, characters, seasons, trending, alerts and your list' },
+const groups: Record<string, { description: string; perms?: bigint; anywhere?: boolean }> = {
+  owo: { description: 'OwO helper: timers, huntbot, gems, zoo, weapons, quests, shop and reminders', anywhere: true },
+  anime: { description: 'Anime and manga: search, characters, seasons, trending, alerts and your list', anywhere: true },
   mod: { description: 'Moderation: warn, timeout, kick, ban, purge, lock, slowmode and the case archive', perms: PermissionFlagsBits.ModerateMembers },
   levels: { description: 'Rank cards, the level leaderboard and xp tools' },
-  info: { description: 'Profiles, avatars and the server' },
-  fun: { description: 'Dice, coins, the 8ball and hard decisions' },
+  info: { description: 'Profiles, avatars and the server', anywhere: true },
+  fun: { description: 'Dice, coins, the 8ball and hard decisions', anywhere: true },
   eco: { description: 'Yen: daily claim, balance, giving, the richest and the role shop' },
   tools: { description: 'Planned announcements and server activity (admins)', perms: PermissionFlagsBits.ManageGuild },
 };
@@ -65,13 +65,18 @@ function asMember(c: Command): Opt {
   } as Opt;
 }
 
+// commands people can also use after adding Texz to their own account, in any server or DM
+const anywhereTop = new Set(['help', 'ping', 'f1', 'football']);
+const everywhere = { integration_types: [0, 1], contexts: [InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel] };
+const serverOnly = { integration_types: [0], contexts: [InteractionContextType.Guild] };
+
 const visible = modules.flatMap((m) => m.commands.filter((c) => !c.hidden));
 export const definitions: Json[] = [
-  ...visible.filter((c) => !c.group).map((c) => c.data),
+  ...visible.filter((c) => !c.group).map((c) => ({ ...c.data, ...(anywhereTop.has(c.name) ? everywhere : c.data.contexts ? {} : serverOnly) })),
   ...Object.entries(groups).map(([name, g]) => ({
     name,
     description: g.description,
-    contexts: [InteractionContextType.Guild, InteractionContextType.BotDM],
+    ...(g.anywhere ? everywhere : serverOnly),
     ...(g.perms ? { default_member_permissions: g.perms.toString() } : {}),
     options: visible.filter((c) => c.group === name).map(asMember),
   })).filter((d) => d.options.length),

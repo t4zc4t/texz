@@ -317,9 +317,10 @@ const football: Command = {
     .addSubcommand((s) => s.setName('favs').setDescription('The server\'s favourite clubs')).toJSON(),
   text: { aliases: ['fb', 'soccer'], sub: true, subArgs: { fav: ['club'] } },
   run: async (ctx, store) => {
-    if (!ctx.guildId) return ctx.reply('Server only.');
-    const g = store.guild(ctx.guildId);
     const sub = ctx.sub() ?? 'today';
+    // outside a server it still lists the big matches, just without anyone's favourites
+    if (!ctx.guildId && sub !== 'today') return ctx.reply('Favourites belong to a server.');
+    const g = store.guild(ctx.guildId ?? 'none');
     if (sub === 'fav') {
       if (!ctx.isAdmin) return ctx.reply('Only admins pick the server\'s clubs.');
       const club = ctx.str('club')?.trim();
@@ -327,7 +328,7 @@ const football: Command = {
       const favs = g.bulletins.football.favs;
       const at = favs.findIndex((f) => f.toLowerCase() === club.toLowerCase());
       if (at >= 0) favs.splice(at, 1); else favs.push(club);
-      store.saveGuild(ctx.guildId, g);
+      store.saveGuild(ctx.guildId!, g);
       return ctx.reply({ content: at >= 0 ? `➖ ${club} is off the list.` : `⭐ ${club} added, every match gets a kick-off ping and the final score.`, temp: true });
     }
     if (sub === 'favs') return ctx.reply({ content: g.bulletins.football.favs.length ? `⭐ ${g.bulletins.football.favs.join(', ')}` : 'No favourites yet. `/football fav` adds one.', temp: true });
