@@ -79,17 +79,36 @@ export async function onBulletinButton(i: Interaction, store: Store): Promise<bo
 
 // ---------- posting ----------
 
-async function post(client: Client, feed: Feed, content: { text?: string; embed: EmbedBuilder; ping?: boolean; buttons?: ButtonBuilder[] }) {
+// at most this many posts per channel an hour, and at most a few role pings, so a bad data day can't flood it
+const sentLog = new Map<string, number[]>();
+function allowed(channel: string, ping: boolean) {
+  const now = Date.now();
+  const recent = (sentLog.get(channel) ?? []).filter((t) => now - t < HOUR);
+  const pings = (sentLog.get(`${channel}:ping`) ?? []).filter((t) => now - t < HOUR);
+  if (recent.length >= 8 || (ping && pings.length >= 3)) return { post: recent.length < 8, ping: false };
+  return { post: true, ping };
+}
+function remember(channel: string, ping: boolean) {
+  sentLog.set(channel, [...(sentLog.get(channel) ?? []), Date.now()].slice(-20));
+  if (ping) sentLog.set(`${channel}:ping`, [...(sentLog.get(`${channel}:ping`) ?? []), Date.now()].slice(-20));
+}
+
+async function post(client: Client, feed: Feed, content: { text?: string; embed: EmbedBuilder; ping?: boolean; buttons?: ButtonBuilder[]; react?: string[] }) {
   if (!feed.channel) return;
+  const ok = allowed(feed.channel, !!content.ping);
+  if (!ok.post) return;
   const ch = await client.channels.fetch(feed.channel).catch(() => null);
   if (!ch?.isSendable()) return;
-  const ping = content.ping && feed.role ? `<@&${feed.role}>` : '';
-  await ch.send({
+  const ping = ok.ping && feed.role ? `<@&${feed.role}>` : '';
+  remember(feed.channel, !!ping);
+  const sent = await ch.send({
     content: [ping, content.text].filter(Boolean).join(' ') || undefined,
     embeds: [content.embed],
     components: content.buttons?.length ? [row(...content.buttons)] : [],
     allowedMentions: { roles: ping && feed.role ? [feed.role] : [] },
-  }).catch((e) => report('bulletin post', e));
+  }).catch((e) => { report('bulletin post', e); return null; });
+  // a reaction or two so people can follow along
+  for (const r of content.react ?? []) await sent?.react(r).catch(() => {});
 }
 
 const link = (url: string, label: string) => new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(url).setLabel(label);
@@ -143,7 +162,7 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
           }
           const win = s.type === 'Q' || s.type === 'SQ' ? `${s.top3[0].driver} takes pole` : `${s.top3[0].driver} wins`;
           await post(client, b.f1, {
-            ping: s.type === 'R', text: s.type === 'R' ? `${win}!` : undefined,
+            ping: s.type === 'R', text: s.type === 'R' ? `${win}!` : undefined, react: [flag, s.type === 'R' ? '🏆' : '⏱️'],
             embed: card({ kind: s.type === 'R' ? 'f1Win' : 'f1Result', title: `${flag} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: 'off', body }),
             buttons: [link(`${SITE}/races`, 'Full result on Parc Fermé')],
           });
@@ -196,13 +215,14 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
     for (const m of mine) {
       if (m.state === 'pre' && m.date - now < 30 * 60_000 && m.date > now && store.firstTime(gid, `fb:ko:${m.id}`)) {
         await post(client, b.football, {
-          ping: true, text: `kick-off <t:${unix(m.date)}:R>`,
+          ping: true, text: `kick-off <t:${unix(m.date)}:R>`, react: ['⚽', '🔥'],
           embed: card({ kind: 'fbSoon', title: `${m.home.name} vs ${m.away.name}`, emoji: '⚽', color: names.football.color, gif: 'off', body: `${leagueOf(m)}${m.venue ? ` · ${m.venue}` : ''}` }),
         });
       }
       if (m.state === 'post' && now - m.date < 8 * HOUR && store.firstTime(gid, `fb:ft:${m.id}`)) {
         const scorers = m.goals.map((g) => `${g.clock} ${g.who} (${g.team === m.home.id ? m.home.short : m.away.short})`).join(' · ');
         await post(client, b.football, {
+          react: [m.home.winner ? '🏠' : m.away.winner ? '✈️' : '🤝'],
           embed: card({ kind: 'fbFull', title: `${m.home.name} ${m.home.score} - ${m.away.score} ${m.away.name}`, emoji: '🏁', color: names.football.color, gif: 'off',
             body: `${leagueOf(m)} · ${m.detail}${scorers ? `\n\n⚽ ${scorers}` : ''}` }),
         });
@@ -238,7 +258,7 @@ async function animeTick(client: Client, store: Store, guilds: [string, Bulletin
         body: `Out now${a.media.episodes ? `, ${a.episode} of ${a.media.episodes}` : ''}.` }).setURL(a.media.siteUrl);
       if (a.media.coverImage.large) e.setThumbnail(a.media.coverImage.large);
       const watch = (a.media.externalLinks ?? []).filter((l) => l.type === 'STREAMING' && !l.isDisabled && l.url.startsWith('https://')).slice(0, 3);
-      await post(client, b.anime, { ping: true, embed: e, buttons: watch.map((l) => link(l.url, `Watch on ${l.site}`.slice(0, 80))) });
+      await post(client, b.anime, { ping: true, react: ['📺', '🔥'], embed: e, buttons: watch.map((l) => link(l.url, `Watch on ${l.site}`.slice(0, 80))) });
     }
   }
 }
