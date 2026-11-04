@@ -42,3 +42,10 @@ export const bigSession = (t: string) => ['Q', 'SQ', 'S', 'R'].includes(t);
 export function nextRound(rounds: Round[], now = Date.now()) {
   return rounds.find((r) => Date.parse(r.race) + 3 * 3_600_000 > now) ?? null;
 }
+
+// a colour square for each team, close to their livery
+const teamDots: [RegExp, string][] = [
+  [/red bull/i, '🟦'], [/ferrari/i, '🟥'], [/mercedes/i, '🩵'], [/mclaren/i, '🟧'], [/aston/i, '🟩'], [/alpine/i, '🩷'],
+  [/williams/i, '🔷'], [/haas/i, '⬜'], [/audi|sauber/i, '⬛'], [/\brb\b|racing bulls|visa/i, '🔹'], [/cadillac/i, '🟨'],
+];
+export const teamDot = (team: string) => teamDots.find(([re]) => re.test(team))?.[1] ?? '▫️';

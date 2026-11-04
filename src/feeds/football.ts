@@ -19,7 +19,7 @@ export const bigClubs = [
   'Internazionale', 'Inter Milan', 'AC Milan', 'Napoli', 'AS Roma', 'Benfica', 'Porto',
 ];
 
-export interface Team { id: string; name: string; short: string; score: string; winner: boolean; home: boolean }
+export interface Team { id: string; name: string; short: string; score: string; winner: boolean; home: boolean; color: string | null }
 export interface Match { id: string; league: string; date: number; state: 'pre' | 'in' | 'post'; detail: string; venue: string | null; home: Team; away: Team; goals: { who: string; clock: string; team: string }[] }
 
 const cache = new Map<string, { at: number; data: Match[] }>();
@@ -40,7 +40,7 @@ export async function matches(league: string, day: Date, keep = 9 * 60_000): Pro
 interface EspnEvent {
   id: string; date: string;
   status: { type: { state: 'pre' | 'in' | 'post'; shortDetail: string } };
-  competitions: { venue?: { fullName?: string }; competitors: { homeAway: string; score?: string; winner?: boolean; team: { id: string; displayName: string; abbreviation: string } }[];
+  competitions: { venue?: { fullName?: string }; competitors: { homeAway: string; score?: string; winner?: boolean; team: { id: string; displayName: string; abbreviation: string; color?: string } }[];
     details?: { scoringPlay?: boolean; clock?: { displayValue?: string }; athletesInvolved?: { displayName: string }[]; team?: { id: string } }[] }[];
 }
 
@@ -48,7 +48,7 @@ function toMatch(league: string, e: EspnEvent): Match {
   const c = e.competitions[0];
   const team = (side: string): Team => {
     const t = c.competitors.find((x) => x.homeAway === side) ?? c.competitors[0];
-    return { id: t.team.id, name: t.team.displayName, short: t.team.abbreviation, score: t.score ?? '0', winner: !!t.winner, home: side === 'home' };
+    return { id: t.team.id, name: t.team.displayName, short: t.team.abbreviation, score: t.score ?? '0', winner: !!t.winner, home: side === 'home', color: t.team.color ?? null };
   };
   return {
     id: e.id, league, date: Date.parse(e.date), state: e.status.type.state, detail: e.status.type.shortDetail, venue: c.venue?.fullName ?? null,
@@ -70,4 +70,14 @@ export function interesting(m: Match, favs: string[], big: boolean) {
   return bigs === 2 || (bigs === 1 && m.league.startsWith('uefa.'));
 }
 
-export const scoreLine = (m: Match) => `**${m.home.name}** ${m.home.score} - ${m.away.score} **${m.away.name}**`;
+export const scoreLine = (m: Match) => `${clubDot(m.home)} **${m.home.name}** ${m.home.score} - ${m.away.score} **${m.away.name}** ${clubDot(m.away)}`;
+
+// the nearest coloured circle to a club's main colour
+const circles: [string, number[]][] = [['🔴', [200, 30, 40]], ['🟠', [240, 130, 30]], ['🟡', [240, 210, 40]], ['🟢', [40, 150, 60]], ['🔵', [30, 80, 200]],
+  ['🟣', [120, 50, 160]], ['🟤', [120, 70, 40]], ['⚫', [20, 20, 20]], ['⚪', [235, 235, 235]]];
+export function clubDot(t: Team) {
+  if (!t.color || !/^[0-9a-f]{6}$/i.test(t.color)) return '⚽';
+  const c = [0, 2, 4].map((i) => Number.parseInt(t.color!.slice(i, i + 2), 16));
+  return circles.reduce((best, cur) => (dist(cur[1], c) < dist(best[1], c) ? cur : best))[0];
+}
+const dist = (a: number[], b: number[]) => a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0);

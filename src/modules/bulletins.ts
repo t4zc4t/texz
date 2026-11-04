@@ -6,8 +6,8 @@ import type { Bulletins, Feed, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { card } from '../theme.js';
 import { report } from '../ops.js';
-import { SITE, bigSession, flagOf, home, nextRound, questions, schedule, type Round } from '../feeds/f1.js';
-import { interesting, leagues, matches, scoreLine, type Match } from '../feeds/football.js';
+import { SITE, bigSession, flagOf, home, nextRound, questions, schedule, teamDot, type Round } from '../feeds/f1.js';
+import { clubDot, interesting, leagues, matches, scoreLine, type Match } from '../feeds/football.js';
 import { airingOn, searchMedia, titleOf, type Media } from '../anime/anilist.js';
 
 type Kind = 'f1' | 'football' | 'anime';
@@ -157,11 +157,11 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
         for (const [gid, b] of live) {
           if (!store.firstTime(gid, `f1:res:${r.round}:${s.type}`)) continue;
           const medal = ['🥇', '🥈', '🥉'];
-          let body = s.top3.map((d, i) => `${medal[i]} **${d.driver}** · ${d.team}`).join('\n');
+          let body = s.top3.map((d, i) => `${medal[i]} ${teamDot(d.team)} **${d.driver}** · ${d.team}`).join('\n');
           if (s.type === 'R') {
             const h = await home().catch(() => null);
             if (h && h.lastRace.round === r.round) {
-              const rest = h.lastRace.results.slice(3, 10).map((d) => `\`${d.pos.padStart(2)}\` ${d.driver} · ${d.team}`).join('\n');
+              const rest = h.lastRace.results.slice(3, 10).map((d) => `\`${d.pos.padStart(2)}\` ${teamDot(d.team)} ${d.driver} · ${d.team}`).join('\n');
               const champ = h.standings.slice(0, 3).map((d) => `${d.pos}. ${d.driver} **${d.points}**`).join(' · ');
               body += `${rest ? `\n${rest}` : ''}\n\n**Championship** · ${champ}`;
             }
@@ -214,14 +214,14 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
       if (upcoming.length) {
         await post(client, b.football, {
           embed: card({ kind: 'fbDay', title: 'Today\'s matches worth watching', emoji: '⚽', color: names.football.color, gif: 'off',
-            body: upcoming.slice(0, 15).map((m) => `<t:${unix(m.date)}:t> **${m.home.name}** vs **${m.away.name}** · ${leagueOf(m)}`).join('\n') }),
+            body: upcoming.slice(0, 15).map((m) => `<t:${unix(m.date)}:t> ${clubDot(m.home)} **${m.home.name}** vs **${m.away.name}** ${clubDot(m.away)} · ${leagueOf(m)}`).join('\n') }),
         });
       }
     }
     for (const m of mine) {
       if (m.state === 'pre' && m.date - now < 30 * 60_000 && m.date > now && store.firstTime(gid, `fb:ko:${m.id}`)) {
         await post(client, b.football, {
-          ping: true, text: `kick-off <t:${unix(m.date)}:R>`, react: ['⚽', '🔥'],
+          ping: true, text: `kick-off <t:${unix(m.date)}:R>`, react: [clubDot(m.home), clubDot(m.away), '⚽'].filter((x, i, a) => a.indexOf(x) === i),
           embed: card({ kind: 'fbSoon', title: `${m.home.name} vs ${m.away.name}`, emoji: '⚽', color: names.football.color, gif: 'off', body: `${leagueOf(m)}${m.venue ? ` · ${m.venue}` : ''}` }),
         });
       }
@@ -296,13 +296,13 @@ const f1: Command = {
     try {
       if (view.startsWith('stand')) {
         const h = await home();
-        const body = h.standings.slice(0, 10).map((d) => `\`${d.pos.padStart(2)}\` **${d.driver}** · ${d.team} · **${d.points}**${d.wins ? ` · ${d.wins}W` : ''}`).join('\n');
-        const teams = h.teams.slice(0, 5).map((t) => `${t.pos}. ${t.team} **${t.points}**`).join(' · ');
+        const body = h.standings.slice(0, 10).map((d) => `\`${d.pos.padStart(2)}\` ${teamDot(d.team)} **${d.driver}** · ${d.team} · **${d.points}**${d.wins ? ` · ${d.wins}W` : ''}`).join('\n');
+        const teams = h.teams.slice(0, 5).map((t) => `${t.pos}. ${teamDot(t.team)} ${t.team} **${t.points}**`).join(' · ');
         return ctx.reply({ embeds: [card({ kind: 'f1Result', title: `${h.season} standings · after round ${h.afterRound}`, emoji: '🏆', color: names.f1.color, gif: 'off', body, fields: [{ name: 'Teams', value: teams, inline: false }] })], components: [site] });
       }
       if (view.startsWith('last')) {
         const h = await home();
-        const body = h.lastRace.results.slice(0, 10).map((d) => `\`${d.pos.padStart(2)}\` **${d.driver}** · ${d.team} · ${d.gap}`).join('\n');
+        const body = h.lastRace.results.slice(0, 10).map((d) => `\`${d.pos.padStart(2)}\` ${teamDot(d.team)} **${d.driver}** · ${d.team} · ${d.gap}`).join('\n');
         return ctx.reply({ embeds: [card({ kind: 'f1Win', title: `${h.lastRace.name} · ${h.lastRace.dateLabel}`, emoji: '🏁', color: names.f1.color, gif: 'off', body })], components: [site] });
       }
       const { rounds } = await schedule();
@@ -343,7 +343,7 @@ const football: Command = {
     for (const lg of Object.keys(leagues)) all.push(...await matches(lg, new Date(now)).catch(() => []));
     const mine = all.filter((m) => interesting(m, g.bulletins.football.favs, g.bulletins.football.big)).sort((a, c) => a.date - c.date);
     const body = mine.length
-      ? mine.slice(0, 20).map((m) => m.state === 'pre' ? `<t:${unix(m.date)}:t> **${m.home.name}** vs **${m.away.name}** · ${leagueOf(m)}` : `${m.state === 'in' ? '🔴' : '🏁'} ${scoreLine(m)} · ${m.detail}`).join('\n')
+      ? mine.slice(0, 20).map((m) => m.state === 'pre' ? `<t:${unix(m.date)}:t> ${clubDot(m.home)} **${m.home.name}** vs **${m.away.name}** ${clubDot(m.away)} · ${leagueOf(m)}` : `${m.state === 'in' ? '🔴' : '🏁'} ${scoreLine(m)} · ${m.detail}`).join('\n')
       : 'Nothing big today. A rest day for everyone\'s nerves.';
     return ctx.reply({ embeds: [card({ kind: 'fbDay', title: 'Today on the pitch', emoji: '⚽', color: names.football.color, gif: 'off', body })] });
   },
