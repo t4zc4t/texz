@@ -23,6 +23,7 @@ import { RED, card, type Kind } from '../theme.js';
 import { report } from '../ops.js';
 import { quoteCommand } from '../modules/quote.js';
 import { onProfileEdit } from '../modules/profile.js';
+import { onShip } from '../modules/ship.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
 
@@ -172,6 +173,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onServerComponent(store, i)) return;
     if (await onGuess(store, i)) return;
     if (await onProfileEdit(store, i)) return;
+    if (await onShip(i)) return;
     if (await onBulletinButton(i, store)) return;
   } catch (e) {
     report('component', e);

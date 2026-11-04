@@ -106,6 +106,7 @@ const bank = {
   fbFull: ['Full time. Joy for some, excuses for others.', 'The whistle blew. Here\'s how it ended.'],
   anDay: ['Today\'s screenings, in order. Plan your procrastination accordingly.', 'What airs today. A detective keeps a tight schedule, mostly of naps.'],
   anEp: ['A new episode just landed. Drop everything. Well, most things.', 'Fresh episode, still warm. Go on.'],
+  ship: ['A detective\'s favourite case: two people and a lot of evidence.', 'Answer honestly. I can tell when you lie, mostly.'],
   gemLow: ['Your gem pouch is nearly empty. Even a detective needs supplies.', 'Last gem standing. Restock before your hunts get sad.'],
   shop: [
     'Window shopping with a detective. I point at things, you pay for them. Fair, no?',

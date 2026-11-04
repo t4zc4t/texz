@@ -195,7 +195,9 @@ test('which football matches get posted', async () => {
 });
 
 test('ship scores stay the same for a pair', async () => {
-  const { shipScore } = await import('../src/modules/utility.ts');
+  const { shipScore, compare } = await import('../src/modules/ship.ts');
+  assert.equal(compare([0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]).score, 100);
+  assert.equal(compare([1, 0, 0, 0, 0, 0, 0, 0], [2, 1, 1, 1, 1, 1, 1, 1]).per[0], 0.5);
   assert.equal(shipScore('1', '2'), shipScore('2', '1'));
   assert.ok(shipScore('1', '2') >= 0 && shipScore('1', '2') <= 100);
 });
