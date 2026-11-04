@@ -5,9 +5,7 @@ import {
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { bar, card, pick, say } from '../theme.js';
-import { fetchAvatar, profileCard } from '../features/rankcard.js';
-import { levelOf, rankFor } from './levels.js';
-import { fmtDate } from './birthdays.js';
+import { profile } from './profile.js';
 
 const unix = (ms: number) => Math.floor(ms / 1000);
 
@@ -328,71 +326,6 @@ export async function afkWatch(store: Store, m: Message) {
     await m.reply({ content: lines.join('\n'), allowedMentions: { repliedUser: false, parse: [] } }).catch(() => {});
   }
 }
-
-const profile: Command = {
-  name: 'profile',
-  group: 'info',
-  data: new SlashCommandBuilder().setName('profile').setDescription('Your personnel file as a picture, with a bio and favourite anime')
-    .addSubcommand((s) => s.setName('view').setDescription('Show a profile card')
-      .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')))
-    .addSubcommand((s) => s.setName('bio').setDescription('Set the line about you')
-      .addStringOption((o) => o.setName('text').setDescription('About you, "clear" removes it').setRequired(true).setMaxLength(180)))
-    .addSubcommand((s) => s.setName('favourite').setDescription('Set your favourite anime')
-      .addStringOption((o) => o.setName('title').setDescription('Title, "clear" removes it').setRequired(true).setMaxLength(60)))
-    .addSubcommand((s) => s.setName('club').setDescription('Your football club, shown on the card')
-      .addStringOption((o) => o.setName('name').setDescription('Club, "clear" removes it').setRequired(true).setMaxLength(40)))
-    .addSubcommand((s) => s.setName('team').setDescription('Your F1 team, shown on the card')
-      .addStringOption((o) => o.setName('name').setDescription('Team, "clear" removes it').setRequired(true).setMaxLength(30)))
-    .toJSON(),
-  // tz profile, tz profile @user, tz profile bio ..., tz profile favourite ...
-  text: { aliases: ['pf', 'card'], sub: true, subArgs: { view: ['user'], bio: ['text'], favourite: ['title'], fav: ['title'], club: ['name'], team: ['name'] } },
-  run: async (ctx, store) => {
-    let sub = ctx.sub() ?? 'view';
-    let who = ctx.user('user');
-    if (ctx.viaText && /^<@!?\d+>$/.test(sub)) { who = sub.replace(/\D/g, ''); sub = 'view'; }
-    if (sub === 'bio') {
-      const t = ctx.str('text')?.trim() ?? '';
-      store.setProfile(ctx.userId, { bio: !t || t.toLowerCase() === 'clear' ? null : t.slice(0, 180) });
-      return ctx.reply({ content: '🖋️ Bio updated. `tz profile` to see the card.', temp: true });
-    }
-    if (sub === 'favourite' || sub === 'fav') {
-      const t = ctx.str('title')?.trim() ?? '';
-      store.setProfile(ctx.userId, { favourite: !t || t.toLowerCase() === 'clear' ? null : t.slice(0, 60) });
-      return ctx.reply({ content: '⭐ Favourite saved.', temp: true });
-    }
-    if (sub === 'club' || sub === 'team') {
-      const t = ctx.str('name')?.trim() ?? '';
-      const picks = JSON.parse(store.getKv(`picks:${ctx.userId}`) ?? '{}') as Record<string, string>;
-      if (!t || t.toLowerCase() === 'clear') delete picks[sub]; else picks[sub] = t.slice(0, 40);
-      store.setKv(`picks:${ctx.userId}`, JSON.stringify(picks));
-      return ctx.reply({ content: `${sub === 'club' ? '⚽' : '🏎️'} Saved. It shows on your card now.`, temp: true });
-    }
-    const id = who ?? ctx.userId;
-    const m = ctx.guild ? await ctx.guild.members.fetch(id).catch(() => null) : null;
-    const p = store.profile(id);
-    const chips: { label: string; value: string }[] = [];
-    let title = 'Agency visitor';
-    if (ctx.guildId && store.rules(ctx.guildId, 'levels').enabled) {
-      const l = levelOf(store.xpOf(ctx.guildId, id).xp).level;
-      title = rankFor(l).name;
-      chips.push({ label: 'Level', value: String(l) });
-    }
-    if (ctx.guildId && store.rules(ctx.guildId, 'economy').enabled) chips.push({ label: 'Yen', value: `¥${store.wallet(ctx.guildId, id).yen.toLocaleString()}` });
-    const b = store.birthday(id);
-    if (b) chips.push({ label: 'Birthday', value: fmtDate(b.month, b.day) });
-    const done = store.watchlist(id, 'completed').length;
-    if (done) chips.push({ label: 'Anime done', value: String(done) });
-    const picks = JSON.parse(store.getKv(`picks:${id}`) ?? '{}') as Record<string, string>;
-    if (picks.club) chips.push({ label: 'Club', value: picks.club });
-    if (picks.team) chips.push({ label: 'F1 team', value: picks.team });
-    if (p.favourite) chips.push({ label: 'Anime', value: p.favourite });
-    const png = await profileCard({
-      name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: p.bio, chips,
-      avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null,
-    });
-    return ctx.reply({ files: [new AttachmentBuilder(png, { name: 'profile.png' })] });
-  },
-};
 
 export const utility: Module = {
   name: 'utility',

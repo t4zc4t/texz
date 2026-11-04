@@ -8,6 +8,7 @@ GlobalFonts.registerFromPath(`${fontDir}inter-latin-700-normal.woff2`, 'Texz San
 GlobalFonts.registerFromPath(`${fontDir}cinzel-latin-700-normal.woff2`, 'Texz Serif');
 
 const SAND = '#c2a46e';
+const SAND_DEFAULT = SAND;
 const INK = '#14161c';
 const W = 1000;
 const H = 300;
@@ -182,7 +183,8 @@ export interface ProfileData {
   title: string;
   bio: string | null;
   // short facts shown as chips, like "Level 12" or "¥4,200"
-  chips: { label: string; value: string }[];
+  chips: { label: string; value: string; color?: string }[];
+  accent?: string;
 }
 
 function wrap(ctx: SKRSContext2D, text: string, max: number, lines: number) {
@@ -202,6 +204,7 @@ function wrap(ctx: SKRSContext2D, text: string, max: number, lines: number) {
 }
 
 export async function profileCard(d: ProfileData): Promise<Buffer> {
+  const SAND = d.accent ?? SAND_DEFAULT;
   const PW = 1000;
   const PH = 420;
   const c = createCanvas(PW, PH);
@@ -211,8 +214,8 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
   ctx.fillStyle = INK;
   ctx.fillRect(0, 0, PW, PH);
   const glow = ctx.createRadialGradient(140, 60, 10, 140, 60, 600);
-  glow.addColorStop(0, 'rgba(194,164,110,0.25)');
-  glow.addColorStop(1, 'rgba(194,164,110,0)');
+  glow.addColorStop(0, `${SAND}40`);
+  glow.addColorStop(1, `${SAND}00`);
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, PW, PH);
   ctx.fillStyle = SAND;
@@ -266,11 +269,13 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
     const vw = ctx.measureText(chip.value).width;
     ctx.font = '400 15px "Texz Sans", sans-serif';
     const lw = ctx.measureText(chip.label.toUpperCase()).width;
-    const w = Math.max(vw, lw) + 36;
+    const w = Math.max(vw, lw) + 36 + (chip.color ? 16 : 0);
     if (x + w > PW - 40) break;
     rounded(ctx, x, y, w, 64, 14);
     ctx.fillStyle = '#20232b';
     ctx.fill();
+    // a little colour dot for teams, drawn since emoji don't render here
+    if (chip.color) { ctx.fillStyle = chip.color; ctx.beginPath(); ctx.arc(x + w - 16, y + 18, 6, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = '#8b8f9a';
     ctx.fillText(chip.label.toUpperCase(), x + 18, y + 24);
     ctx.fillStyle = '#ffffff';
