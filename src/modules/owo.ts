@@ -12,6 +12,7 @@ import { planZoo, values } from '../features/zoo.js';
 import { refresh, traits, weaponType, type Huntbot, type ListedWeapon, type Pet, type ShopWeapon, type Weapon, type ZooRank } from '../owo/parse.js';
 import { momentOf } from '../gifs.js';
 import { panel } from '../features/panel.js';
+import { parseLength } from './moderation.js';
 import { RED, bar, card, say, type CardOptions } from '../theme.js';
 import { fmtLeft, nextReset, owoDay, unix } from '../time.js';
 
@@ -323,7 +324,9 @@ const remind: Command = {
   text: { aliases: ['r'], args: ['minutes', 'note'] },
   run: (ctx, store) => {
     // "tz r 30 restart huntbot" adds one, plain "tz r" opens the list
-    const mins = ctx.int('minutes');
+    // "tz r 30 ...", "tz r 2h ..." and "tz r 1h30m ..." all work
+    const raw = ctx.str('minutes') ?? '';
+    const mins = /^\d+$/.test(raw) ? Number(raw) : ctx.viaText ? Math.round((parseLength(raw) ?? 0) / 60_000) || null : ctx.int('minutes');
     const note = ctx.str('note');
     if (mins && note) {
       const at = new Date(Date.now() + Math.min(Math.max(mins, 1), 10080) * 60_000);

@@ -278,6 +278,37 @@ const roll: Command = {
   },
 };
 
+// the same pair always gets the same answer, so nobody can reroll fate
+export function shipScore(a: string, b: string) {
+  const [x, y] = [a, b].sort();
+  let h = 7;
+  for (const ch of `${x}:${y}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % 101;
+}
+
+const ship: Command = {
+  name: 'ship',
+  group: 'fun',
+  data: new SlashCommandBuilder().setName('ship').setDescription('How well two people get along, by detective deduction')
+    .addUserOption((o) => o.setName('user').setDescription('First person').setRequired(true))
+    .addUserOption((o) => o.setName('other').setDescription('Second person, you if empty')).toJSON(),
+  text: { aliases: ['match', 'compat'], args: ['user', 'other'] },
+  run: (ctx) => {
+    const a = ctx.user('user');
+    const b = ctx.user('other') ?? ctx.userId;
+    if (!a) return ctx.reply('Who? `tz ship @someone` or `tz ship @a @b`');
+    if (a === b) return ctx.reply({ content: '💞 Loving yourself, 100%. Healthy. I approve.', temp: true });
+    const n = shipScore(a, b);
+    const verdict = n >= 90 ? 'Partners in crime, the Agency would hire you both on the spot.'
+      : n >= 70 ? 'A solid pair. Kunikida-kun would even write it in his notebook.'
+      : n >= 45 ? 'It could work, with snacks and patience.'
+      : n >= 20 ? 'Like Chuuya and me. Loud, but somehow it works.'
+      : 'Even I can\'t deduce a way this works. Fascinating.';
+    const filled = Math.round(n / 10);
+    return ctx.reply({ content: `💞 <@${a}> × <@${b}>\n${'❤️'.repeat(filled)}${'🖤'.repeat(10 - filled)} **${n}%**\n-# ${verdict}`, temp: true });
+  },
+};
+
 const coin: Command = {
   name: 'coin',
   group: 'fun',
@@ -331,5 +362,5 @@ export const utility: Module = {
   name: 'utility',
   label: 'Utility and fun',
   about: 'Avatars, user and server info, polls, choose, dice, coin, 8ball and AFK',
-  commands: [avatar, user, profile, server, poll, choose, roll, coin, eightball, afk],
+  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk],
 };

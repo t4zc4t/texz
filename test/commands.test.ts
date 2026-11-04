@@ -193,3 +193,9 @@ test('which football matches get posted', async () => {
   assert.ok(!interesting(m('eng.1', 'Liverpool', 'Arsenal'), [], false));
   assert.ok(interesting(m('esp.1', 'Atlético Madrid', 'Real Madrid'), [], true));
 });
+
+test('ship scores stay the same for a pair', async () => {
+  const { shipScore } = await import('../src/modules/utility.ts');
+  assert.equal(shipScore('1', '2'), shipScore('2', '1'));
+  assert.ok(shipScore('1', '2') >= 0 && shipScore('1', '2') <= 100);
+});

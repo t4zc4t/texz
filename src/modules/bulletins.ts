@@ -94,7 +94,7 @@ function remember(channel: string, ping: boolean) {
   if (ping) sentLog.set(`${channel}:ping`, [...(sentLog.get(`${channel}:ping`) ?? []), Date.now()].slice(-20));
 }
 
-async function post(client: Client, feed: Feed, content: { text?: string; embed: EmbedBuilder; ping?: boolean; buttons?: ButtonBuilder[]; react?: string[]; users?: string[] }) {
+async function post(client: Client, feed: Feed, content: { text?: string; embed: EmbedBuilder; ping?: boolean; buttons?: ButtonBuilder[]; react?: string[]; users?: string[]; fanRoles?: string[] }) {
   if (!feed.channel) return;
   const ok = allowed(feed.channel, !!content.ping);
   if (!ok.post) return;
@@ -109,11 +109,13 @@ async function post(client: Client, feed: Feed, content: { text?: string; embed:
   // personal picks get their own mention, a handful at most
   const users = (content.users ?? []).slice(0, 15);
   remember(feed.channel, !!ping || users.length > 0);
+  const fans = content.fanRoles ?? [];
+  const fan = fans.map((r) => `<@&${r}>`).join(' ');
   const sent = await ch.send({
-    content: [ping, users.map((u) => `<@${u}>`).join(' '), content.text].filter(Boolean).join(' ') || undefined,
+    content: [ping, fan, users.map((u) => `<@${u}>`).join(' '), content.text].filter(Boolean).join(' ') || undefined,
     embeds: [content.embed],
     components: content.buttons?.length ? [row(...content.buttons)] : [],
-    allowedMentions: { roles: ping && feed.role ? [feed.role] : [], users },
+    allowedMentions: { roles: [...(ping && feed.role ? [feed.role] : []), ...fans], users },
   }).catch((e) => { report('bulletin post', e); return null; });
   // a reaction or two so people can follow along
   for (const r of content.react ?? []) await sent?.react(r).catch(() => {});
@@ -208,6 +210,29 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
   }
 }
 
+// more than three people for the same club or show get a role of their own, so the post pings one role
+async function fanPing(client: Client, store: Store, guildId: string, key: string, label: string, ids: string[]): Promise<{ users: string[]; role: string | null }> {
+  if (ids.length <= 3) return { users: ids, role: null };
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) return { users: ids, role: null };
+  const kvKey = `fanrole:${guildId}:${key}`;
+  let role = store.getKv(kvKey) ? guild.roles.cache.get(store.getKv(kvKey)!) ?? null : null;
+  if (!role) {
+    const made = Number(store.getKv(`fanroles:${guildId}`) ?? 0);
+    // a sensible cap, servers have a role limit
+    if (made >= 25) return { users: ids, role: null };
+    role = await guild.roles.create({ name: label.slice(0, 100), mentionable: false, reason: 'fans of the same club or show' }).catch(() => null);
+    if (!role) return { users: ids, role: null };
+    store.setKv(kvKey, role.id);
+    store.setKv(`fanroles:${guildId}`, String(made + 1));
+  }
+  for (const id of ids) {
+    const m = guild.members.cache.get(id) ?? await guild.members.fetch(id).catch(() => null);
+    if (m && !m.roles.cache.has(role.id)) await m.roles.add(role, 'follows this').catch(() => {});
+  }
+  return { users: [], role: role.id };
+}
+
 // only people who are actually in that server, and haven't switched personal pings off
 async function membersAmong(client: Client, guildId: string, ids: string[]) {
   const guild = client.guilds.cache.get(guildId);
@@ -245,9 +270,18 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
     for (const m of mine) {
       if (m.state === 'pre' && m.date - now < 30 * 60_000 && m.date > now && store.firstTime(gid, `fb:ko:${m.id}`)) {
         const norm = (x: string) => x.toLowerCase();
-        const fans = store.allPicks().filter((p) => p.club && p.ping !== false && [m.home.name, m.away.name].some((n) => norm(n).includes(norm(p.club!)))).map((p) => p.user);
+        const picks = store.allPicks().filter((p) => p.club && p.ping !== false && [m.home.name, m.away.name].some((n) => norm(n).includes(norm(p.club!))));
+        // fans of each side get grouped by club
+        const users: string[] = [];
+        const fanRoles: string[] = [];
+        for (const side of [m.home, m.away]) {
+          const ids = await membersAmong(client, gid, picks.filter((p) => norm(side.name).includes(norm(p.club!))).map((p) => p.user));
+          const f = await fanPing(client, store, gid, `club:${side.id}`, `${side.name} Informants`, ids);
+          users.push(...f.users);
+          if (f.role) fanRoles.push(f.role);
+        }
         await post(client, b.football, {
-          users: await membersAmong(client, gid, fans),
+          users, fanRoles,
           ping: true, text: `kick-off <t:${unix(m.date)}:R>`, react: [clubDot(m.home), clubDot(m.away), '⚽'].filter((x, i, a) => a.indexOf(x) === i),
           embed: card({ kind: 'fbSoon', title: `${m.home.name} vs ${m.away.name}`, emoji: '⚽', color: names.football.color, gif: 'off', body: `${leagueOf(m)}${m.venue ? ` · ${m.venue}` : ''}` }),
         });
@@ -291,7 +325,8 @@ async function animeTick(client: Client, store: Store, guilds: [string, Bulletin
         body: `Out now${a.media.episodes ? `, ${a.episode} of ${a.media.episodes}` : ''}.` }).setURL(a.media.siteUrl);
       if (a.media.coverImage.large) e.setThumbnail(a.media.coverImage.large);
       const watch = (a.media.externalLinks ?? []).filter((l) => l.type === 'STREAMING' && !l.isDisabled && l.url.startsWith('https://')).slice(0, 3);
-      await post(client, b.anime, { users: await membersAmong(client, gid, store.watchersOf(a.media.id)), ping: true, react: ['📺', '🔥'], embed: e, buttons: watch.map((l) => link(l.url, `Watch on ${l.site}`.slice(0, 80))) });
+      const fans = await fanPing(client, store, gid, `show:${a.media.id}`, `${titleOf(a.media).slice(0, 80)} Watchers`, await membersAmong(client, gid, store.watchersOf(a.media.id)));
+      await post(client, b.anime, { users: fans.users, fanRoles: fans.role ? [fans.role] : [], ping: true, react: ['📺', '🔥'], embed: e, buttons: watch.map((l) => link(l.url, `Watch on ${l.site}`.slice(0, 80))) });
     }
   }
 }
