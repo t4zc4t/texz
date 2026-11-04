@@ -154,7 +154,7 @@ test('per reminder routes and auto delete', async () => {
 });
 
 test('grouped commands keep the slash list short and work typed too', async () => {
-  assert.ok(definitions.length <= 18, `${definitions.length} top-level slash commands`);
+  assert.ok(definitions.length <= 20, `${definitions.length} top-level slash commands`);
   const owo = definitions.find((d) => d.name === 'owo')!;
   const subs = (owo.options ?? []).map((o) => o.name);
   assert.ok(subs.includes('huntbot') && subs.includes('top'));

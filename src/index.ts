@@ -15,6 +15,7 @@ import { report, startOps, syncCommands } from './ops.js';
 import { startServerTimers } from './modules/server.js';
 import { startDailyCharacter } from './modules/anime.js';
 import { startBulletins } from './modules/bulletins.js';
+import { onQuote } from './modules/quote.js';
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) throw new Error('DISCORD_TOKEN is missing, copy .env.example to .env and fill it in');
@@ -69,6 +70,7 @@ client.once(Events.ClientReady, (c) => {
 
 client.on(Events.InteractionCreate, (i) => {
   if (i.isChatInputCommand()) void onSlash(store, i);
+  else if (i.isMessageContextMenuCommand() && i.commandName === 'Quote') void onQuote(store, i).catch((e) => report('quote', e));
   else void onComponent(store, i);
 });
 

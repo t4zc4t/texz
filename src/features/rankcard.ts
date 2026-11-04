@@ -280,3 +280,61 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
   }
   return c.toBuffer('image/png');
 }
+
+export interface QuoteData { name: string; avatar: Buffer | null; text: string; at: number; image: Buffer | null; where: string }
+
+// a message turned into a picture: avatar on the left, words on the right, any picture underneath
+export async function quoteCard(d: QuoteData): Promise<Buffer> {
+  const QW = 1000;
+  const probe = createCanvas(10, 10).getContext('2d');
+  probe.font = '400 30px "Texz Sans", sans-serif';
+  const lines = d.text ? wrap(probe, d.text, QW - 260, 9) : [];
+  const img = d.image ? await loadImage(d.image).catch(() => null) : null;
+  const imgW = img ? Math.min(QW - 260, img.width) : 0;
+  const imgH = img ? Math.min(420, Math.round(img.height * (imgW / img.width))) : 0;
+  const QH = Math.max(260, 150 + lines.length * 42 + (img ? imgH + 30 : 0) + 40);
+  const c = createCanvas(QW, QH);
+  const ctx = c.getContext('2d');
+  rounded(ctx, 0, 0, QW, QH, 28);
+  ctx.clip();
+  ctx.fillStyle = INK;
+  ctx.fillRect(0, 0, QW, QH);
+  ctx.fillStyle = SAND;
+  ctx.fillRect(0, 0, 8, QH);
+  // a big quote mark in the corner
+  ctx.fillStyle = 'rgba(194,164,110,0.12)';
+  ctx.font = '700 260px "Texz Serif", serif';
+  ctx.fillText('"', QW - 170, 230);
+  const av = d.avatar ? await loadImage(d.avatar).catch(() => null) : null;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(120, 120, 70, 0, Math.PI * 2);
+  ctx.clip();
+  if (av) ctx.drawImage(av, 50, 50, 140, 140);
+  else { ctx.fillStyle = '#2a2d36'; ctx.fillRect(50, 50, 140, 140); }
+  ctx.restore();
+  ctx.strokeStyle = SAND;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(120, 120, 73, 0, Math.PI * 2);
+  ctx.stroke();
+  const left = 230;
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 34px "Texz Sans Bold", sans-serif';
+  ctx.fillText(fit(ctx, d.name, QW - left - 60), left, 82);
+  ctx.fillStyle = '#8b8f9a';
+  ctx.font = '400 18px "Texz Sans", sans-serif';
+  ctx.fillText(fit(ctx, `${new Date(d.at).toISOString().slice(0, 16).replace('T', ' ')} UTC · ${d.where}`, QW - left - 60), left, 112);
+  ctx.fillStyle = '#e6e1d6';
+  ctx.font = '400 30px "Texz Sans", sans-serif';
+  lines.forEach((l, i) => ctx.fillText(l, left, 165 + i * 42));
+  if (img) {
+    const y = 150 + lines.length * 42 + 20;
+    ctx.save();
+    rounded(ctx, left, y, imgW, imgH, 14);
+    ctx.clip();
+    ctx.drawImage(img, left, y, imgW, imgH);
+    ctx.restore();
+  }
+  return c.toBuffer('image/png');
+}

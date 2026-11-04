@@ -21,6 +21,7 @@ import { onServerComponent, server } from '../modules/server.js';
 import { onSetup, useModules } from '../features/setup.js';
 import { RED, card, type Kind } from '../theme.js';
 import { report } from '../ops.js';
+import { quoteCommand } from '../modules/quote.js';
 import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
 
@@ -72,6 +73,7 @@ const serverOnly = { integration_types: [0], contexts: [InteractionContextType.G
 
 const visible = modules.flatMap((m) => m.commands.filter((c) => !c.hidden));
 export const definitions: Json[] = [
+  quoteCommand as unknown as Json,
   ...visible.filter((c) => !c.group).map((c) => ({ ...c.data, ...(anywhereTop.has(c.name) ? everywhere : c.data.contexts ? {} : serverOnly) })),
   ...Object.entries(groups).map(([name, g]) => ({
     name,

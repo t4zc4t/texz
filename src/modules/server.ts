@@ -161,8 +161,6 @@ export function startServerTimers(client: Client, store: Store) {
   };
   setInterval(() => void tick(), 30_000);
   void tick();
-  client.on(Events.MessageReactionAdd, (r) => void onStar(store, r).catch((e) => report('starboard', e)));
-  client.on(Events.MessageReactionRemove, (r) => void onStar(store, r).catch((e) => report('starboard', e)));
   client.on(Events.GuildMemberAdd, (m) => store.countDay(m.guild.id, 'join', 'all'));
   client.on(Events.GuildMemberRemove, (m) => store.countDay(m.guild.id, 'leave', 'all'));
 }

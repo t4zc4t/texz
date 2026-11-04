@@ -58,7 +58,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { label: 'Levels, xp and reward roles', value: 'levels', emoji: '🎖️' },
       { label: 'Birthday greetings and role', value: 'birthdays', emoji: '🎂' },
       { label: 'Bulletins: F1, football, anime', value: 'bulletins', emoji: '🗞️' },
-      { label: 'Starboard', value: 'starboard', emoji: '⭐' },
+      { label: 'Quotes channel', value: 'quotes', emoji: '🖼️' },
       { label: 'Character of the day', value: 'cotd', emoji: '🎭' },
       { label: 'Tickets', value: 'tickets', emoji: '🎫' },
       { label: 'Gifs for each moment', value: 'gifs', emoji: '🎞️' },
@@ -270,25 +270,14 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
     );
   }
 
-  if (page === 'starboard') {
-    title = 'Starboard';
-    const sb = g.starboard;
-    body = `Messages that collect enough ${sb.emoji} get reposted in the starboard channel with a link back. The count keeps updating as people react.`;
-    fields.push(
-      { name: '📌 Channel', value: ch(sb.channel), inline: true },
-      { name: `${sb.emoji} Needed`, value: String(sb.min), inline: true },
-      { name: '🙋 Own stars', value: sb.self ? 'count' : 'don\'t count', inline: true },
-    );
+  if (page === 'quotes') {
+    title = 'Quotes';
+    body = 'Right-click any message → Apps → **Quote** and Texz turns it into a picture with the avatar, the words and any image. With a quotes channel picked they all get hung there, otherwise the quote shows up where it was asked for.';
+    fields.push({ name: '🖼️ Quotes channel', value: ch(g.quotes.channel), inline: true });
     comps.push(
-      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'sbch')).setPlaceholder('📌 Starboard channel (empty = off)')
-        .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(sb.channel ? [sb.channel] : [])),
-      row(new StringSelectMenuBuilder().setCustomId(id(owner, 'sbmin')).setPlaceholder('How many reactions it takes').addOptions(
-        [1, 2, 3, 4, 5, 7, 10, 15, 20].map((n) => ({ label: `${n} reaction${n === 1 ? '' : 's'}`, value: String(n), default: sb.min === n })))),
-      row(
-        new ButtonBuilder().setCustomId(id(owner, 'sbemoji')).setLabel(`Emoji: ${sb.emoji}`.slice(0, 80)).setStyle(ButtonStyle.Secondary),
-        toggle(owner, 'sbself', '', 'Own stars count', sb.self, '🙋'),
-        back(owner),
-      ),
+      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'qch')).setPlaceholder('🖼️ Quotes channel (empty = where it was asked)')
+        .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(g.quotes.channel ? [g.quotes.channel] : [])),
+      row(back(owner)),
     );
   }
 
@@ -419,7 +408,7 @@ const pageOf: Record<string, string> = {
   arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
   clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
-  bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
+  qch: 'quotes', bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
   noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
@@ -579,6 +568,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'clean') g.autoclean = Number(values[0]) || 0;
     if (action === 'sbch') g.starboard.channel = values[0] ?? null;
     if (action === 'cotdch') g.daily.channel = values[0] ?? null;
+    if (action === 'qch') g.quotes.channel = values[0] ?? null;
     if (action === 'bulon' && (arg === 'f1' || arg === 'football' || arg === 'anime')) g.bulletins[arg].on = !g.bulletins[arg].on;
     if (action === 'bulopt') {
       if (arg === 'facts') g.bulletins.f1.facts = !g.bulletins.f1.facts;

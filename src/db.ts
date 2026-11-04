@@ -69,6 +69,7 @@ export interface GuildSettings {
   // channel for the character of the day
   daily: { channel: string | null };
   bulletins: Bulletins;
+  quotes: { channel: string | null };
 }
 
 export interface Feed { on: boolean; channel: string | null; role: string | null }
@@ -419,6 +420,7 @@ export class Store {
       starboard: { channel: null, emoji: '⭐', min: 3, self: false, ...saved.starboard },
       tickets: { category: null, staff: null, log: null, ...saved.tickets },
       daily: { channel: null, ...saved.daily },
+      quotes: { channel: null, ...saved.quotes },
       bulletins: (() => {
         const d = defaultBulletins();
         const b: Partial<Bulletins> = saved.bulletins ?? {};

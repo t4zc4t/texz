@@ -20,7 +20,7 @@ function check(where: string, opts: Opt[] = []) {
 
 test('every slash command is valid for discord', () => {
   assert.ok(definitions.length <= 100);
-  for (const d of definitions) {
+  for (const d of definitions.filter((x) => (x as { type?: number }).type !== 3)) {
     assert.match(d.name, /^[\p{Ll}\p{N}_-]{1,32}$/u, `bad command name ${d.name}`);
     assert.ok(d.description.length >= 1 && d.description.length <= 100, `${d.name}: description length ${d.description.length}`);
     check(d.name, d.options as Opt[]);
@@ -36,7 +36,7 @@ test('every setup page fits discord limits', async () => {
   g.levels.rewards = { '5': '111111111111111111' };
   store.saveGuild('g1', g);
   const guild = { id: 'g1', roles: { cache: new Map() }, client: { application: { owner: { id: '123456789012345678' } } } } as never;
-  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'rewards', 'lvxp', 'birthdays', 'starboard', 'tickets', 'cotd', 'bulletins', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
+  const pages = ['home', 'features', 'welcome', 'autorole', 'mod', 'levels', 'rewards', 'lvxp', 'birthdays', 'quotes', 'tickets', 'cotd', 'bulletins', 'gifs', ...modules.filter((m) => !m.locked).map((m) => `f:${m.name}`)];
   for (const p of pages) {
     const v = setupPanel(store, guild, '123456789012345678', p);
     assert.ok(v.components.length >= 1 && v.components.length <= 5, `${p}: rows`);
