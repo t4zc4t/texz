@@ -1,4 +1,5 @@
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { Client } from 'discord.js';
 import type { Store } from './db.js';
@@ -60,7 +61,20 @@ export function startOps(c: Client, s: Store) {
   daily();
   setInterval(daily, 3_600_000);
   // the tray icon reads this to tell "online" from "running but stuck"
-  const beat = () => { try { writeFileSync('.alive', String(c.isReady() ? Date.now() : 0)); } catch { /* read-only folder, no tray then */ } };
+  const beat = () => {
+    try { writeFileSync('.alive', String(c.isReady() ? Date.now() : 0)); } catch { /* read-only folder, no tray then */ }
+    // dropping a .restart file asks for a clean exit, the tray or runner starts the new build
+    if (existsSync('.restart')) { rmSync('.restart', { force: true }); console.log('restart asked for, exiting'); process.exit(0); }
+  };
   beat();
   setInterval(beat, 30_000);
+}
+
+// slash commands are registered again only when they changed, so a new build never needs a manual deploy
+export async function syncCommands(c: Client<true>, s: Store, defs: unknown[]) {
+  const hash = createHash('sha256').update(JSON.stringify(defs)).digest('hex');
+  if (s.getKv('commandsHash') === hash) return;
+  await c.application.commands.set(defs as never);
+  s.setKv('commandsHash', hash);
+  console.log(`slash commands updated: ${defs.length}`);
 }
