@@ -27,7 +27,7 @@ function rulesText(store: Store, guildId: string) {
   return out.join('\n');
 }
 
-const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '🎖️', utility: '🧰', anime: '📺', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴', bulletins: '🗞️' };
+const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '🎖️', utility: '🧰', anime: '📺', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴', bulletins: '🗞️', spawns: '🎯' };
 
 // both ways to run a command, written the same way everywhere in help
 function forms(c: Command, prefix: string) {
@@ -35,10 +35,11 @@ function forms(c: Command, prefix: string) {
   const opts = (c.data.options ?? []) as { name: string; required?: boolean; type: number }[];
   const slashArgs = opts.filter((o) => o.type !== 1 && o.type !== 2).map((o) => (o.required ? `<${o.name}>` : `[${o.name}]`)).join(' ');
   const textArgs = (t.args ?? []).map((a) => (opts.find((o) => o.name === a)?.required ? `<${a}>` : `[${a}]`)).join(' ');
-  const short = t.aliases?.length ? ` · short: ${t.aliases.slice(0, 3).map((a) => `\`${prefix} ${a}\``).join(' ')}` : '';
+  const short = c.group || t.aliases?.length ? ` · short: ${[...(c.group ? [c.name] : []), ...(t.aliases ?? [])].slice(0, 3).map((a) => `\`${prefix} ${a}\``).join(' ')}` : '';
   return {
     slash: `\`/${slashPath(c)}${slashArgs ? ` ${slashArgs}` : ''}\``,
-    text: `\`${prefix} ${c.name}${textArgs ? ` ${textArgs}` : ''}\`${short}`,
+    // typed mirrors slash, "tz owo huntbot" for "/owo view:huntbot", the short names still work
+    text: `\`${prefix} ${c.group ? `${c.group} ${c.as ?? c.name}` : c.name}${textArgs ? ` ${textArgs}` : ''}\`${short}`,
   };
 }
 

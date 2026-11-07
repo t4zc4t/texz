@@ -100,6 +100,8 @@ const bank = {
   f1Soon: ['Engines in an hour. Find a snack, I already have mine.', 'One hour to go. Even Kunikida-kun puts his notebook down for this.'],
   f1Result: ['The timesheet has spoken. Some smiling, some sulking, as usual.', 'Results are in. Fast people did fast things.'],
   f1Win: ['A winner! Champagne for them, paperwork for Kunikida-kun.', 'Chequered flag. Somebody\'s having a very good day.'],
+  f1Quiz: ['Lights out for your brain. Twenty seconds.', 'Paddock pop quiz. No pit stops allowed.'],
+  f1QuizWin: ['Pole position for you. Kunikida-kun is taking notes.', 'Right answer, clean lap. Very tidy.'],
   f1Fact: ['A little paddock trivia, for the curious.', 'Did you know? Now you do. You\'re welcome.'],
   fbDay: ['Today\'s fixtures worth skipping work for. Don\'t tell Kunikida-kun.', 'The matches that matter today. I checked, so you don\'t have to.'],
   fbSoon: ['Kick-off soon. Pick a side, or be clever and pick both.', 'Thirty minutes. Snacks, seats, nerves.'],

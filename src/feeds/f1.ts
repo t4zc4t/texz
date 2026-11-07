@@ -49,3 +49,10 @@ const teamDots: [RegExp, string][] = [
   [/williams/i, '🔷'], [/haas/i, '⬜'], [/audi|sauber/i, '⬛'], [/\brb\b|racing bulls|visa/i, '🔹'], [/cadillac/i, '🟨'],
 ];
 export const teamDot = (team: string) => teamDots.find(([re]) => re.test(team))?.[1] ?? '▫️';
+
+export interface Fact { id: string; category: string; text: string; link?: string }
+export interface QuizQ { id: string; q: string; options: string[]; answer: number; explain: string; difficulty: string; category: string; link?: string }
+export const facts = () => get<{ facts: Fact[] }>('trivia/facts.json', 6 * 60 * 60_000);
+export const quiz = () => get<{ questions: QuizQ[] }>('trivia/quiz.json', 6 * 60 * 60_000);
+export const onThisDay = () => get<{ days: Record<string, { text: string; year: number; link?: string }[]> }>('trivia/onthisday.json', 6 * 60 * 60_000);
+export const siteLink = (path?: string) => (path ? `${SITE}${path.startsWith('/') ? '' : '/'}${path}` : SITE);

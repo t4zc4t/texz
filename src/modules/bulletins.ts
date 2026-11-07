@@ -6,7 +6,8 @@ import type { Bulletins, Feed, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { card } from '../theme.js';
 import { report } from '../ops.js';
-import { SITE, bigSession, flagOf, home, nextRound, questions, schedule, teamDot, type Round } from '../feeds/f1.js';
+import { SITE, bigSession, facts, flagOf, home, nextRound, onThisDay, questions, schedule, siteLink, teamDot, type Round } from '../feeds/f1.js';
+import { quizButton, quizRound } from './f1quiz.js';
 import { clubDot, interesting, leagues, matches, scoreLine, type Match } from '../feeds/football.js';
 import { airingOn, searchMedia, titleOf, type Media } from '../anime/anilist.js';
 
@@ -195,15 +196,39 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
       const climb = [...h.lastRace.results].filter((d) => d.grid > 0).sort((x, y) => (y.grid - Number(y.pos)) - (x.grid - Number(x.pos)))[0];
       if (climb && climb.grid - Number(climb.pos) > 3) made.push({ q: `Who climbed the most in ${h.lastRace.name}?`, answer: `${climb.driver}, from P${climb.grid} to P${climb.pos}.`, body: `${climb.grid - Number(climb.pos)} places gained in one afternoon for ${climb.team}.` });
     }
-    const pool = [...qs, ...made];
     const day = Math.floor(now / (24 * HOUR));
-    const q = pool.length ? pool[day % pool.length] : null;
-    if (q) {
+    // every other evening is one of the site's short trivia facts, the rest are questions
+    const fs = (await facts().catch(() => null))?.facts ?? [];
+    const pool = [...qs, ...made];
+    let embed: ReturnType<typeof card> | null = null;
+    let more = `${SITE}/questions`;
+    if (fs.length && (day % 2 === 0 || !pool.length)) {
+      const f = fs[Math.floor(day / 2) % fs.length];
+      embed = card({ kind: 'f1Fact', title: 'Paddock trivia', emoji: '🗞️', color: names.f1.color, gif: 'off', body: f.text.slice(0, 900) });
+      more = siteLink(f.link);
+    } else if (pool.length) {
+      const q = pool[day % pool.length];
+      embed = card({ kind: 'f1Fact', title: q.q, emoji: '🗞️', color: names.f1.color, gif: 'off', body: `**${q.answer}**\n\n${q.body.slice(0, 700)}` });
+    }
+    if (embed) {
       for (const [gid, b] of live) {
         if (!b.f1.facts || !store.firstTime(gid, `f1:fact:${day}`)) continue;
+        await post(client, b.f1, { embed, buttons: [link(more, 'More on Parc Fermé'), quizButton()] });
+      }
+    }
+  }
+  // on this day in F1, mid morning in India
+  if (d.getUTCHours() === 5) {
+    const key = `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    const list = (await onThisDay().catch(() => null))?.days[key] ?? [];
+    if (list.length) {
+      const picks = [...list].sort((a, b) => a.year - b.year).slice(-4);
+      const body = picks.map((e) => `**${e.year}** · ${e.text}`).join('\n\n').slice(0, 1500);
+      for (const [gid, b] of live) {
+        if (!b.f1.facts || !store.firstTime(gid, `f1:otd:${key}:${d.getUTCFullYear()}`)) continue;
         await post(client, b.f1, {
-          embed: card({ kind: 'f1Fact', title: q.q, emoji: '🗞️', color: names.f1.color, gif: 'off', body: `**${q.answer}**\n\n${q.body.slice(0, 700)}` }),
-          buttons: [link(`${SITE}/questions`, 'More on Parc Fermé')],
+          embed: card({ kind: 'f1Fact', title: `On this day in F1 · ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`, emoji: '📅', color: names.f1.color, gif: 'off', body }),
+          buttons: [link(siteLink(picks.at(-1)?.link), 'Read on Parc Fermé'), quizButton()],
         });
       }
     }
@@ -350,12 +375,31 @@ const f1: Command = {
   name: 'f1',
   data: new SlashCommandBuilder().setName('f1').setDescription('Grand Prix: the next race, standings and the last result')
     .addStringOption((o) => o.setName('view').setDescription('Next race if empty')
-      .addChoices({ name: 'next race', value: 'next' }, { name: 'standings', value: 'standings' }, { name: 'last race', value: 'last' })).toJSON(),
+      .addChoices({ name: 'next race', value: 'next' }, { name: 'standings', value: 'standings' }, { name: 'last race', value: 'last' },
+        { name: 'quiz (win yen)', value: 'quiz' }, { name: 'trivia fact', value: 'trivia' }, { name: 'on this day', value: 'today' })).toJSON(),
   text: { aliases: ['gp'], args: ['view'] },
-  run: async (ctx) => {
+  run: async (ctx, store) => {
     const view = (ctx.str('view') ?? 'next').toLowerCase();
     const site = row(link(SITE, 'Parc Fermé'));
     try {
+      if (view.startsWith('quiz')) {
+        const r = await quizRound(ctx.channelId, !!ctx.guildId && store.rules(ctx.guildId, 'economy').enabled);
+        if (r.busy) return ctx.reply({ content: 'A question is already running here, answer that one first.', temp: true });
+        return ctx.reply({ embeds: r.embeds, components: r.components, public: true });
+      }
+      if (view.startsWith('triv') || view.startsWith('fact')) {
+        const fs = (await facts()).facts;
+        const f = fs[Math.floor(Math.random() * fs.length)];
+        return ctx.reply({ embeds: [card({ kind: 'f1Fact', title: 'Paddock trivia', emoji: '🗞️', color: names.f1.color, gif: 'off', body: f.text })], components: [row(link(siteLink(f.link), 'More on Parc Fermé'), quizButton())] });
+      }
+      if (view.startsWith('today') || view.startsWith('otd')) {
+        const d = new Date();
+        const key = `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+        const list = [...((await onThisDay()).days[key] ?? [])].sort((a, b) => a.year - b.year);
+        if (!list.length) return ctx.reply('Nothing on file for today. A quiet day in the paddock, for once.');
+        const body = list.slice(-6).map((e) => `**${e.year}** · ${e.text}`).join('\n\n').slice(0, 3500);
+        return ctx.reply({ embeds: [card({ kind: 'f1Fact', title: `On this day in F1 · ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`, emoji: '📅', color: names.f1.color, gif: 'off', body })], components: [row(link(siteLink(list.at(-1)?.link), 'Parc Fermé'), quizButton())] });
+      }
       if (view.startsWith('stand')) {
         const h = await home();
         const body = h.standings.slice(0, 10).map((d) => `\`${d.pos.padStart(2)}\` ${teamDot(d.team)} **${d.driver}** · ${d.team} · **${d.points}**${d.wins ? ` · ${d.wins}W` : ''}`).join('\n');

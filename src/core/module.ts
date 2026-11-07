@@ -8,6 +8,8 @@ export interface Command {
   // text form: extra names after the prefix and the order of positional args
   text?: { aliases?: string[]; args?: string[]; sub?: boolean; subArgs?: Record<string, string[]> };
   admin?: boolean;
+  // seconds between uses for one person, see cooldownOf in the registry
+  cooldown?: number;
   // slash commands are grouped, /owo huntbot instead of /huntbot, so the list stays short
   group?: string;
   // the name inside the group when it differs, /anime search for the "anime" text command

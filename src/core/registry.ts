@@ -8,6 +8,7 @@ import type { Store } from '../db.js';
 import { core, allModules } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
 import { anime, onAnimeComponent, onGuess } from '../modules/anime.js';
+import { onF1Quiz } from '../modules/f1quiz.js';
 import { economy } from '../modules/economy.js';
 import { bulletins, onBulletinButton } from '../modules/bulletins.js';
 import { onWatchlist } from '../modules/watchlist.js';
@@ -24,10 +25,11 @@ import { report } from '../ops.js';
 import { quoteCommand } from '../modules/quote.js';
 import { onProfileEdit } from '../modules/profile.js';
 import { onShip } from '../modules/ship.js';
+import { onSpawnButton, spawnsModule } from '../modules/spawns.js';
 import { fromComponent, fromSlash, fromText, withTokens, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
 
-export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins];
+export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule];
 allModules.push(...modules);
 useModules(modules);
 
@@ -50,6 +52,8 @@ const byText = new Map<string, Hit>();
 for (const mod of modules) for (const cmd of mod.commands) {
   byName.set(cmd.name, { mod, cmd });
   if (!cmd.hidden) bySlash.set(slashPath(cmd), { mod, cmd });
+  // typed "tz owo huntbot" mirrors "/owo view:huntbot"
+  if (cmd.group && !bySlash.has(`${cmd.group} ${cmd.as ?? cmd.name}`)) bySlash.set(`${cmd.group} ${cmd.as ?? cmd.name}`, { mod, cmd });
   for (const name of [cmd.name, ...(cmd.text?.aliases ?? [])]) byText.set(name, { mod, cmd });
 }
 
@@ -107,9 +111,30 @@ function gate(store: Store, ctx: Ctx, mod: Module, cmd: Command): Block | null {
   return null;
 }
 
-async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command) {
+// a short wait between uses so nobody floods a channel, longer for the ones that draw pictures or call outside sites
+const heavy = new Set(['rank', 'profile', 'ship', 'guess', 'f1', 'football', 'anime', 'manga', 'character', 'season', 'trending', 'recommend', 'airing', 'animehome', 'avatar', 'serverstats', 'rich', 'leaderboard', 'levels']);
+export const cooldownOf = (cmd: Command) => cmd.cooldown ?? (heavy.has(cmd.name) ? 8 : 3);
+const used = new Map<string, number>();
+export const clearCooldowns = () => used.clear();
+
+function coolingDown(ctx: Ctx, cmd: Command): number {
+  if (cmd.admin) return 0;
+  const key = `${ctx.userId}:${cmd.name}`;
+  const now = Date.now();
+  const until = used.get(key) ?? 0;
+  if (until > now) return Math.ceil((until - now) / 1000);
+  used.set(key, now + cooldownOf(cmd) * 1000);
+  // keep the map small
+  if (used.size > 5000) for (const [k, t] of used) if (t < now) used.delete(k);
+  return 0;
+}
+
+async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command, cool = true) {
   const blocked = gate(store, ctx, mod, cmd);
   if (blocked) return ctx.reply({ embeds: [card({ ...blocked, title: 'Not this time', emoji: '🚫', color: RED, gif: 'off' })], temp: true });
+  // buttons on dashboards move between pages, they don't count
+  const wait = cool ? coolingDown(ctx, cmd) : 0;
+  if (wait) return ctx.reply({ content: `⏳ Easy, give it **${wait}s**. Even Dazai takes breaks between schemes.`, temp: true });
   try {
     await cmd.run(ctx, store);
   } catch (e) {
@@ -192,6 +217,8 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onGiveawayButton(store, i)) return;
     if (await onServerComponent(store, i)) return;
     if (await onGuess(store, i)) return;
+    if (await onF1Quiz(store, i)) return;
+    if (await onSpawnButton(store, i)) return;
     if (await onProfileEdit(store, i)) return;
     if (await onShip(i)) return;
     if (await onBulletinButton(i, store)) return;
@@ -215,7 +242,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (!hit) return;
     // pages that belong to whoever opened them change in place, anyone else gets their own copy
     const edit = !!opts.owner && opts.owner === i.user.id;
-    return run(store, fromComponent(i, opts, edit), hit.mod, hit.cmd);
+    return run(store, fromComponent(i, opts, edit), hit.mod, hit.cmd, false);
   }
   const arm = parseArmId(i.customId);
   if (!arm) return;

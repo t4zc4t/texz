@@ -348,7 +348,7 @@ const remind: Command = {
     if (mins && note) {
       const at = new Date(Date.now() + Math.min(Math.max(mins, 1), 10080) * 60_000);
       const id = store.addReminder(ctx.userId, 'custom', at, note.slice(0, 200), ctx.channelId);
-      return ctx.reply({ content: `📝 Promise #${id}: **${note}**, <t:${unix(at)}:R>. ${say('remindAdd')}`, temp: true });
+      return ctx.reply({ content: `📝 Promise #${id}: **${note}**, <t:${unix(at)}:R>. ${say('remindAdd')}`, temp: false });
     }
     return ctx.reply(panel(store, ctx.userId, 'list'));
   },

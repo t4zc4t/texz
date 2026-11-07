@@ -1,10 +1,14 @@
-import { test } from 'node:test';
+import { beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Message } from 'discord.js';
 import { Store } from '../src/db.ts';
-import { onText, definitions } from '../src/core/registry.ts';
+import { clearCooldowns, onText, definitions } from '../src/core/registry.ts';
 
-function fake(content: string, opts: { admin?: boolean; channel?: string; roles?: string[] } = {}) {
+beforeEach(() => clearCooldowns());
+
+function fake(content: string, opts: { admin?: boolean; channel?: string; roles?: string[]; cooling?: boolean } = {}) {
+  // each fake message is a fresh moment unless the test is about cooldowns
+  if (!opts.cooling) clearCooldowns();
   const replies: { content?: string; embeds?: { data: { title?: string; description?: string } }[] }[] = [];
   const m = {
     content,
@@ -185,4 +189,24 @@ test('quick typed answers are queued for cleanup, cards are not', async () => {
   onText(store, b.m);
   await tick();
   assert.equal(store.dueDeletes(Date.now() + 31_000).length, 0);
+});
+
+test('commands cool down per person', async () => {
+  const store = new Store(':memory:');
+  const a = fake('tz coin');
+  onText(store, a.m);
+  await tick();
+  const b = fake('tz coin', { cooling: true });
+  onText(store, b.m);
+  await tick();
+  assert.match(said(b.replies[0]), /give it \*\*\d+s\*\*/);
+});
+
+test('typed commands mirror slash paths', async () => {
+  const store = new Store(':memory:');
+  for (const line of ['tz owo huntbot', 'tz owo hb', 'tz owo', 'tz levels perks', 'tz fun coin', 'tz anime airing']) {
+    const a = fake(line);
+    assert.equal(onText(store, a.m), true, line);
+    await tick();
+  }
 });
