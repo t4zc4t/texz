@@ -113,7 +113,7 @@ const birthday: Command = {
       if (!date) return ctx.reply('That date doesn\'t exist, even in my calendar. Like this: `tz bday set 14 feb`');
       store.setBirthday(ctx.userId, date.month, date.day);
       const tz = store.settings(ctx.userId).timezone;
-      return ctx.reply({ content: `🎂 **${fmtDate(date.month, date.day)}**, noted. ${say('birthdaySet')}\n-# I go by your timezone (${tz}), \`/owo remind\` → Settings changes it.`, temp: true });
+      return ctx.reply({ content: `🎂 **${fmtDate(date.month, date.day)}**, noted. ${say('birthdaySet')}\n-# I go by your timezone (${tz}), \`tz remind\` → Settings changes it.`, temp: true });
     }
     if (sub === 'remove') return ctx.reply(store.removeBirthday(ctx.userId) ? '🎂 Forgotten. Ageless, like me.' : 'I didn\'t have it anyway.');
     if (sub === 'check') {

@@ -36,7 +36,7 @@ test('prefix commands and aliases', async () => {
   const a = fake('tz status');
   assert.equal(onText(store, a.m), true);
   await tick();
-  assert.match(said(a.replies[0]), /Case file/);
+  assert.match(said(a.replies[0]), /OwO dashboard/);
 
   const b = fake('TZ hb');
   assert.equal(onText(store, b.m), true);
@@ -80,7 +80,7 @@ test('channel and role limits', async () => {
   const right = fake('tz status', { channel: '222222222222222222' });
   onText(store, right.m);
   await tick();
-  assert.match(said(right.replies[0]), /Case file/);
+  assert.match(said(right.replies[0]), /OwO dashboard/);
 
   onText(store, fake('tz config role owo add <@&333333333333333333>', { admin: true }).m);
   await tick();
@@ -91,7 +91,7 @@ test('channel and role limits', async () => {
   const withRole = fake('tz status', { channel: '222222222222222222', roles: ['333333333333333333'] });
   onText(store, withRole.m);
   await tick();
-  assert.match(said(withRole.replies[0]), /Case file/);
+  assert.match(said(withRole.replies[0]), /OwO dashboard/);
 });
 
 test('custom prefix', async () => {
@@ -153,11 +153,18 @@ test('per reminder routes and auto delete', async () => {
   assert.deepEqual(store.settings(u).routes, {});
 });
 
+const store0 = () => new Store(':memory:');
+
 test('grouped commands keep the slash list short and work typed too', async () => {
   assert.ok(definitions.length <= 20, `${definitions.length} top-level slash commands`);
   const owo = definitions.find((d) => d.name === 'owo')!;
-  const subs = (owo.options ?? []).map((o) => o.name);
+  const view = (owo.options ?? []).find((o) => o.name === 'view') as { choices: { value: string }[] };
+  const subs = view.choices.map((c) => c.value);
   assert.ok(subs.includes('huntbot') && subs.includes('top'));
+  const dash = fake('tz owo');
+  assert.equal(onText(store0(), dash.m), true);
+  await tick();
+  assert.match(said(dash.replies[0]), /OwO dashboard/);
   const store = new Store(':memory:');
   const a = fake('tz owo hb');
   assert.equal(onText(store, a.m), true);

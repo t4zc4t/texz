@@ -115,7 +115,7 @@ export async function onWatchlist(store: Store, i: Interaction): Promise<boolean
 
   // the list itself only turns pages for whoever opened it
   if ((tag === 'wl' || tag === 'wlf' || tag === 'wle') && a !== me) {
-    await i.reply({ content: 'Open your own with `/anime list view`.', flags: MessageFlags.Ephemeral });
+    await i.reply({ content: 'Open your own with `tz wl`.', flags: MessageFlags.Ephemeral });
     return true;
   }
   if (tag === 'wl' && i.isButton()) { await i.update(listPage(store, a, b, c, Number(d))); return true; }

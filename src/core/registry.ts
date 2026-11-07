@@ -24,7 +24,7 @@ import { report } from '../ops.js';
 import { quoteCommand } from '../modules/quote.js';
 import { onProfileEdit } from '../modules/profile.js';
 import { onShip } from '../modules/ship.js';
-import { fromComponent, fromSlash, fromText, type Ctx } from './ctx.js';
+import { fromComponent, fromSlash, fromText, withTokens, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
 
 export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins];
@@ -32,9 +32,9 @@ allModules.push(...modules);
 useModules(modules);
 
 // the grouped slash commands and who can see them by default
-const groups: Record<string, { description: string; perms?: bigint; anywhere?: boolean }> = {
-  owo: { description: 'OwO helper: timers, huntbot, gems, zoo, weapons, quests, shop and reminders', anywhere: true },
-  anime: { description: 'Anime and manga: search, characters, seasons, trending, alerts and your list', anywhere: true },
+const groups: Record<string, { description: string; perms?: bigint; anywhere?: boolean; dashboard?: string }> = {
+  owo: { description: 'OwO dashboard, or pick a view: huntbot, gems, zoo, weapons, quests, shop, reminders', anywhere: true, dashboard: 'status' },
+  anime: { description: 'Anime dashboard, a title to search, or pick a view: airing, list, guess and more', anywhere: true, dashboard: 'animehome' },
   mod: { description: 'Moderation: warn, timeout, kick, ban, purge, lock, slowmode and the case archive', perms: PermissionFlagsBits.ModerateMembers },
   levels: { description: 'Rank cards, the level leaderboard and xp tools' },
   info: { description: 'Profiles, avatars and the server', anywhere: true },
@@ -82,7 +82,13 @@ export const definitions: Json[] = [
     description: g.description,
     ...(g.anywhere ? everywhere : serverOnly),
     ...(g.perms ? { default_member_permissions: g.perms.toString() } : {}),
-    options: visible.filter((c) => c.group === name).map(asMember),
+    // dashboard commands are one command with a view picker and a free text box, no subcommands to remember
+    options: g.dashboard
+      ? [
+          { type: ApplicationCommandOptionType.String, name: 'view', description: 'Leave empty for the dashboard', choices: visible.filter((c) => c.group === name).map((c) => ({ name: c.as ?? c.name, value: c.as ?? c.name })) },
+          { type: ApplicationCommandOptionType.String, name: 'input', description: 'Whatever that view needs: a title, an id, @someone, a time', max_length: 200 },
+        ] as Opt[]
+      : visible.filter((c) => c.group === name).map(asMember),
   })).filter((d) => d.options.length),
 ];
 
@@ -113,6 +119,19 @@ async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command) {
 }
 
 export function onSlash(store: Store, i: ChatInputCommandInteraction) {
+  const dash = groups[i.commandName]?.dashboard;
+  if (dash) {
+    let view = i.options.getString('view');
+    const input = i.options.getString('input') ?? '';
+    // "/anime input:frieren" is a search
+    if (!view && input && i.commandName === 'anime') view = 'search';
+    const hit = view ? bySlash.get(`${i.commandName} ${view}`) : byName.get(dash);
+    if (!hit) return;
+    const t = hit.cmd.text;
+    const tokens = input.split(/\s+/).filter(Boolean);
+    const args = t?.sub ? t.subArgs?.[tokens[0]?.toLowerCase() ?? ''] ?? [] : t?.args ?? [];
+    return run(store, withTokens(fromSlash(i, null), tokens, args, !!t?.sub), hit.mod, hit.cmd);
+  }
   if (groups[i.commandName]) {
     const group = i.options.getSubcommandGroup(false);
     const sub = i.options.getSubcommand(false);
@@ -143,7 +162,8 @@ export function onText(store: Store, m: Message): boolean {
     ? bySlash.get(`${name} ${next}`) ?? (byText.get(next)?.cmd.group === name ? byText.get(next) : undefined)
     : undefined;
   if (member) { tokens.shift(); name = member.cmd.name; }
-  const hit = member ?? byText.get(name);
+  // "tz owo" on its own opens the dashboard
+  const hit = member ?? byText.get(name) ?? (groups[name]?.dashboard ? byName.get(groups[name].dashboard!) : undefined);
   if (!hit) return false;
   // "tzatziki" shouldn't trigger anything, only a space or a real command name after the prefix
   if (!/^\s/.test(body) && !byText.has(body.split(/\s+/)[0].toLowerCase())) return false;
@@ -185,10 +205,12 @@ export async function onComponent(store: Store, i: Interaction) {
   if (!i.isButton() && !i.isStringSelectMenu()) return;
   // "nav|command|option=value" buttons open another screen, just for whoever pressed it
   if (i.customId.startsWith('nav|')) {
-    const [, name, extra] = i.customId.split('|');
+    let [, name, extra] = i.customId.split('|');
+    // the "open anything" menus carry the command in the picked value
+    if (name === 'pick' && i.isStringSelectMenu()) name = i.values[0];
     const opts: Record<string, string> = {};
     if (extra) for (const pair of extra.split(',')) { const [k, v] = pair.split('='); opts[k] = v; }
-    if (i.isStringSelectMenu()) opts[opts.as ?? 'value'] = i.values[0];
+    if (i.isStringSelectMenu() && i.customId.split('|')[1] !== 'pick') opts[opts.as ?? 'value'] = i.values[0];
     const hit = byName.get(name);
     if (!hit) return;
     // pages that belong to whoever opened them change in place, anyone else gets their own copy

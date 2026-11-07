@@ -2,6 +2,7 @@ import { PermissionFlagsBits, SlashCommandBuilder, type Message } from 'discord.
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { card, say } from '../theme.js';
+import { levelOf, perksFor } from './levels.js';
 
 export const YEN = '¥';
 // daily pay grows with the streak for a week, chat pays a little once a minute
@@ -20,7 +21,9 @@ export function claimDaily(store: Store, guildId: string, userId: string): { ok:
     return { ok: false, next: midnight };
   }
   const streak = w.daily_day === yesterday() ? w.streak + 1 : 1;
-  const got = DAILY_BASE + DAILY_STEP * Math.min(streak - 1, 6);
+  // higher Agency ranks get a bigger daily
+  const rankBonus = store.rules(guildId, 'levels').enabled ? perksFor(levelOf(store.xpOf(guildId, userId).xp).level).yen : 0;
+  const got = DAILY_BASE + DAILY_STEP * Math.min(streak - 1, 6) + rankBonus;
   store.pay(guildId, userId, got, { daily_day: today(), streak });
   return { ok: true, got, streak };
 }

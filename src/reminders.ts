@@ -112,7 +112,8 @@ function line(store: Store, r: Reminder): string | null {
 async function deliver(client: Client, store: Store, r: Reminder, body: EmbedBuilder) {
   const s = store.settings(r.user_id);
   const key = r.kind.startsWith('ep:') ? 'anime' : routeOf[r.kind] ?? '';
-  const where = s.routes[key] ?? s.delivery;
+  // episode alerts go by DM unless someone asks for a channel, so they never land in a random chat
+  const where = key === 'anime' ? s.routes.anime ?? 'dm' : s.routes[key] ?? s.delivery;
   if (where === 'dm' || r.kind === 'urgent') {
     try {
       const user = await client.users.fetch(r.user_id);
@@ -126,6 +127,11 @@ async function deliver(client: Client, store: Store, r: Reminder, body: EmbedBui
   if (!channelId) return;
   const ch = await client.channels.fetch(channelId).catch(() => null);
   if (!ch?.isSendable()) return;
+  // new episodes go to the server's screenings channel, where followers get mentioned, never to general
+  if (r.kind.startsWith('ep:') && 'guildId' in ch && ch.guildId) {
+    const b = store.guild(ch.guildId).bulletins.anime;
+    if (b.on && b.channel && store.rules(ch.guildId, 'bulletins').enabled) return;
+  }
   const text = r.kind === 'urgent' ? null : line(store, r);
   const sent = text
     ? await ch.send({ content: `<@${r.user_id}> ${text}`.slice(0, 2000), allowedMentions: { users: [r.user_id] } })

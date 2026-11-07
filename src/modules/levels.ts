@@ -31,6 +31,26 @@ export const ranks = [
 ];
 export const rankFor = (level: number) => [...ranks].reverse().find((r) => level >= r.at)!;
 
+// what each rank earns: a bit more xp, a bigger daily, extra giveaway chances, and a spot of its own in the member list
+export const perks: Record<string, { xp: number; yen: number; tickets: number; hoist: boolean }> = {
+  'Stray': { xp: 1, yen: 0, tickets: 1, hoist: false },
+  'Agency Visitor': { xp: 1, yen: 10, tickets: 1, hoist: false },
+  'Errand Runner': { xp: 1.05, yen: 20, tickets: 1, hoist: false },
+  'Junior Detective': { xp: 1.05, yen: 30, tickets: 1, hoist: false },
+  'Field Investigator': { xp: 1.1, yen: 40, tickets: 1, hoist: false },
+  'Senior Detective': { xp: 1.1, yen: 60, tickets: 1, hoist: true },
+  'Ability User': { xp: 1.15, yen: 80, tickets: 2, hoist: true },
+  'Agency Elite': { xp: 1.2, yen: 100, tickets: 2, hoist: true },
+  'Strategist': { xp: 1.25, yen: 150, tickets: 2, hoist: true },
+  'Living Legend of Yokohama': { xp: 1.3, yen: 250, tickets: 3, hoist: true },
+};
+export const perksFor = (level: number) => perks[rankFor(level).name];
+export const perkLine = (name: string) => {
+  const p = perks[name];
+  const bits = [p.xp > 1 && `+${Math.round((p.xp - 1) * 100)}% xp`, p.yen && `+¥${p.yen} daily`, p.tickets > 1 && `${p.tickets}x giveaway chance`, p.hoist && 'own spot in the member list'].filter(Boolean);
+  return bits.join(' · ') || 'nothing yet, everyone starts somewhere';
+};
+
 // every multiplier that applies right now, so the rank card and /setup can show the same maths giveXp uses
 export function boostsFor(l: LevelRules, member: GuildMember | null, channelId: string | null, parentId: string | null, now = Date.now()) {
   const parts: { why: string; x: number }[] = [];
@@ -87,7 +107,8 @@ export async function giveXp(store: Store, m: Message) {
   const before = store.xpOf(m.guild.id, m.author.id);
   if (Date.now() - before.last_at < l.cooldown * 1000) return;
   const base = l.min + Math.floor(Math.random() * (Math.max(l.min, l.max) - l.min + 1));
-  const gain = Math.max(1, Math.round(base * boostsFor(l, m.member, m.channelId, parentId).total));
+  const rankX = perksFor(levelOf(before.xp).level).xp;
+  const gain = Math.max(1, Math.round(base * boostsFor(l, m.member, m.channelId, parentId).total * rankX));
   store.addXp(m.guild.id, m.author.id, gain);
   const was = levelOf(before.xp).level;
   const now = levelOf(before.xp + gain).level;
@@ -139,6 +160,19 @@ const levels: Command = {
         }).join('\n')
       : 'Nobody has said a word yet. A quiet Agency. Suspicious.';
     return ctx.reply({ embeds: [card({ kind: 'levels', title: 'Agency roster', emoji: '📜', gif: 'off', body })], private: false });
+  },
+};
+
+const perksCmd: Command = {
+  name: 'perks',
+  group: 'levels',
+  data: new SlashCommandBuilder().setName('perks').setDescription('What every Agency rank earns, and where you are').toJSON(),
+  text: { aliases: ['rankperks'] },
+  run: (ctx, store) => {
+    const lvl = ctx.guildId ? levelOf(store.xpOf(ctx.guildId, ctx.userId).xp).level : 0;
+    const mine = rankFor(lvl).name;
+    const body = ranks.map((r) => `${r.name === mine ? '▶️' : r.emoji} **${r.name}** · lvl ${r.at}\n-# ${perkLine(r.name)}`).join('\n');
+    return ctx.reply({ embeds: [card({ kind: 'levelSetup', title: 'Agency ranks and perks', emoji: '🎖️', gif: 'off', body, fields: [{ name: 'You', value: `${mine} · level ${lvl}`, inline: true }] })] });
   },
 };
 
@@ -206,6 +240,6 @@ export const levelsModule: Module = {
   name: 'levels',
   label: 'Levels and ranks',
   about: 'Chat xp and Agency ranks from Stray to Living Legend. Reward roles, xp rates, boosts and no-xp zones are in /setup, admins move xp with /levels xp',
-  commands: [rank, levels, xp],
+  commands: [rank, levels, perksCmd, xp],
 };
 

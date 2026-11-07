@@ -143,3 +143,32 @@ export function fromText(m: Message, tokens: string[], argNames: string[], hasSu
     },
   };
 }
+
+// slash commands with one free "input" box read it the same way typed commands are read
+export function withTokens(base: Ctx, tokens: string[], argNames: string[], hasSub: boolean): Ctx {
+  const rest = [...tokens];
+  const sub = hasSub ? (rest.shift()?.toLowerCase() ?? null) : null;
+  const values = new Map<string, string>();
+  argNames.forEach((name, idx) => {
+    if (!rest.length) return;
+    values.set(name, idx === argNames.length - 1 ? rest.splice(0).join(' ') : rest.shift()!);
+  });
+  const id = (n: string, re: RegExp) => values.get(n)?.match(re)?.[1] ?? null;
+  return {
+    ...base,
+    viaText: true,
+    sub: () => sub,
+    str: (n) => values.get(n) ?? null,
+    int: (n) => {
+      const v = Number.parseInt(values.get(n) ?? '', 10);
+      return Number.isNaN(v) ? null : v;
+    },
+    bool: (n) => {
+      const v = values.get(n)?.toLowerCase();
+      return v === undefined ? null : ['on', 'yes', 'true', 'enable', '1'].includes(v);
+    },
+    user: (n) => id(n, /^<@!?(\d+)>$/) ?? values.get(n)?.match(/^(\d{15,})$/)?.[1] ?? null,
+    channel: (n) => id(n, /^<#(\d+)>$/) ?? values.get(n)?.match(/^(\d{15,})$/)?.[1] ?? null,
+    role: (n) => id(n, /^<@&(\d+)>$/) ?? values.get(n)?.match(/^(\d{15,})$/)?.[1] ?? null,
+  };
+}

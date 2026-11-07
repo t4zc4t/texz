@@ -5,7 +5,7 @@ import {
 import type { Giveaway, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { parseLength, human } from './moderation.js';
-import { levelOf } from './levels.js';
+import { levelOf, perksFor } from './levels.js';
 import { card } from '../theme.js';
 
 export interface GiveawayRules {
@@ -21,6 +21,9 @@ export interface GiveawayRules {
   // role → tickets, the best one counts
   bonusRoles: Record<string, number>;
 }
+
+// high Agency ranks get extra chances, when levels are on
+const rankTickets = (store: Store, m: GuildMember) => (store.rules(m.guild.id, 'levels').enabled ? perksFor(levelOf(store.xpOf(m.guild.id, m.id).xp).level).tickets : 1);
 
 const noRules = (): GiveawayRules => ({ needRoles: [], blockRoles: [], minLevel: 0, minMessages: 0, minAccountDays: 0, minServerDays: 0, boosterBonus: 1, bonusRoles: {} });
 const rulesOf = (g: Giveaway): GiveawayRules => ({ ...noRules(), ...JSON.parse(g.rules) });
@@ -41,8 +44,8 @@ export function blocker(store: Store, r: GiveawayRules, m: GuildMember, now = Da
   return null;
 }
 
-export function tickets(r: GiveawayRules, m: GuildMember): number {
-  const boost = m.premiumSinceTimestamp ? r.boosterBonus : 1;
+export function tickets(r: GiveawayRules, m: GuildMember, rank = 1): number {
+  const boost = Math.max(m.premiumSinceTimestamp ? r.boosterBonus : 1, rank);
   const role = Math.max(1, ...m.roles.cache.map((x) => r.bonusRoles[x.id] ?? 1));
   return Math.max(boost, role);
 }
@@ -123,7 +126,7 @@ async function pickWinners(guild: Guild, store: Store, g: Giveaway, count: numbe
     const m = await guild.members.fetch(id).catch(() => null);
     // conditions are checked again at the draw, leaving the server or losing a role counts
     if (!m || blocker(store, r, m)) continue;
-    pool.push({ who: id, weight: tickets(r, m) });
+    pool.push({ who: id, weight: tickets(r, m, rankTickets(store, m)) });
   }
   return draw(pool, count);
 }
@@ -182,7 +185,7 @@ export async function onGiveawayButton(store: Store, i: Interaction): Promise<bo
     return true;
   }
   store.toggleEntry(g.id, i.user.id);
-  const n = tickets(rulesOf(g), m!);
+  const n = tickets(rulesOf(g), m!, rankTickets(store, m!));
   await i.reply({ content: `🎟️ You're in${n > 1 ? ` with **${n}x** the chance` : ''}. Good luck, not that luck is a real thing.`, flags: MessageFlags.Ephemeral });
   refreshSoon(i.client, store, g.id);
   return true;

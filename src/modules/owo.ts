@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, StringSelectMenuBuilder, ButtonStyle, SlashCommandBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Ctx } from '../core/ctx.js';
 import type { Command, Module } from '../core/module.js';
@@ -71,11 +71,28 @@ const status: Command = {
       const e = hb.traits.efficiency;
       fields.push({ name: '🤖 Huntbot', value: [g ? `Gain **${g.level}**` : null, e ? `Efficiency **${e.level}**` : null, a.pick ? `next up: **${a.pick}**` : null].filter(Boolean).join(' · '), inline: false });
     }
+    // the rest of the dashboard: quests, armoury, reminders and today's shop at a glance
+    const glance: string[] = [];
+    const q = store.snapshot<{ allDone: boolean; lines: string[] }>(ctx.userId, 'quests')?.data;
+    if (q) glance.push(q.allDone ? '📜 quests all done' : `📜 ${q.lines.length} quest line${q.lines.length === 1 ? '' : 's'} open`);
+    const arm = store.snapshot<[string, unknown][]>(ctx.userId, 'armoury')?.data;
+    if (arm) glance.push(`⚔️ ${arm.length} weapons on file`);
+    const queued = store.userReminders(ctx.userId).filter((r) => !['reset', 'lastcall'].includes(r.kind));
+    if (queued.length) glance.push(`⏰ ${queued.length} reminder${queued.length === 1 ? '' : 's'} queued, next <t:${Math.floor(Math.min(...queued.map((r) => r.due_at)) / 1000)}:R>`);
+    const shopSnap = store.snapshot<{ until: number | null }>('*', 'shop');
+    if (shopSnap && (!shopSnap.data.until || shopSnap.data.until > Date.now())) glance.push('🛒 today\'s weapon shop is on file, `tz shop`');
+    if (glance.length) fields.push({ name: '🧭 At a glance', value: glance.join('\n'), inline: false });
     const nav = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      ...[['huntbot', '🤖', 'Huntbot'], ['armoury', '⚔️', 'Armoury'], ['zoo', '🦁', 'Zoo'], ['stats', '📈', 'Week'], ['settings', '🎛️', 'Reminders']]
+      ...[['huntbot', '🤖', 'Huntbot'], ['armoury', '⚔️', 'Armoury'], ['zoo', '🦁', 'Zoo'], ['quests', '📜', 'Quests'], ['settings', '🎛️', 'Reminders']]
         .map(([cmd, emoji, label]) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId},back=status`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary)),
     );
-    return ctx.reply({ embeds: [card({ kind: 'status', title: 'Case file', emoji: '🗂️', fields, gif: gifFor(store, ctx, 'status') })], components: [nav] });
+    const more = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      new StringSelectMenuBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=status`).setPlaceholder('📂 Open anything else').addOptions(
+        { label: 'Gems', value: 'gems', emoji: '💎' }, { label: 'Team', value: 'team', emoji: '🐾' }, { label: 'Weapon shop', value: 'shop', emoji: '🛒' },
+        { label: 'Weekly stats', value: 'stats', emoji: '📈' }, { label: 'Leaderboard', value: 'leaderboard', emoji: '🏆' },
+        { label: 'Reminders queued', value: 'remind', emoji: '⏰' }, { label: 'Buddies', value: 'buddy', emoji: '🤝' },
+      ));
+    return ctx.reply({ embeds: [card({ kind: 'status', title: 'OwO dashboard', emoji: '🗂️', fields, gif: gifFor(store, ctx, 'status') })], components: [nav, more] });
   },
 };
 

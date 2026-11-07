@@ -52,7 +52,7 @@ Greetings, goodbyes and the autorole are set in `/setup`: pick the channels and 
 
 ## Levels
 
-Levels are off until an admin switches them on in `/setup`. Then one message a minute earns 15 to 25 xp, so chatting counts and spam doesn't. Levels come with Agency ranks, from Stray and Agency Visitor up through Junior Detective, Ability User and Strategist to Living Legend of Yokohama. `tz rank` draws your rank card as an image, with your avatar, rank, position and progress bar, `tz levels` the server's top ten, and `/setup` picks where level-ups get posted (or turns them off) and handles reward roles: one button makes a role for every Agency rank, another makes a single role with your own name, colour and level, an existing role can be used too, and any reward can be renamed or moved to another level from a menu.
+Levels are off until an admin switches them on in `/setup`. Every Agency rank comes with perks, more xp, a bigger daily and extra giveaway chances at the top, see `tz perks`. *Make or fix rank roles* in `/setup` puts the rank roles in order, highest on top, with the senior ones shown separately in the member list. Then one message a minute earns 15 to 25 xp, so chatting counts and spam doesn't. Levels come with Agency ranks, from Stray and Agency Visitor up through Junior Detective, Ability User and Strategist to Living Legend of Yokohama. `tz rank` draws your rank card as an image, with your avatar, rank, position and progress bar, `tz levels` the server's top ten, and `/setup` picks where level-ups get posted (or turns them off) and handles reward roles: one button makes a role for every Agency rank, another makes a single role with your own name, colour and level, an existing role can be used too, and any reward can be renamed or moved to another level from a menu.
 
 The **Xp and boosts** page in `/setup` covers the rest: how much xp a message gives and how often it counts, channels and roles that earn nothing, a multiplier for certain roles (boosters, say) or channels, a standing weekend multiplier, and a timed boost event that can start now, in a few hours or at an exact `<t:unix>` time. Boosts multiply each other up to 10x and show on rank cards while they're live. Reward roles can stack or be swapped so only the highest stays, and the level-up line can be your own with `{user}`, `{level}`, `{rank}` and friends. Admins can also move xp by hand with `/levels xp give`, `/levels xp take`, `/levels xp level` and `/levels xp reset` (`tz xp give @user 500` works too).
 
@@ -87,6 +87,8 @@ Yen comes from `tz daily` (more for every day in a row, up to a week), a little 
 The case file shows your battle streak and gems left. An alert goes out when a gem type drops to its last one, the last call before reset also says where the huntbot is and how many gems are left, and `tz hb` shows how far each trait moved over the last week.
 
 ## Using it
+
+`tz owo` and `tz anime` open dashboards with everything on one screen and a menu to open the rest. On slash, `/owo` and `/anime` work the same way, with an optional view to jump straight somewhere and a box for whatever that view needs (`/anime input:frieren` searches).
 
 Every command works as a slash command and with the short prefix, so `tz status` and `tz status` do the same thing, and most have a shorter alias too (`tz hb`, `tz s`, `tz w <id>`). `tz help` lists everything switched on in the server.
 

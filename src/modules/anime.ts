@@ -115,6 +115,8 @@ const lookup = (type: 'ANIME' | 'MANGA'): Command => ({
   text: { aliases: type === 'ANIME' ? ['ani'] : ['mg'], args: ['title'] },
   run: async (ctx, store) => {
     const title = ctx.str('title');
+    // nothing to search means the dashboard
+    if (!title && type === 'ANIME') return home.run(ctx, store);
     if (!title) return ctx.reply(`Give me a title, partner: \`tz ${type === 'ANIME' ? 'anime' : 'manga'} bungo stray dogs\``);
     try {
       const found = await searchMedia(title, type);
@@ -226,6 +228,44 @@ const alerts: Command = {
   },
 };
 
+// everything anime on one screen: today's episodes, what's hot, your list and alerts
+const home: Command = {
+  name: 'animehome',
+  hidden: true,
+  data: new SlashCommandBuilder().setName('animehome').setDescription('Anime dashboard').toJSON(),
+  run: async (ctx, store) => {
+    const tz = store.settings(ctx.userId).timezone;
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(new Date()).map((x) => [x.type, x.value]));
+    const from = Math.floor(zonedTime(tz, Number(p.year), Number(p.month), Number(p.day)).getTime() / 1000);
+    const [today, hot, cotd] = await Promise.all([
+      airingOn(from, from + 86_400).catch(() => []),
+      trending('ANIME').catch(() => []),
+      characterOfDay().catch(() => null),
+    ]);
+    const mine = new Set(store.follows(ctx.userId).map((f) => f.media_id));
+    const airs = [...today].sort((a, b) => (mine.has(b.media.id) ? 1 : 0) - (mine.has(a.media.id) ? 1 : 0) || (b.media.popularity ?? 0) - (a.media.popularity ?? 0)).slice(0, 6)
+      .sort((a, b) => a.airingAt - b.airingAt);
+    const count = (st: string) => store.watchlist(ctx.userId, st).length;
+    const fields = [
+      { name: '📡 Airing today', value: airs.map((a) => `<t:${a.airingAt}:t> ${mine.has(a.media.id) ? '🔔 ' : ''}**${titleOf(a.media)}** · ep ${a.episode}`).join('\n') || 'Nothing big today.', inline: false },
+      { name: '🔥 Trending', value: hot.slice(0, 4).map((m, i) => `${i + 1}. [${titleOf(m)}](${m.siteUrl})`).join('\n') || '?', inline: true },
+      { name: '📋 Your list', value: `▶️ ${count('watching')} watching\n🗓️ ${count('planning')} planning\n✅ ${count('completed')} done\n🔔 ${mine.size} alerts`, inline: true },
+      ...(cotd ? [{ name: '🎭 Character of the day', value: `[${cotd.name.full}](${cotd.siteUrl})`, inline: true }] : []),
+    ];
+    const nav = (cmd: string, emoji: string, label: string) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId},back=animehome`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary);
+    const rows = [
+      row(nav('airing', '📡', 'Full schedule'), nav('watchlist', '📋', 'My list'), nav('trending', '🔥', 'Trending'), nav('guess', '🔎', 'Guess game')),
+      row(new StringSelectMenuBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=animehome`).setPlaceholder('📂 Open anything else').addOptions(
+        { label: 'This season', value: 'season', emoji: '🌸' }, { label: 'Random pick', value: 'recommend', emoji: '🎲' },
+        { label: 'Character of the day', value: 'today', emoji: '🎭' }, { label: 'My episode alerts', value: 'alerts', emoji: '🔔' },
+        { label: 'Server\'s tracked shows', value: 'track', emoji: '📺' },
+      )),
+    ];
+    return ctx.reply({ embeds: [card({ kind: 'season', title: 'Anime dashboard', emoji: '📺', gif: 'off', fields,
+      body: 'Search with `tz anime <title>` or `/anime input:<title>`. Everything else is a click away.' })], components: rows });
+  },
+};
+
 const airing: Command = {
   name: 'airing',
   group: 'anime',
@@ -331,7 +371,7 @@ export const anime: Module = {
   name: 'anime',
   label: 'Anime and manga',
   about: 'Search anime, manga and characters, seasons, trending picks, new-episode alerts and your own watch list',
-  commands: [lookup('ANIME'), lookup('MANGA'), character, airing, daily, guess, season, trend, random, alerts, watchlist],
+  commands: [home, lookup('ANIME'), lookup('MANGA'), character, airing, daily, guess, season, trend, random, alerts, watchlist],
 };
 
 // ---------- buttons and menus ----------
