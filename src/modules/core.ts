@@ -6,6 +6,8 @@ import { isGifLink, resolve } from '../gifs.js';
 import { setupPanel } from '../features/setup.js';
 
 // filled in by the registry so help and config can list every module
+// the dashboards, filled in by the registry, so help can list them
+export const dashList: { name: string; label: string; emoji: string; description: string; home: string; anywhere?: boolean }[] = [];
 export const allModules: Module[] = [];
 
 const switchable = () => allModules.filter((m) => !m.locked);
@@ -37,7 +39,7 @@ function forms(c: Command, prefix: string) {
   const textArgs = (t.args ?? []).map((a) => (opts.find((o) => o.name === a)?.required ? `<${a}>` : `[${a}]`)).join(' ');
   const short = c.group || t.aliases?.length ? ` · short: ${[...(c.group ? [c.name] : []), ...(t.aliases ?? [])].slice(0, 3).map((a) => `\`${prefix} ${a}\``).join(' ')}` : '';
   return {
-    slash: `\`/${slashPath(c)}${slashArgs ? ` ${slashArgs}` : ''}\``,
+    slash: c.group ? `\`/${slashPath(c)}${textArgs ? ` input:${textArgs}` : ''}\`` : `\`/${slashPath(c)}${slashArgs ? ` ${slashArgs}` : ''}\``,
     // typed mirrors slash, "tz owo huntbot" for "/owo view:huntbot", the short names still work
     text: `\`${prefix} ${c.group ? `${c.group} ${c.as ?? c.name}` : c.name}${textArgs ? ` ${textArgs}` : ''}\`${short}`,
   };
@@ -117,14 +119,17 @@ const help: Command = {
         }),
       }));
     }
+    // the front page is the dashboards, each one opens with a click
+    const staff = (d: { name: string }) => (d.name === 'tools' ? ctx.isAdmin : d.name === 'mod' ? ctx.isAdmin || !!ctx.member?.permissions.has(PermissionFlagsBits.ModerateMembers) : true);
+    const dashes = dashList.filter((d) => (ctx.guildId || d.anywhere) && staff(d));
+    rows.unshift(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      new StringSelectMenuBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=help`).setPlaceholder('🚪 Open a dashboard')
+        .addOptions(dashes.map((d) => ({ label: d.label, value: d.home, emoji: d.emoji, description: `/${d.name} · ${prefix} ${d.name}` }))),
+    ));
     return page(card({
       kind: 'help', title: 'At your service', emoji: '🕵️', gif,
-      body: `Slash works, and so does the lazy way: \`${prefix} <command>\`. Slash answers are only shown to you, typed ones to everyone.\nPick a feature below, I'll walk you through it.`,
-      fields: mods.map((m) => ({
-        name: `${icons[m.name] ?? '📁'} ${m.label}`,
-        value: m.commands.filter((c) => !c.hidden).map((c) => `\`${c.name}\``).join(' ') + (m.commands.some((c) => c.group) ? `\n-# slash: /${[...new Set(m.commands.filter((c) => c.group && !c.hidden).map((c) => c.group))].join(', /')}` : ''),
-        inline: false,
-      })),
+      body: `Everything lives in a few dashboards. Run one, then click, no commands to remember. Slash ones only show to you, typed ones to everyone.\n-# Pick a feature in the second menu to see every command it has, typed and slash.`,
+      fields: dashes.map((d) => ({ name: `${d.emoji} ${d.label} · \`/${d.name}\` or \`${prefix} ${d.name}\``, value: d.description, inline: false })),
     }));
   },
 };

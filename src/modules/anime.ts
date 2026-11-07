@@ -11,6 +11,7 @@ import {
 import { RED, card, say } from '../theme.js';
 import { listMenu, watchlist } from './watchlist.js';
 import { GUESS_PAY } from './economy.js';
+import { addWin } from './f1quiz.js';
 import { zonedTime } from '../time.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
@@ -338,6 +339,7 @@ export async function onGuess(store: Store, i: import('discord.js').Interaction)
   }
   if (Number(pick) !== r.answer) { await i.reply({ content: '❌ Not that one.', flags: 64 }); return true; }
   r.done = true;
+  if (i.guildId) addWin(store, i.guildId, i.user.id);
   const paid = i.guildId && store.rules(i.guildId, 'economy').enabled ? store.pay(i.guildId, i.user.id, GUESS_PAY) : false;
   const rows = i.message.components.map((c) => c.toJSON());
   for (const rw of rows) for (const b of (rw as { components: { disabled?: boolean; style?: number; custom_id?: string }[] }).components) {

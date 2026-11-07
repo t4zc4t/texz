@@ -92,7 +92,7 @@ The case file shows your battle streak and gems left. An alert goes out when a g
 
 ## Using it
 
-Everything sits in nine dashboards, so nobody has to remember a command: `/owo`, `/anime`, `/fun` (games and trivia), `/eco` (yen), `/levels`, `/info` (you, your pings and the server), `/sports` (F1 and football), `/mod` and `/tools` (giveaways, role pickers, announcements). Typed works the same, `tz fun` or `tz owo` on their own. Buttons open the quick things, a menu lists the rest, and anything that needs a name, a number or a person opens a small form instead of asking you to type arguments. `/help`, `/ping`, `/setup` and the Quote message command stay on their own.
+Everything sits in nine dashboards, so nobody has to remember a command: `/owo`, `/anime`, `/fun` (games and trivia), `/eco` (yen), `/levels`, `/info` (you, your pings and the server), `/sports` (F1 and football), `/mod` and `/tools` (giveaways, role pickers, announcements). Typed works the same, `tz fun` or `tz owo` on their own. Buttons open the quick things, a menu lists the rest, and anything that needs a name, a number or a person opens a small form instead of asking you to type arguments. `/help` (or just `tz`) lists the dashboards, and `/ping`, `/setup` and the Quote message command stay on their own.
 
 If you do like typing, the typed form follows the slash one: `/owo view:huntbot` is `tz owo huntbot`, and `/fun view:ship input:@someone` is `tz ship @someone`. Most have short names too (`tz hb`, `tz s`, `tz w <id>`). Each command has a short cooldown per person, a few seconds, a bit longer for the ones that draw cards or call other sites.
 

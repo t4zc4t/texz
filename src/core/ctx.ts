@@ -94,7 +94,9 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
         return i.replied || i.deferred ? i.followUp(payload) : i.reply(payload);
       }
       // edit mode swaps the page in place, like flipping through a book
-      if (edit && (!i.isModalSubmit() || i.isFromMessage())) {
+      // a one line answer like "+¥150" shows next to the dashboard instead of replacing it
+      const quick = !n.embeds.length && !n.files.length && !n.components.length;
+      if (edit && !quick && (!i.isModalSubmit() || i.isFromMessage())) {
         // pages opened from another screen get a way back to it
         const rows = [...n.components];
         if (opts.back && rows.length < 5) {

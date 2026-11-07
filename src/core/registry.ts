@@ -5,7 +5,7 @@ import {
 import { armouryPage, parseArmId, filters, sorts, type Filter, type Sort } from '../features/armoury-pages.js';
 import { apply, modalFor, panel, parseRp } from '../features/panel.js';
 import type { Store } from '../db.js';
-import { core, allModules } from '../modules/core.js';
+import { core, allModules, dashList } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
 import { anime, onAnimeComponent, onGuess } from '../modules/anime.js';
 import { onF1Quiz } from '../modules/f1quiz.js';
@@ -28,6 +28,7 @@ import { onShip } from '../modules/ship.js';
 import { onPingsButton, onSpawnButton, spawnsModule } from '../modules/spawns.js';
 import { fromComponent, fromSlash, fromText, withTokens, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
+import { glance, layout } from './glance.js';
 import { askModal, entriesOf, homePage, needsInput, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
 
 export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule];
@@ -75,6 +76,7 @@ const findEntry = (key: string) => {
 
 // groups without a hand made dashboard get the generic one
 for (const [name, g] of Object.entries(groups)) {
+  dashList.push({ name, label: g.label, emoji: g.emoji, description: g.description, home: g.dashboard ?? `${name}home`, anywhere: g.anywhere });
   if (g.dashboard) continue;
   g.dashboard = `${name}home`;
   const cmd: Command = {
@@ -82,8 +84,10 @@ for (const [name, g] of Object.entries(groups)) {
     hidden: true,
     data: { name: g.dashboard, description: g.description },
     run: (ctx, store) => {
-      const list = groupEntries(name).filter(({ hit }) => hit.mod.locked || store.rules(ctx.guildId, hit.mod.name).enabled).map(({ e }) => e);
-      return ctx.reply(homePage(ctx, g.dashboard!, g, list));
+      const all = groupEntries(name);
+      const on = (h: Hit) => h.mod.locked || store.rules(ctx.guildId, h.mod.name).enabled;
+      const off = [...new Set(all.filter(({ hit }) => !on(hit)).map(({ hit }) => hit.mod.label))];
+      return ctx.reply(homePage(ctx, g.dashboard!, g, all.filter(({ hit }) => on(hit)).map(({ e }) => e), { layout: layout[name], glance: all.some(({ hit }) => on(hit)) ? glance(name, ctx, store) : null, off }));
     },
   };
   core.commands.push(cmd);
@@ -222,6 +226,8 @@ export function onText(store: Store, m: Message): boolean {
   const body = text.slice(prefix.length);
   const tokens = body.trim().split(/\s+/).filter(Boolean);
   let name = tokens.shift()?.toLowerCase();
+  // just the prefix on its own opens help
+  if (!name && text.length === prefix.length) name = 'help';
   if (!name) return false;
   // "tz mod warn @x" works like "/mod warn", but "tz anime frieren" is still a search
   const next = tokens[0]?.toLowerCase();
@@ -233,7 +239,7 @@ export function onText(store: Store, m: Message): boolean {
   const hit = member ?? (groups[name] && !tokens.length ? byName.get(groups[name].dashboard!) : undefined) ?? byText.get(name) ?? (groups[name] ? byName.get(groups[name].dashboard!) : undefined);
   if (!hit) return false;
   // "tzatziki" shouldn't trigger anything, only a space or a real command name after the prefix
-  if (!/^\s/.test(body) && !byText.has(body.split(/\s+/)[0].toLowerCase())) return false;
+  if (body && !/^\s/.test(body) && !byText.has(body.split(/\s+/)[0].toLowerCase())) return false;
   const t = hit.cmd.text ?? {};
   // "tz ship" with nobody named gets a button that opens a small form
   const parts = entriesOf(hit.cmd);

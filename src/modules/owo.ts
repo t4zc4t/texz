@@ -57,6 +57,8 @@ const status: Command = {
       { name: '⏱️ Timers', value: [timer('huntbot', '🤖 Huntbot'), timer('pray', '🙏 Pray'), timer('vote', '🗳️ Vote'), `🌙 Reset · <t:${unix(nextReset())}:R>`].join('\n'), inline: true },
       { name: `📋 Today · ${done}/${items.length}`, value: `${bar(done, items.length, 10)}\n` + items.map((i) => `${i.done ? '✅' : '▫️'} ${i.label}`).join('\n'), inline: true },
     ];
+    // nothing seen yet, so say how this works instead of a wall of unknowns
+    if (!cds.size && !money.length && !hb) fields.unshift({ name: '👋 New here?', value: 'Just play OwO in a channel I can read. I pick up your huntbot, pray, vote, gems and weapons from its replies, then remind you and plan things here. Try `owo hb`, `owo inv` or `owo weapon` once.', inline: false });
     const streak = store.snapshot<{ now: number; best: number }>(ctx.userId, 'streak')?.data;
     if (streak) money.push(`⚔️ battle streak **${streak.now}** (best ${streak.best})`);
     const inv = store.snapshot<[number, number][]>(ctx.userId, 'inv')?.data;

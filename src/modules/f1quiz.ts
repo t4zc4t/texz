@@ -71,6 +71,7 @@ export async function onF1Quiz(store: Store, i: Interaction) {
   if (r.out.has(i.user.id)) { await i.reply({ content: 'You already had your try on this one.', flags: 64 }); return true; }
   if (Number(pick) !== r.q.answer) { r.out.add(i.user.id); await i.reply({ content: '❌ Not that one. You\'re out for this question.', flags: 64 }); return true; }
   r.done = true;
+  if (i.guildId) addWin(store, i.guildId, i.user.id);
   const amount = payFor(r.q);
   const paid = economy && store.pay(i.guildId!, i.user.id, amount) ? amount : 0;
   await i.update({ components: lock(r.q.answer) as never });
@@ -88,3 +89,10 @@ export function sweepQuiz(send: (channelId: string, payload: object) => Promise<
     }
   }, 5_000).unref?.();
 }
+
+// right answers in the quiz and the guess game, shown on the fun dashboard
+export function addWin(store: Store, guildId: string, userId: string) {
+  const key = `wins:${guildId}:${userId}`;
+  store.setKv(key, String(Number(store.getKv(key) ?? 0) + 1));
+}
+export const winsOf = (store: Store, guildId: string, userId: string) => Number(store.getKv(`wins:${guildId}:${userId}`) ?? 0);
