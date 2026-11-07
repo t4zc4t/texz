@@ -28,6 +28,5 @@ export interface Module {
   commands: Command[];
 }
 
-// how the command is written as a slash command, like "owo huntbot"
-const dashboards = new Set(['owo', 'anime']);
-export const slashPath = (c: Command) => (c.group ? (dashboards.has(c.group) ? `${c.group} view:${c.as ?? c.name}` : `${c.group} ${c.as ?? c.name}`) : c.name);
+// how the command is written as a slash command, like "/owo view:huntbot"
+export const slashPath = (c: Command) => (c.group ? `${c.group} view:${c.as ?? c.name}` : c.name);

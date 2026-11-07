@@ -1,6 +1,6 @@
 import {
   ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits, type MessageActionRowComponentBuilder,
-  type ButtonInteraction, type ChatInputCommandInteraction, type Guild, type GuildMember, type Message, type StringSelectMenuInteraction,
+  type ButtonInteraction, type ChatInputCommandInteraction, type ModalSubmitInteraction, type Guild, type GuildMember, type Message, type StringSelectMenuInteraction,
 } from 'discord.js';
 
 export type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
@@ -67,13 +67,13 @@ export function fromSlash(i: ChatInputCommandInteraction, sub?: string | null): 
 }
 
 // a button or menu press that runs a command, with optional fixed option values
-export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction, opts: Record<string, string> = {}, edit = false): Ctx {
+export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction, opts: Record<string, string> = {}, edit = false): Ctx {
   const member = (i.member && 'permissions' in i.member && typeof i.member.permissions !== 'string') ? (i.member as GuildMember) : null;
   return {
     userId: i.user.id,
     guildId: i.guildId,
     guild: i.guild,
-    channelId: i.channelId,
+    channelId: i.channelId ?? '',
     member,
     isAdmin: !!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild),
     viaText: true,
@@ -81,14 +81,20 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
     sub: () => opts.sub ?? null,
     str: (n) => opts[n] ?? null,
     int: (n) => (opts[n] ? Number.parseInt(opts[n], 10) : null),
-    bool: () => null,
-    user: () => null,
-    channel: () => null,
-    role: () => null,
+    bool: (n) => (opts[n] ? ['yes', 'on', 'true', '1'].includes(opts[n].toLowerCase()) : null),
+    // ids from a form or a fixed option, a pasted mention works too
+    user: (n) => opts[n]?.match(/(\d{15,})/)?.[1] ?? null,
+    channel: (n) => opts[n]?.match(/(\d{15,})/)?.[1] ?? null,
+    role: (n) => opts[n]?.match(/(\d{15,})/)?.[1] ?? null,
     reply: (r) => {
       const n = normalise(r);
+      // games and polls are for the whole channel, so they go out as a new message
+      if (n.public) {
+        const payload = { content: n.content, embeds: n.embeds, components: n.components, files: n.files, allowedMentions: { parse: [], users: n.ping } };
+        return i.replied || i.deferred ? i.followUp(payload) : i.reply(payload);
+      }
       // edit mode swaps the page in place, like flipping through a book
-      if (edit) {
+      if (edit && (!i.isModalSubmit() || i.isFromMessage())) {
         // pages opened from another screen get a way back to it
         const rows = [...n.components];
         if (opts.back && rows.length < 5) {
@@ -96,8 +102,12 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
             new ButtonBuilder().setCustomId(`nav|${opts.back}|owner=${opts.owner}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
           ));
         }
-        return i.update({ content: n.content ?? null, embeds: n.embeds, components: rows, ...(n.files.length ? { files: n.files } : { attachments: [] }) });
+        const page = { content: n.content ?? null, embeds: n.embeds, components: rows, ...(n.files.length ? { files: n.files } : { attachments: [] }) };
+        if (i.replied || i.deferred) return i.editReply(page);
+        if (i.isModalSubmit()) return i.isFromMessage() ? i.update(page) : (i as ModalSubmitInteraction).reply({ content: n.content, embeds: n.embeds, components: rows, files: n.files, flags: MessageFlags.Ephemeral });
+        return i.update(page);
       }
+      if (i.replied || i.deferred) return i.followUp({ content: n.content, embeds: n.embeds, components: n.components, files: n.files, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
       return i.reply({ content: n.content, embeds: n.embeds, components: n.components, files: n.files, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     },
   };

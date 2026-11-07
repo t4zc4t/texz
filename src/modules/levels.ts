@@ -239,7 +239,7 @@ const xp: Command = {
 export const levelsModule: Module = {
   name: 'levels',
   label: 'Levels and ranks',
-  about: 'Chat xp and Agency ranks from Stray to Living Legend. Reward roles, xp rates, boosts and no-xp zones are in /setup, admins move xp with /levels xp',
+  about: 'Chat xp and Agency ranks from Stray to Living Legend. Reward roles, xp rates, boosts and no-xp zones are in /setup, admins move xp with /levels view:xp',
   commands: [rank, levels, perksCmd, xp],
 };
 

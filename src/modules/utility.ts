@@ -7,6 +7,8 @@ import type { Command, Module } from '../core/module.js';
 import { bar, card, pick, say } from '../theme.js';
 import { profile } from './profile.js';
 import { ship } from './ship.js';
+import { f1Quiz, f1Today, f1Trivia } from './bulletins.js';
+import { guess } from './anime.js';
 
 const unix = (ms: number) => Math.floor(ms / 1000);
 
@@ -201,6 +203,7 @@ export function pollView(messageId: string | null, p: { question: string; option
 
 const poll: Command = {
   name: 'poll',
+  group: 'fun',
   data: new SlashCommandBuilder().setName('poll').setDescription('Start a vote with buttons, up to 5 options')
     .addStringOption((o) => o.setName('question').setDescription('What are we voting on').setRequired(true).setMaxLength(200))
     .addStringOption((o) => o.setName('options').setDescription('Options split with | like pizza | burger | crab').setRequired(true).setMaxLength(400)).toJSON(),
@@ -302,6 +305,7 @@ const eightball: Command = {
 
 const afk: Command = {
   name: 'afk',
+  group: 'info',
   data: new SlashCommandBuilder().setName('afk').setDescription('Tell people you\'re away, Texz answers when they ping you')
     .addStringOption((o) => o.setName('reason').setDescription('Why, optional').setMaxLength(120)).toJSON(),
   text: { args: ['reason'] },
@@ -332,5 +336,5 @@ export const utility: Module = {
   name: 'utility',
   label: 'Utility and fun',
   about: 'Avatars, user and server info, polls, choose, dice, coin, 8ball and AFK',
-  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk],
+  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk, guess, f1Quiz, f1Trivia, f1Today],
 };

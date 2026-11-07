@@ -210,3 +210,29 @@ test('typed commands mirror slash paths', async () => {
     await tick();
   }
 });
+
+test('every group opens a dashboard and every pick can be asked for', async () => {
+  const { entriesOf, askModal, needsInput } = await import('../src/core/dashboards.ts');
+  const { modules } = await import('../src/core/registry.ts');
+  for (const d of definitions.filter((x) => x.options?.some((o) => o.name === 'view'))) {
+    const view = d.options!.find((o) => o.name === 'view') as { choices?: unknown[] };
+    assert.ok((view.choices?.length ?? 0) <= 25, d.name);
+    assert.ok(d.description.length <= 100, d.name);
+  }
+  let asked = 0;
+  for (const m of modules) for (const c of m.commands) for (const e of entriesOf(c)) {
+    if (!needsInput(e)) continue;
+    askModal(e, 'u1', 'funhome').toJSON();
+    asked++;
+  }
+  assert.ok(asked > 10);
+  const store = new Store(':memory:');
+  const a = fake('tz fun');
+  onText(store, a.m);
+  await tick();
+  assert.match(said(a.replies[0]), /Games and trivia/);
+  const b = fake('tz ship');
+  onText(store, b.m);
+  await tick();
+  assert.match(said(b.replies[0]), /Fill it in|needs a bit more/);
+});

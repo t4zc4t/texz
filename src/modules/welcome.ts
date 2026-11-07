@@ -53,6 +53,7 @@ export async function onLeave(store: Store, m: GuildMember | PartialGuildMember)
 
 const rolepicker: Command = {
   name: 'rolepicker',
+  group: 'tools',
   admin: true,
   data: new SlashCommandBuilder().setName('rolepicker').setDescription('Post a panel people use to give themselves roles')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles).setDMPermission(false)
@@ -91,9 +92,9 @@ function pickerView(title: string, about: string | null, style: string, roles: R
 export async function onRoleButton(store: Store, i: Interaction) {
   if (!i.guild) return false;
   if (i.isRoleSelectMenu() && i.customId.startsWith('rpk|')) {
-    if (i.customId.split('|')[1] !== i.user.id) { await i.reply({ content: 'Start your own with `/rolepicker`.', flags: 64 }); return true; }
+    if (i.customId.split('|')[1] !== i.user.id) { await i.reply({ content: 'Start your own with `/tools view:rolepicker`.', flags: 64 }); return true; }
     const draft = JSON.parse(store.getKv(`rpk:${i.user.id}`) ?? 'null') as { title: string; about: string | null; style: string } | null;
-    if (!draft) { await i.reply({ content: 'That draft expired, run `/rolepicker` again.', flags: 64 }); return true; }
+    if (!draft) { await i.reply({ content: 'That draft expired, run `/tools view:rolepicker` again.', flags: 64 }); return true; }
     const me = await i.guild.members.fetchMe();
     const roles = [...i.roles.values()].map((r) => i.guild!.roles.cache.get(r.id)).filter((r): r is Role => !!r);
     const bad = roles.filter((r) => r.position >= me.roles.highest.position || r.managed || r.id === i.guild!.id);

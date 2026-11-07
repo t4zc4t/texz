@@ -1,5 +1,5 @@
 import {
-  ApplicationCommandOptionType, InteractionContextType, MessageFlags, PermissionFlagsBits,
+  ActionRowBuilder, ApplicationCommandOptionType, ButtonBuilder, ButtonStyle, InteractionContextType, MessageFlags, PermissionFlagsBits, type MessageActionRowComponentBuilder,
   type ChatInputCommandInteraction, type Interaction, type Message, type RESTPostAPIChatInputApplicationCommandsJSONBody,
 } from 'discord.js';
 import { armouryPage, parseArmId, filters, sorts, type Filter, type Sort } from '../features/armoury-pages.js';
@@ -25,24 +25,27 @@ import { report } from '../ops.js';
 import { quoteCommand } from '../modules/quote.js';
 import { onProfileEdit } from '../modules/profile.js';
 import { onShip } from '../modules/ship.js';
-import { onSpawnButton, spawnsModule } from '../modules/spawns.js';
+import { onPingsButton, onSpawnButton, spawnsModule } from '../modules/spawns.js';
 import { fromComponent, fromSlash, fromText, withTokens, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
+import { askModal, entriesOf, homePage, needsInput, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
 
 export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule];
 allModules.push(...modules);
 useModules(modules);
 
-// the grouped slash commands and who can see them by default
-const groups: Record<string, { description: string; perms?: bigint; anywhere?: boolean; dashboard?: string }> = {
-  owo: { description: 'OwO dashboard, or pick a view: huntbot, gems, zoo, weapons, quests, shop, reminders', anywhere: true, dashboard: 'status' },
-  anime: { description: 'Anime dashboard, a title to search, or pick a view: airing, list, guess and more', anywhere: true, dashboard: 'animehome' },
-  mod: { description: 'Moderation: warn, timeout, kick, ban, purge, lock, slowmode and the case archive', perms: PermissionFlagsBits.ModerateMembers },
-  levels: { description: 'Rank cards, the level leaderboard and xp tools' },
-  info: { description: 'Profiles, avatars and the server', anywhere: true },
-  fun: { description: 'Dice, coins, the 8ball and hard decisions', anywhere: true },
-  eco: { description: 'Yen: daily claim, balance, giving, the richest and the role shop' },
-  tools: { description: 'Planned announcements and server activity (admins)', perms: PermissionFlagsBits.ManageGuild },
+// every group is one slash command and one typed word that opens its dashboard, everything else is picked from there
+type Group = GroupInfo & { description: string; perms?: bigint; anywhere?: boolean; dashboard?: string };
+const groups: Record<string, Group> = {
+  owo: { label: 'OwO', emoji: '🐾', about: '', description: 'OwO dashboard: huntbot, gems, zoo, weapons, quests, shop and reminders', anywhere: true, dashboard: 'status' },
+  anime: { label: 'Anime', emoji: '📺', about: '', description: 'Anime dashboard, or a title to search', anywhere: true, dashboard: 'animehome' },
+  fun: { label: 'Games and trivia', emoji: '🎲', about: 'Games for the whole channel, trivia that pays yen, and the small stuff.', description: 'Games, trivia, ship, polls, dice and spawn pings', anywhere: true },
+  eco: { label: 'Yen', emoji: '💴', about: 'Claim, spend and give yen. The quiz and the guess game pay out too.', description: 'Yen: daily, balance, giving, the richest, the role shop and games that pay', extra: ['quiz', 'guess'] },
+  levels: { label: 'Levels', emoji: '🎖️', about: 'Ranks, perks and the roster.', description: 'Rank cards, perks, the leaderboard and xp tools' },
+  info: { label: 'You and the server', emoji: '🗂️', about: 'Your profile, your pings, birthdays and a look at people and the server.', description: 'Profile, pings, birthdays, avatars, away notes and the server', anywhere: true },
+  sports: { label: 'Sports', emoji: '🏁', about: 'Formula 1 from Parc Fermé and football from the big leagues.', description: 'F1 races, standings, quiz and football matches', anywhere: true },
+  mod: { label: 'Moderation', emoji: '🛡️', about: 'Pick an action, then pick who. Everything lands in the case archive.', description: 'Moderation: warn, timeout, kick, ban, purge, lock, slowmode and cases', perms: PermissionFlagsBits.ModerateMembers },
+  tools: { label: 'Server tools', emoji: '🧰', about: 'Giveaways, role pickers, planned announcements and activity numbers.', description: 'Giveaways, role pickers, announcements and server stats (admins)', perms: PermissionFlagsBits.ManageGuild },
 };
 
 type Hit = { mod: Module; cmd: Command };
@@ -55,6 +58,36 @@ for (const mod of modules) for (const cmd of mod.commands) {
   // typed "tz owo huntbot" mirrors "/owo view:huntbot"
   if (cmd.group && !bySlash.has(`${cmd.group} ${cmd.as ?? cmd.name}`)) bySlash.set(`${cmd.group} ${cmd.as ?? cmd.name}`, { mod, cmd });
   for (const name of [cmd.name, ...(cmd.text?.aliases ?? [])]) byText.set(name, { mod, cmd });
+}
+
+// the menu lines of a group, its own commands first, then borrowed ones
+const groupEntries = (name: string): { hit: Hit; e: Entry }[] => {
+  const own = [...byName.values()].filter((h) => h.cmd.group === name && !h.cmd.hidden);
+  const extra = (groups[name].extra ?? []).map((n) => byName.get(n)).filter((h): h is Hit => !!h);
+  return [...own, ...extra].flatMap((hit) => entriesOf(hit.cmd).map((e) => ({ hit, e })));
+};
+const findEntry = (key: string) => {
+  const { name } = parseKey(key);
+  const hit = byName.get(name);
+  const e = hit ? entriesOf(hit.cmd).find((x) => x.key === key) : undefined;
+  return hit && e ? { hit, e } : null;
+};
+
+// groups without a hand made dashboard get the generic one
+for (const [name, g] of Object.entries(groups)) {
+  if (g.dashboard) continue;
+  g.dashboard = `${name}home`;
+  const cmd: Command = {
+    name: g.dashboard,
+    hidden: true,
+    data: { name: g.dashboard, description: g.description },
+    run: (ctx, store) => {
+      const list = groupEntries(name).filter(({ hit }) => hit.mod.locked || store.rules(ctx.guildId, hit.mod.name).enabled).map(({ e }) => e);
+      return ctx.reply(homePage(ctx, g.dashboard!, g, list));
+    },
+  };
+  core.commands.push(cmd);
+  byName.set(cmd.name, { mod: core, cmd });
 }
 
 type Json = RESTPostAPIChatInputApplicationCommandsJSONBody;
@@ -73,7 +106,7 @@ function asMember(c: Command): Opt {
 }
 
 // commands people can also use after adding Texz to their own account, in any server or DM
-const anywhereTop = new Set(['help', 'ping', 'f1', 'football']);
+const anywhereTop = new Set(['help', 'ping']);
 const everywhere = { integration_types: [0, 1], contexts: [InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel] };
 const serverOnly = { integration_types: [0], contexts: [InteractionContextType.Guild] };
 
@@ -86,14 +119,12 @@ export const definitions: Json[] = [
     description: g.description,
     ...(g.anywhere ? everywhere : serverOnly),
     ...(g.perms ? { default_member_permissions: g.perms.toString() } : {}),
-    // dashboard commands are one command with a view picker and a free text box, no subcommands to remember
-    options: g.dashboard
-      ? [
-          { type: ApplicationCommandOptionType.String, name: 'view', description: 'Leave empty for the dashboard', choices: visible.filter((c) => c.group === name).map((c) => ({ name: c.as ?? c.name, value: c.as ?? c.name })) },
-          { type: ApplicationCommandOptionType.String, name: 'input', description: 'Whatever that view needs: a title, an id, @someone, a time', max_length: 200 },
-        ] as Opt[]
-      : visible.filter((c) => c.group === name).map(asMember),
-  })).filter((d) => d.options.length),
+    // one command with a view picker and a free text box, empty opens the dashboard
+    options: [
+      { type: ApplicationCommandOptionType.String, name: 'view', description: 'Leave empty for the dashboard', choices: visible.filter((c) => c.group === name).slice(0, 25).map((c) => ({ name: c.as ?? c.name, value: c.as ?? c.name })) },
+      { type: ApplicationCommandOptionType.String, name: 'input', description: 'Optional, whatever that view needs. Leave empty and I\'ll ask', max_length: 200 },
+    ] as Opt[],
+  })),
 ];
 
 // the on/off switch, channel limits and role limits, checked before every command
@@ -143,29 +174,40 @@ async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command, cool = tru
   }
 }
 
-export function onSlash(store: Store, i: ChatInputCommandInteraction) {
-  const dash = groups[i.commandName]?.dashboard;
-  if (dash) {
+export async function onSlash(store: Store, i: ChatInputCommandInteraction) {
+  const g = groups[i.commandName];
+  if (g) {
     let view = i.options.getString('view');
     const input = i.options.getString('input') ?? '';
     // "/anime input:frieren" is a search
     if (!view && input && i.commandName === 'anime') view = 'search';
-    const hit = view ? bySlash.get(`${i.commandName} ${view}`) : byName.get(dash);
+    const hit = view ? bySlash.get(`${i.commandName} ${view}`) : byName.get(g.dashboard!);
     if (!hit) return;
+    // a view that needs something and got nothing asks for it, or shows its parts to pick from
+    if (view && !input) {
+      const parts = entriesOf(hit.cmd);
+      if (parts.length > 1) return run(store, fromSlash(i, null), core, pickerFor(i.commandName, parts));
+      if (parts[0] && needsInput(parts[0])) {
+        const blocked = gate(store, fromSlash(i, null), hit.mod, hit.cmd);
+        if (!blocked) return i.showModal(askModal(parts[0], i.user.id, g.dashboard!));
+      }
+    }
     const t = hit.cmd.text;
     const tokens = input.split(/\s+/).filter(Boolean);
     const args = t?.sub ? t.subArgs?.[tokens[0]?.toLowerCase() ?? ''] ?? [] : t?.args ?? [];
     return run(store, withTokens(fromSlash(i, null), tokens, args, !!t?.sub), hit.mod, hit.cmd);
   }
-  if (groups[i.commandName]) {
-    const group = i.options.getSubcommandGroup(false);
-    const sub = i.options.getSubcommand(false);
-    const hit = bySlash.get(`${i.commandName} ${group ?? sub}`);
-    if (hit) return run(store, fromSlash(i, group ? sub : null), hit.mod, hit.cmd);
-    return;
-  }
   const hit = bySlash.get(i.commandName);
   if (hit) return run(store, fromSlash(i), hit.mod, hit.cmd);
+}
+
+// a small page of one command's parts, like giveaway start, end and reroll
+function pickerFor(group: string, parts: Entry[]): Command {
+  const g = groups[group];
+  return {
+    name: `${group}parts`, hidden: true, data: { name: 'parts', description: parts[0].cmd.data.description },
+    run: (ctx) => ctx.reply(homePage(ctx, g.dashboard!, { ...g, label: `${g.label} · ${parts[0].cmd.as ?? parts[0].cmd.name}`, about: parts[0].cmd.data.description }, parts)),
+  };
 }
 
 export function isEnabled(store: Store, guildId: string | null, module: string) {
@@ -187,12 +229,22 @@ export function onText(store: Store, m: Message): boolean {
     ? bySlash.get(`${name} ${next}`) ?? (byText.get(next)?.cmd.group === name ? byText.get(next) : undefined)
     : undefined;
   if (member) { tokens.shift(); name = member.cmd.name; }
-  // "tz owo" on its own opens the dashboard
-  const hit = member ?? byText.get(name) ?? (groups[name]?.dashboard ? byName.get(groups[name].dashboard!) : undefined);
+  // "tz fun" on its own opens the dashboard, "tz owo" too
+  const hit = member ?? (groups[name] && !tokens.length ? byName.get(groups[name].dashboard!) : undefined) ?? byText.get(name) ?? (groups[name] ? byName.get(groups[name].dashboard!) : undefined);
   if (!hit) return false;
   // "tzatziki" shouldn't trigger anything, only a space or a real command name after the prefix
   if (!/^\s/.test(body) && !byText.has(body.split(/\s+/)[0].toLowerCase())) return false;
   const t = hit.cmd.text ?? {};
+  // "tz ship" with nobody named gets a button that opens a small form
+  const parts = entriesOf(hit.cmd);
+  if (!tokens.length && parts.length === 1 && needsInput(parts[0])) {
+    void m.reply({
+      content: `📝 **${parts[0].label}** needs a bit more. Press the button and I'll ask, or type it: \`${prefix} ${hit.cmd.name} ${(t.args ?? []).map((a) => `<${a}>`).join(' ')}\``,
+      components: [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(new ButtonBuilder().setCustomId(`nav|pick|owner=${m.author.id},key=${parts[0].key}`).setLabel('Fill it in').setEmoji('📝').setStyle(ButtonStyle.Primary))],
+      allowedMentions: { repliedUser: false },
+    }).catch(() => {});
+    return true;
+  }
   const sub = t.sub ? tokens[0]?.toLowerCase() : undefined;
   const args = t.sub ? (t.subArgs?.[sub ?? ''] ?? []) : (t.args ?? []);
   // quick answers to typed commands clean themselves up, the server picks how long in /setup
@@ -203,6 +255,12 @@ export function onText(store: Store, m: Message): boolean {
   void run(store, fromText(m, tokens, args, !!t.sub, after), hit.mod, hit.cmd);
   return true;
 }
+
+const optsOf = (extra?: string) => {
+  const opts: Record<string, string> = {};
+  if (extra) for (const pair of extra.split(',')) { const [k, v] = pair.split('='); if (k) opts[k] = v; }
+  return opts;
+};
 
 // buttons and menus on Texz's own messages
 export async function onComponent(store: Store, i: Interaction) {
@@ -219,6 +277,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onGuess(store, i)) return;
     if (await onF1Quiz(store, i)) return;
     if (await onSpawnButton(store, i)) return;
+    if (await onPingsButton(store, i)) return;
     if (await onProfileEdit(store, i)) return;
     if (await onShip(i)) return;
     if (await onBulletinButton(i, store)) return;
@@ -229,19 +288,43 @@ export async function onComponent(store: Store, i: Interaction) {
     const rp = parseRp(i.customId);
     if (rp) return onPanel(store, i, rp).catch((e) => console.error('panel', e));
   }
+  // a filled in form from a dashboard pick
+  if (i.isModalSubmit() && i.customId.startsWith('ask|')) {
+    const [, key, extra] = i.customId.split('|');
+    const found = findEntry(key);
+    if (!found) return;
+    const opts: Record<string, string> = { ...optsOf(extra), ...readModal(i, found.e), ...(found.e.fixed ?? {}), ...(found.e.sub ? { sub: found.e.sub } : {}) };
+    const edit = opts.owner === i.user.id && i.isFromMessage();
+    return run(store, fromComponent(i, opts, edit), found.hit.mod, found.hit.cmd, false);
+  }
   if (!i.isButton() && !i.isStringSelectMenu()) return;
   // "nav|command|option=value" buttons open another screen, just for whoever pressed it
   if (i.customId.startsWith('nav|')) {
-    let [, name, extra] = i.customId.split('|');
-    // the "open anything" menus carry the command in the picked value
-    if (name === 'pick' && i.isStringSelectMenu()) name = i.values[0];
-    const opts: Record<string, string> = {};
-    if (extra) for (const pair of extra.split(',')) { const [k, v] = pair.split('='); opts[k] = v; }
-    if (i.isStringSelectMenu() && i.customId.split('|')[1] !== 'pick') opts[opts.as ?? 'value'] = i.values[0];
-    const hit = byName.get(name);
-    if (!hit) return;
+    const [, name0, extra] = i.customId.split('|');
+    const opts = optsOf(extra);
+    if (i.isStringSelectMenu() && name0 !== 'pick') opts[opts.as ?? 'value'] = i.values[0];
     // pages that belong to whoever opened them change in place, anyone else gets their own copy
     const edit = !!opts.owner && opts.owner === i.user.id;
+    if (name0 === 'pick') {
+      const key = i.isStringSelectMenu() ? i.values[0] : opts.key;
+      const found = key ? findEntry(key) : null;
+      // the hand made dashboards name the command itself
+      if (!found) {
+        const hit = key ? byName.get(key) : undefined;
+        return hit ? run(store, fromComponent(i, opts, edit), hit.mod, hit.cmd, false) : undefined;
+      }
+      const ctx = fromComponent(i, opts, edit);
+      // pick something that needs a name or a number, and a small form asks for it
+      if (needsInput(found.e)) {
+        const blocked = gate(store, ctx, found.hit.mod, found.hit.cmd);
+        if (blocked) return run(store, ctx, found.hit.mod, found.hit.cmd, false);
+        return i.showModal(askModal(found.e, i.user.id, opts.back ?? groups[found.hit.cmd.group ?? '']?.dashboard ?? 'help'));
+      }
+      Object.assign(opts, found.e.fixed ?? {}, found.e.sub ? { sub: found.e.sub } : {});
+      return run(store, fromComponent(i, opts, edit), found.hit.mod, found.hit.cmd, false);
+    }
+    const hit = byName.get(name0);
+    if (!hit) return;
     return run(store, fromComponent(i, opts, edit), hit.mod, hit.cmd, false);
   }
   const arm = parseArmId(i.customId);

@@ -259,6 +259,9 @@ const home: Command = {
         { label: 'This season', value: 'season', emoji: '🌸' }, { label: 'Random pick', value: 'recommend', emoji: '🎲' },
         { label: 'Character of the day', value: 'today', emoji: '🎭' }, { label: 'My episode alerts', value: 'alerts', emoji: '🔔' },
         { label: 'Server\'s tracked shows', value: 'track', emoji: '📺' },
+        { label: 'Search an anime', value: 'anime', emoji: '🔍' }, { label: 'Search a manga', value: 'manga', emoji: '📚' },
+        { label: 'Find a character', value: 'character', emoji: '🎭' }, { label: 'Add to my list', value: 'watchlist.add', emoji: '➕' },
+        { label: 'Airing on another day', value: 'airing', emoji: '📅' }, { label: 'My pings', value: 'pings', emoji: '🔔' },
       )),
     ];
     return ctx.reply({ embeds: [card({ kind: 'season', title: 'Anime dashboard', emoji: '📺', gif: 'off', fields,
@@ -302,11 +305,11 @@ const daily: Command = {
 // one round per channel, the first right answer wins
 const rounds = new Map<string, { answer: number; titles: string[]; ends: number; done: boolean }>();
 
-const guess: Command = {
+export const guess: Command = {
   name: 'guess',
-  group: 'anime',
+  group: 'fun',
   data: new SlashCommandBuilder().setName('guess').setDescription('Name the anime from a picture, first right answer wins yen').toJSON(),
-  text: { aliases: ['gta', 'quiz'] },
+  text: { aliases: ['gta', 'animequiz'] },
   run: async (ctx, store) => {
     const live = rounds.get(ctx.channelId);
     if (live && !live.done && live.ends > Date.now()) return ctx.reply('A round is already running here, answer that one first.');
@@ -371,7 +374,7 @@ export const anime: Module = {
   name: 'anime',
   label: 'Anime and manga',
   about: 'Search anime, manga and characters, seasons, trending picks, new-episode alerts and your own watch list',
-  commands: [home, lookup('ANIME'), lookup('MANGA'), character, airing, daily, guess, season, trend, random, alerts, watchlist],
+  commands: [home, lookup('ANIME'), lookup('MANGA'), character, airing, daily, season, trend, random, alerts, watchlist],
 };
 
 // ---------- buttons and menus ----------

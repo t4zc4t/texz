@@ -92,9 +92,11 @@ The case file shows your battle streak and gems left. An alert goes out when a g
 
 ## Using it
 
-`tz owo` and `tz anime` open dashboards with everything on one screen and a menu to open the rest. On slash, `/owo` and `/anime` work the same way, with an optional view to jump straight somewhere and a box for whatever that view needs (`/anime input:frieren` searches).
+Everything sits in nine dashboards, so nobody has to remember a command: `/owo`, `/anime`, `/fun` (games and trivia), `/eco` (yen), `/levels`, `/info` (you, your pings and the server), `/sports` (F1 and football), `/mod` and `/tools` (giveaways, role pickers, announcements). Typed works the same, `tz fun` or `tz owo` on their own. Buttons open the quick things, a menu lists the rest, and anything that needs a name, a number or a person opens a small form instead of asking you to type arguments. `/help`, `/ping`, `/setup` and the Quote message command stay on their own.
 
-Every command works as a slash command and with the short prefix, and the typed form follows the slash one: `/owo view:huntbot` is `tz owo huntbot`, `/fun coin` is `tz fun coin`. Most have a shorter alias too (`tz hb`, `tz s`, `tz w <id>`). Each command has a short cooldown per person, a few seconds, a bit longer for the ones that draw cards or call other sites. `tz help` lists everything switched on in the server.
+If you do like typing, the typed form follows the slash one: `/owo view:huntbot` is `tz owo huntbot`, and `/fun view:ship input:@someone` is `tz ship @someone`. Most have short names too (`tz hb`, `tz s`, `tz w <id>`). Each command has a short cooldown per person, a few seconds, a bit longer for the ones that draw cards or call other sites.
+
+`tz pings` (also on `/info`) is one panel for every ping Texz can send you: the F1, football and anime boards, Pokétwo and Shoob spawns, OwO quest buddies, and mentions for your own club, team and show. When more than three people share a pick they get a role of their own, so one ping covers everyone.
 
 Server admins (Manage Server) run `/setup` (or `tz setup`) to get the front desk, a panel where everything is done with menus and buttons: each feature on or off and limited to certain channels or roles, welcome and goodbye, the autorole, logs and automod, levels, xp and reward roles, birthdays, gifs and the prefix.
 

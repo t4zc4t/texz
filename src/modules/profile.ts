@@ -31,7 +31,7 @@ export function picksOf(store: Store, userId: string): Picks {
   const old = store.profile(userId).favourite;
   return { anime: old ?? undefined, ...saved, show: saved.show ?? ['level', 'birthday'] };
 }
-const savePicks = (store: Store, userId: string, p: Picks) => store.setKv(`picks:${userId}`, JSON.stringify(p));
+export const savePicks = (store: Store, userId: string, p: Picks) => store.setKv(`picks:${userId}`, JSON.stringify(p));
 
 function editPanel(store: Store, userId: string) {
   const p = picksOf(store, userId);

@@ -373,6 +373,7 @@ export function startBulletins(client: Client, store: Store) {
 
 const f1: Command = {
   name: 'f1',
+  group: 'sports',
   data: new SlashCommandBuilder().setName('f1').setDescription('Grand Prix: the next race, standings and the last result')
     .addStringOption((o) => o.setName('view').setDescription('Next race if empty')
       .addChoices({ name: 'next race', value: 'next' }, { name: 'standings', value: 'standings' }, { name: 'last race', value: 'last' },
@@ -420,8 +421,21 @@ const f1: Command = {
   },
 };
 
+// the trivia side of /f1, also on the fun dashboard
+const asView = (name: string, view: string, about: string, aliases: string[]): Command => ({
+  name,
+  group: 'fun',
+  data: new SlashCommandBuilder().setName(name).setDescription(about).toJSON(),
+  text: { aliases },
+  run: (ctx, store) => f1.run({ ...ctx, str: (n) => (n === 'view' ? view : ctx.str(n)) }, store),
+});
+export const f1Quiz = asView('quiz', 'quiz', 'F1 quiz, first right answer wins yen', ['f1quiz', 'fq']);
+export const f1Trivia = asView('trivia', 'trivia', 'A random bit of F1 trivia', ['fact', 'f1fact']);
+export const f1Today = asView('onthisday', 'today', 'What happened in F1 on this day', ['otd']);
+
 const football: Command = {
   name: 'football',
+  group: 'sports',
   data: new SlashCommandBuilder().setName('football').setDescription('Matches today and the server\'s favourite clubs')
     .addSubcommand((s) => s.setName('today').setDescription('Big matches and favourites today'))
     .addSubcommand((s) => s.setName('fav').setDescription('Add or remove a favourite club (admins)')
@@ -443,7 +457,7 @@ const football: Command = {
       store.saveGuild(ctx.guildId!, g);
       return ctx.reply({ content: at >= 0 ? `➖ ${club} is off the list.` : `⭐ ${club} added, every match gets a kick-off ping and the final score.`, temp: true });
     }
-    if (sub === 'favs') return ctx.reply({ content: g.bulletins.football.favs.length ? `⭐ ${g.bulletins.football.favs.join(', ')}` : 'No favourites yet. `/football fav` adds one.', temp: true });
+    if (sub === 'favs') return ctx.reply({ content: g.bulletins.football.favs.length ? `⭐ ${g.bulletins.football.favs.join(', ')}` : 'No favourites yet. `/sports view:football` adds one.', temp: true });
     const now = Date.now();
     const all: Match[] = [];
     for (const lg of Object.keys(leagues)) all.push(...await matches(lg, new Date(now)).catch(() => []));

@@ -91,6 +91,8 @@ const status: Command = {
         { label: 'Gems', value: 'gems', emoji: '💎' }, { label: 'Team', value: 'team', emoji: '🐾' }, { label: 'Weapon shop', value: 'shop', emoji: '🛒' },
         { label: 'Weekly stats', value: 'stats', emoji: '📈' }, { label: 'Leaderboard', value: 'leaderboard', emoji: '🏆' },
         { label: 'Reminders queued', value: 'remind', emoji: '⏰' }, { label: 'Buddies', value: 'buddy', emoji: '🤝' },
+        { label: 'Join the buddy network', value: 'buddy.join', emoji: '🕵️' }, { label: 'Ask buddies for a cookie, pray...', value: 'ask', emoji: '📣' },
+        { label: 'Check one weapon', value: 'weapon', emoji: '🗡️' }, { label: 'My pings', value: 'pings', emoji: '🔔' },
       ));
     return ctx.reply({ embeds: [card({ kind: 'status', title: 'OwO dashboard', emoji: '🗂️', fields, gif: gifFor(store, ctx, 'status') })], components: [nav, more] });
   },

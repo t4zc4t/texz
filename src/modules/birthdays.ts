@@ -88,6 +88,7 @@ export function startBirthdays(client: Client, store: Store) {
 
 const birthday: Command = {
   name: 'birthday',
+  group: 'info',
   data: new SlashCommandBuilder().setName('birthday').setDescription('Your birthday, so Texz can make a fuss on the day')
     .addSubcommand((s) => s.setName('set').setDescription('Save your birthday, no year needed')
       .addIntegerOption((o) => o.setName('day').setDescription('Day of the month').setRequired(true).setMinValue(1).setMaxValue(31))
