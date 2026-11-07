@@ -13,7 +13,7 @@ export const allModules: Module[] = [];
 const switchable = () => allModules.filter((m) => !m.locked);
 
 // moments an admin can attach a gif to
-export const gifMoments = ['help', 'ping', 'status', 'error', 'huntbot', 'leaderboard', 'ask', 'levelup', 'welcome', 'goodbye', 'ban', 'kick', 'timeout', 'warn', 'giveaway'];
+export const gifMoments = ['help', 'ping', 'status', 'error', 'huntbot', 'leaderboard', 'ask', 'levelup', 'welcome', 'goodbye', 'ban', 'kick', 'timeout', 'warn', 'giveaway', 'f1week', 'f1soon', 'f1win', 'f1result', 'matchday', 'kickoff', 'fulltime', 'screening', 'episode'];
 
 function rulesText(store: Store, guildId: string) {
   const g = store.guild(guildId);

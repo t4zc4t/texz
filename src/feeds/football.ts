@@ -19,7 +19,7 @@ export const bigClubs = [
   'Internazionale', 'Inter Milan', 'AC Milan', 'Napoli', 'AS Roma', 'Benfica', 'Porto',
 ];
 
-export interface Team { id: string; name: string; short: string; score: string; winner: boolean; home: boolean; color: string | null }
+export interface Team { id: string; name: string; short: string; score: string; winner: boolean; home: boolean; color: string | null; logo: string | null }
 export interface Match { id: string; league: string; date: number; state: 'pre' | 'in' | 'post'; detail: string; venue: string | null; home: Team; away: Team; goals: { who: string; clock: string; team: string }[] }
 
 const cache = new Map<string, { at: number; data: Match[] }>();
@@ -40,7 +40,7 @@ export async function matches(league: string, day: Date, keep = 9 * 60_000): Pro
 interface EspnEvent {
   id: string; date: string;
   status: { type: { state: 'pre' | 'in' | 'post'; shortDetail: string } };
-  competitions: { venue?: { fullName?: string }; competitors: { homeAway: string; score?: string; winner?: boolean; team: { id: string; displayName: string; abbreviation: string; color?: string } }[];
+  competitions: { venue?: { fullName?: string }; competitors: { homeAway: string; score?: string; winner?: boolean; team: { id: string; displayName: string; abbreviation: string; color?: string; logo?: string } }[];
     details?: { scoringPlay?: boolean; clock?: { displayValue?: string }; athletesInvolved?: { displayName: string }[]; team?: { id: string } }[] }[];
 }
 
@@ -48,7 +48,7 @@ function toMatch(league: string, e: EspnEvent): Match {
   const c = e.competitions[0];
   const team = (side: string): Team => {
     const t = c.competitors.find((x) => x.homeAway === side) ?? c.competitors[0];
-    return { id: t.team.id, name: t.team.displayName, short: t.team.abbreviation, score: t.score ?? '0', winner: !!t.winner, home: side === 'home', color: t.team.color ?? null };
+    return { id: t.team.id, name: t.team.displayName, short: t.team.abbreviation, score: t.score ?? '0', winner: !!t.winner, home: side === 'home', color: t.team.color ?? null, logo: t.team.logo?.startsWith('https://') ? t.team.logo : null };
   };
   return {
     id: e.id, league, date: Date.parse(e.date), state: e.status.type.state, detail: e.status.type.shortDetail, venue: c.venue?.fullName ?? null,

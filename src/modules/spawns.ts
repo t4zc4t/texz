@@ -46,13 +46,41 @@ async function roleFor(guild: Guild, store: Store, k: K, make: boolean) {
 
 const last = new Map<string, number>();
 
+// is the bot here, has it spawned anything, and could I read it
+export function spawnStatus(store: Store, guild: Guild, k: K) {
+  const here = guild.members.cache.has(kinds[k].bot);
+  const roleId = store.getKv(`spawnrole:${guild.id}:${k}`);
+  const role = roleId ? guild.roles.cache.get(roleId) : null;
+  const today = Number(store.getKv(`spawncount:${guild.id}:${k}:${new Date().toISOString().slice(0, 10)}`) ?? 0);
+  const seen = Number(store.getKv(`spawnseen:${guild.id}:${k}`) ?? 0);
+  let lastMsg: { at: number; spawn: boolean; title: string } | null = null;
+  try { lastMsg = JSON.parse(store.getKv(`spawnlast:${guild.id}:${k}`) ?? 'null'); } catch { /* old value */ }
+  return [
+    here ? '🟢 in this server' : '⚪ not seen in this server yet',
+    `👥 ${role ? `**${role.members.size}** opted in` : 'nobody opted in yet'}`,
+    `✨ **${today}** spawn${today === 1 ? '' : 's'} today${seen ? ` · last <t:${Math.floor(seen / 1000)}:R>` : ''}`,
+    lastMsg && !lastMsg.spawn ? `-# last message I didn't count: ${lastMsg.title || 'no title'}` : null,
+  ].filter(Boolean).join('\n');
+}
+
 export function watchSpawns(client: Client, store: Store) {
   client.on(Events.MessageCreate, (m) => void onSpawn(store, m).catch(() => {}));
 }
 
 async function onSpawn(store: Store, m: Message) {
   if (!m.guild || !m.author.bot) return;
+  const which = m.author.id === POKETWO_ID ? 'p2' : m.author.id === SHOOB_ID ? 'shoob' : null;
+  if (!which) return;
   const s = spawnOf(m);
+  // what the bot said last, so the status page can show whether spawns are being recognised
+  const e = m.embeds[0];
+  store.setKv(`spawnlast:${m.guild.id}:${which}`, JSON.stringify({ at: Date.now(), spawn: !!s, title: (e?.title ?? m.content ?? '').slice(0, 80) }));
+  if (s) {
+    const day = new Date().toISOString().slice(0, 10);
+    const key = `spawncount:${m.guild.id}:${which}:${day}`;
+    store.setKv(key, String(Number(store.getKv(key) ?? 0) + 1));
+    store.setKv(`spawnseen:${m.guild.id}:${which}`, String(Date.now()));
+  }
   if (!s || !store.rules(m.guild.id, 'spawns').enabled) return;
   const min = Number(store.getKv(`spawnmin:${m.guild.id}`) ?? 1);
   if (s.kind === 'shoob' && s.tier !== null && s.tier < min) return;
@@ -83,6 +111,7 @@ const spawns: Command = {
     const e = card({
       kind: 'help', title: 'Spawn pings', emoji: '🎯', gif: 'off',
       body: `Pick what you want a ping for. I only ping when the spawn shows up, never for anything else.\n\n🔴 **Pokétwo** · every wild pokémon\n🃏 **Shoob** · tier **${min === 7 ? 'S' : min}** and up${tier ? ' (just changed)' : ''}\n-# Press again to stop. Admins: \`/fun view:spawns input:4\` changes the Shoob tier.`,
+      fields: (['p2', 'shoob'] as const).map((k) => ({ name: `${kinds[k].emoji} ${kinds[k].label} status`, value: spawnStatus(store, ctx.guild!, k), inline: true })),
     });
     return ctx.reply({ embeds: [e], components: [row(
       new ButtonBuilder().setCustomId('spw|p2').setLabel('Pokétwo').setEmoji('🔴').setStyle(ButtonStyle.Secondary),

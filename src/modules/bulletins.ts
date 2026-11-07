@@ -4,7 +4,7 @@ import {
 } from 'discord.js';
 import type { Bulletins, Feed, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
-import { card } from '../theme.js';
+import { bar, card } from '../theme.js';
 import { report } from '../ops.js';
 import { SITE, bigSession, facts, flagOf, home, nextRound, onThisDay, questions, schedule, siteLink, teamDot, type Round } from '../feeds/f1.js';
 import { quizButton, quizRound } from './f1quiz.js';
@@ -124,6 +124,16 @@ async function post(client: Client, feed: Feed, content: { text?: string; embed:
 
 const link = (url: string, label: string) => new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(url).setLabel(label);
 const sessionWord: Record<string, string> = { Q: 'Qualifying', SQ: 'Sprint qualifying', S: 'Sprint', R: 'Grand Prix' };
+// a small mark for each kind of session so the week reads at a glance
+const sessionMark = (t: string) => (t === 'R' ? '🏁' : t === 'Q' ? '⏱️' : t === 'SQ' ? '⏲️' : t === 'S' ? '⚡' : '🔧');
+const weekLines = (r: Round, rel = false) => r.sessions.map((s) => {
+  const at = unix(Date.parse(s.start));
+  return `${sessionMark(s.type)} ${bigSession(s.type) ? `**${s.label}**` : s.label} · <t:${at}:F>${rel ? ` (<t:${at}:R>)` : ''}`;
+});
+// a server's own gif for a moment, or the default
+const gifIn = (store: Store, gid: string, moment: string) => store.guild(gid).gifs[moment] ?? undefined;
+// league marks, so a list of matches is easy to scan
+const leagueMark: Record<string, string> = { 'eng.1': '🦁', 'esp.1': '🇪🇸', 'ita.1': '🇮🇹', 'ger.1': '🇩🇪', 'fra.1': '🇫🇷', 'uefa.champions': '⭐', 'uefa.europa': '🟠', 'fifa.world': '🌍', 'uefa.euro': '🇪🇺', 'ind.1': '🇮🇳' };
 
 async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][]) {
   const live = guilds.filter(([, b]) => b.f1.on && b.f1.channel);
@@ -137,9 +147,9 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
     if (now > first - 24 * HOUR && now < first) {
       for (const [gid, b] of live) {
         if (!store.firstTime(gid, `f1:week:${r.round}`)) continue;
-        const lines = r.sessions.map((s) => `${bigSession(s.type) ? '**' : ''}${s.label}${bigSession(s.type) ? '**' : ''} · <t:${unix(Date.parse(s.start))}:F>`);
         await post(client, b.f1, {
-          embed: card({ kind: 'f1Week', title: `${flag} ${r.name} · round ${r.round}`, emoji: '', color: names.f1.color, gif: 'off', body: `${r.circuit.name}, ${r.circuit.locality}\n\n${lines.join('\n')}` }),
+          react: [flag, '🏎️'],
+          embed: card({ kind: 'f1Week', title: `${flag} ${r.name} · round ${r.round}`, emoji: '', color: names.f1.color, gif: gifIn(store, gid, 'f1week'), body: `📍 ${r.circuit.name}, ${r.circuit.locality}${r.sprint ? ' · ⚡ sprint weekend' : ''}\n\n${weekLines(r).join('\n')}` }),
           buttons: [link(`${SITE}/schedule`, 'Full schedule')],
         });
       }
@@ -153,7 +163,8 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
           if (!store.firstTime(gid, `f1:pre:${r.round}:${s.type}`)) continue;
           await post(client, b.f1, {
             ping: true, text: `${sessionWord[s.type] ?? s.label} <t:${unix(start)}:R>`,
-            embed: card({ kind: 'f1Soon', title: `${flag} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: 'off', body: `Lights out <t:${unix(start)}:t>, ${r.circuit.name}.` }),
+            react: ['🚦', flag],
+            embed: card({ kind: 'f1Soon', title: `${sessionMark(s.type)} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: gifIn(store, gid, 'f1soon'), body: `🔴🔴🔴🔴🔴 Lights out <t:${unix(start)}:t>, ${r.circuit.name}.` }),
           });
         }
       }
@@ -174,7 +185,7 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
           const win = s.type === 'Q' || s.type === 'SQ' ? `${s.top3[0].driver} takes pole` : `${s.top3[0].driver} wins`;
           await post(client, b.f1, {
             ping: s.type === 'R', text: s.type === 'R' ? `${win}!` : undefined, react: [flag, s.type === 'R' ? '🏆' : '⏱️'],
-            embed: card({ kind: s.type === 'R' ? 'f1Win' : 'f1Result', title: `${flag} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: 'off', body }),
+            embed: card({ kind: s.type === 'R' ? 'f1Win' : 'f1Result', title: `${flag} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: gifIn(store, gid, s.type === 'R' ? 'f1win' : 'f1result'), body }),
             buttons: [link(`${SITE}/races`, 'Full result on Parc Fermé')],
           });
         }
@@ -266,7 +277,7 @@ async function membersAmong(client: Client, guildId: string, ids: string[]) {
   return found ? [...found.keys()] : [];
 }
 
-const leagueOf = (m: Match) => leagues[m.league]?.name ?? m.league;
+const leagueOf = (m: Match) => `${leagueMark[m.league] ?? '⚽'} ${leagues[m.league]?.name ?? m.league}`;
 
 async function footballTick(client: Client, store: Store, guilds: [string, Bulletins][]) {
   const live = guilds.filter(([, b]) => b.football.on && b.football.channel);
@@ -287,7 +298,7 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
       const upcoming = mine.filter((m) => m.state === 'pre' && m.date - now < 24 * HOUR).sort((a, c) => a.date - c.date);
       if (upcoming.length) {
         await post(client, b.football, {
-          embed: card({ kind: 'fbDay', title: 'Today\'s matches worth watching', emoji: '⚽', color: names.football.color, gif: 'off',
+          embed: card({ kind: 'fbDay', title: 'Today\'s matches worth watching', emoji: '🏟️', color: names.football.color, gif: gifIn(store, gid, 'matchday'),
             body: upcoming.slice(0, 15).map((m) => `<t:${unix(m.date)}:t> ${clubDot(m.home)} **${m.home.name}** vs **${m.away.name}** ${clubDot(m.away)} · ${leagueOf(m)}`).join('\n') }),
         });
       }
@@ -308,15 +319,15 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
         await post(client, b.football, {
           users, fanRoles,
           ping: true, text: `kick-off <t:${unix(m.date)}:R>`, react: [clubDot(m.home), clubDot(m.away), '⚽'].filter((x, i, a) => a.indexOf(x) === i),
-          embed: card({ kind: 'fbSoon', title: `${m.home.name} vs ${m.away.name}`, emoji: '⚽', color: names.football.color, gif: 'off', body: `${leagueOf(m)}${m.venue ? ` · ${m.venue}` : ''}` }),
+          embed: card({ kind: 'fbSoon', title: `${clubDot(m.home)} ${m.home.name} vs ${m.away.name} ${clubDot(m.away)}`, emoji: '', color: names.football.color, gif: gifIn(store, gid, 'kickoff'), body: `${leagueOf(m)}${m.venue ? `\n🏟️ ${m.venue}` : ''}\n⏰ Kick-off <t:${unix(m.date)}:t>` }).setThumbnail(m.home.logo ?? m.away.logo),
         });
       }
       if (m.state === 'post' && now - m.date < 8 * HOUR && store.firstTime(gid, `fb:ft:${m.id}`)) {
         const scorers = m.goals.map((g) => `${g.clock} ${g.who} (${g.team === m.home.id ? m.home.short : m.away.short})`).join(' · ');
         await post(client, b.football, {
           react: [m.home.winner ? '🏠' : m.away.winner ? '✈️' : '🤝'],
-          embed: card({ kind: 'fbFull', title: `${m.home.name} ${m.home.score} - ${m.away.score} ${m.away.name}`, emoji: '🏁', color: names.football.color, gif: 'off',
-            body: `${leagueOf(m)} · ${m.detail}${scorers ? `\n\n⚽ ${scorers}` : ''}` }),
+          embed: card({ kind: 'fbFull', title: `${clubDot(m.home)} ${m.home.name} ${m.home.score} - ${m.away.score} ${m.away.name} ${clubDot(m.away)}`, emoji: '', color: names.football.color, gif: gifIn(store, gid, 'fulltime'),
+            body: `${leagueOf(m)} · ${m.detail}\n${m.home.winner ? `🏆 **${m.home.name}** win` : m.away.winner ? `🏆 **${m.away.name}** win` : '🤝 Honours even'}${scorers ? `\n\n⚽ ${scorers}` : ''}` }).setThumbnail((m.home.winner ? m.home.logo : m.away.winner ? m.away.logo : null) ?? m.home.logo),
         });
       }
     }
@@ -339,19 +350,23 @@ async function animeTick(client: Client, store: Store, guilds: [string, Bulletin
       const list = schedule.filter((a) => wanted(a.media));
       if (list.length) {
         await post(client, b.anime, {
-          embed: card({ kind: 'anDay', title: 'Screening schedule', emoji: '🗓️', color: names.anime.color, gif: 'off',
-            body: list.slice(0, 20).map((a) => `<t:${a.airingAt}:t> **${titleOf(a.media)}** · ep ${a.episode}`).join('\n') }),
+          embed: card({ kind: 'anDay', title: 'Today\'s screenings', emoji: '🍿', color: names.anime.color, gif: gifIn(store, gid, 'screening'),
+            body: list.slice(0, 20).map((a) => `<t:${a.airingAt}:t> ${b.anime.shows.some((x) => x.id === a.media.id) ? '⭐' : '📺'} **${titleOf(a.media)}** · ep ${a.episode}${a.media.episodes && a.episode === a.media.episodes ? ' · 🎬 finale' : a.episode === 1 ? ' · 🆕 premiere' : ''}`).join('\n') }),
         });
       }
     }
     for (const a of aired) {
       if (!wanted(a.media) || !store.firstTime(gid, `an:ep:${a.media.id}:${a.episode}`)) continue;
-      const e = card({ kind: 'anEp', title: `${titleOf(a.media)} · episode ${a.episode}`, emoji: '📺', color: names.anime.color, gif: 'off',
-        body: `Out now${a.media.episodes ? `, ${a.episode} of ${a.media.episodes}` : ''}.` }).setURL(a.media.siteUrl);
+      const last = !!a.media.episodes && a.episode === a.media.episodes;
+      const e = card({ kind: 'anEp', title: `${titleOf(a.media)} · episode ${a.episode}`, emoji: last ? '🎬' : a.episode === 1 ? '🆕' : '📺', color: names.anime.color,
+        // the show's own banner beats any gif, the gif only fills in when there isn't one
+        gif: a.media.bannerImage ? 'off' : gifIn(store, gid, 'episode'),
+        body: `${last ? '🎬 **The finale is out.**' : a.episode === 1 ? '🆕 **Premiere, a new show starts today.**' : '▶️ Out now'}${a.media.episodes ? `\n${bar(a.episode, a.media.episodes)} ${a.episode}/${a.media.episodes}` : ''}` }).setURL(a.media.siteUrl);
       if (a.media.coverImage.large) e.setThumbnail(a.media.coverImage.large);
+      if (a.media.bannerImage) e.setImage(a.media.bannerImage);
       const watch = (a.media.externalLinks ?? []).filter((l) => l.type === 'STREAMING' && !l.isDisabled && l.url.startsWith('https://')).slice(0, 3);
       const fans = await fanPing(client, store, gid, `show:${a.media.id}`, `${titleOf(a.media).slice(0, 80)} Watchers`, await membersAmong(client, gid, store.watchersOf(a.media.id)));
-      await post(client, b.anime, { users: fans.users, fanRoles: fans.role ? [fans.role] : [], ping: true, react: ['📺', '🔥'], embed: e, buttons: watch.map((l) => link(l.url, `Watch on ${l.site}`.slice(0, 80))) });
+      await post(client, b.anime, { users: fans.users, fanRoles: fans.role ? [fans.role] : [], ping: true, react: last ? ['🎬', '😭'] : ['📺', '🔥'], embed: e, buttons: watch.map((l) => link(l.url, `Watch on ${l.site}`.slice(0, 80))) });
     }
   }
 }
@@ -403,20 +418,21 @@ const f1: Command = {
       }
       if (view.startsWith('stand')) {
         const h = await home();
-        const body = h.standings.slice(0, 10).map((d) => `\`${d.pos.padStart(2)}\` ${teamDot(d.team)} **${d.driver}** · ${d.team} · **${d.points}**${d.wins ? ` · ${d.wins}W` : ''}`).join('\n');
+        const medal = ['🥇', '🥈', '🥉'];
+        const body = h.standings.slice(0, 10).map((d, i) => `${medal[i] ?? `\`${d.pos.padStart(2)}\``} ${teamDot(d.team)} **${d.driver}** · ${d.team} · **${d.points}**${d.wins ? ` · ${d.wins}W` : ''}`).join('\n');
         const teams = h.teams.slice(0, 5).map((t) => `${t.pos}. ${teamDot(t.team)} ${t.team} **${t.points}**`).join(' · ');
         return ctx.reply({ embeds: [card({ kind: 'f1Result', title: `${h.season} standings · after round ${h.afterRound}`, emoji: '🏆', color: names.f1.color, gif: 'off', body, fields: [{ name: 'Teams', value: teams, inline: false }] })], components: [site] });
       }
       if (view.startsWith('last')) {
         const h = await home();
-        const body = h.lastRace.results.slice(0, 10).map((d) => `\`${d.pos.padStart(2)}\` ${teamDot(d.team)} **${d.driver}** · ${d.team} · ${d.gap}`).join('\n');
-        return ctx.reply({ embeds: [card({ kind: 'f1Win', title: `${h.lastRace.name} · ${h.lastRace.dateLabel}`, emoji: '🏁', color: names.f1.color, gif: 'off', body })], components: [site] });
+        const medal = ['🥇', '🥈', '🥉'];
+        const body = h.lastRace.results.slice(0, 10).map((d, i) => `${medal[i] ?? `\`${d.pos.padStart(2)}\``} ${teamDot(d.team)} **${d.driver}** · ${d.team} · ${d.gap}`).join('\n');
+        return ctx.reply({ embeds: [card({ kind: 'f1Win', title: `${h.lastRace.name} · ${h.lastRace.dateLabel}`, emoji: '🏁', color: names.f1.color, gif: ctx.guildId ? gifIn(store, ctx.guildId, 'f1win') : undefined, body })], components: [site] });
       }
       const { rounds } = await schedule();
       const r: Round | null = nextRound(rounds);
       if (!r) return ctx.reply('The season is over. The paddock sleeps, and so do I.');
-      const lines = r.sessions.map((s) => `${bigSession(s.type) ? '**' : ''}${s.label}${bigSession(s.type) ? '**' : ''} · <t:${unix(Date.parse(s.start))}:F> (<t:${unix(Date.parse(s.start))}:R>)`);
-      return ctx.reply({ embeds: [card({ kind: 'f1Week', title: `${flagOf[r.circuit.country] ?? '🏁'} ${r.name} · round ${r.round}`, emoji: '', color: names.f1.color, gif: 'off', body: `${r.circuit.name}, ${r.circuit.locality}\n\n${lines.join('\n')}` })], components: [site] });
+      return ctx.reply({ embeds: [card({ kind: 'f1Week', title: `${flagOf[r.circuit.country] ?? '🏁'} ${r.name} · round ${r.round}`, emoji: '', color: names.f1.color, gif: ctx.guildId ? gifIn(store, ctx.guildId, 'f1week') : undefined, body: `📍 ${r.circuit.name}, ${r.circuit.locality}${r.sprint ? ' · ⚡ sprint weekend' : ''}\n\n${weekLines(r, true).join('\n')}` })], components: [site] });
     } catch { return ctx.reply('Parc Fermé didn\'t answer, try again in a moment.'); }
   },
 };
@@ -462,10 +478,16 @@ const football: Command = {
     const all: Match[] = [];
     for (const lg of Object.keys(leagues)) all.push(...await matches(lg, new Date(now)).catch(() => []));
     const mine = all.filter((m) => interesting(m, g.bulletins.football.favs, g.bulletins.football.big)).sort((a, c) => a.date - c.date);
-    const body = mine.length
-      ? mine.slice(0, 20).map((m) => m.state === 'pre' ? `<t:${unix(m.date)}:t> ${clubDot(m.home)} **${m.home.name}** vs **${m.away.name}** ${clubDot(m.away)} · ${leagueOf(m)}` : `${m.state === 'in' ? '🔴' : '🏁'} ${scoreLine(m)} · ${m.detail}`).join('\n')
-      : 'Nothing big today. A rest day for everyone\'s nerves.';
-    return ctx.reply({ embeds: [card({ kind: 'fbDay', title: 'Today on the pitch', emoji: '⚽', color: names.football.color, gif: 'off', body })] });
+    // live first, then what's still to come, then the finished ones
+    const part = (state: Match['state']) => mine.filter((m) => m.state === state).slice(0, 10);
+    const fields = [
+      { name: '🔴 Live now', value: part('in').map((m) => `${scoreLine(m)} · ${m.detail}`).join('\n'), inline: false },
+      { name: '⏰ Coming up', value: part('pre').map((m) => `<t:${unix(m.date)}:t> ${clubDot(m.home)} **${m.home.name}** vs **${m.away.name}** ${clubDot(m.away)} · ${leagueOf(m)}`).join('\n'), inline: false },
+      { name: '🏁 Full time', value: part('post').map((m) => `${scoreLine(m)} · ${leagueOf(m)}`).join('\n'), inline: false },
+    ].filter((f) => f.value);
+    const favs = g.bulletins.football.favs;
+    const body = mine.length ? (favs.length ? `⭐ Following ${favs.join(', ')}` : '') : 'Nothing big today. A rest day for everyone\'s nerves.';
+    return ctx.reply({ embeds: [card({ kind: 'fbDay', title: 'Today on the pitch', emoji: '🏟️', color: names.football.color, gif: 'off', body, fields })], components: [row(...['eng.1', 'esp.1', 'uefa.champions'].map((l) => link(`https://www.espn.com/soccer/scoreboard/_/league/${l}`, `${leagueMark[l]} ${leagues[l].name}`)))] });
   },
 };
 

@@ -50,6 +50,7 @@ const groups: Record<string, Group> = {
 };
 
 type Hit = { mod: Module; cmd: Command };
+const dashNames = new Set<string>();
 const byName = new Map<string, Hit>();
 const bySlash = new Map<string, Hit>();
 const byText = new Map<string, Hit>();
@@ -76,6 +77,7 @@ const findEntry = (key: string) => {
 
 // groups without a hand made dashboard get the generic one
 for (const [name, g] of Object.entries(groups)) {
+  dashNames.add(g.dashboard ?? `${name}home`);
   dashList.push({ name, label: g.label, emoji: g.emoji, description: g.description, home: g.dashboard ?? `${name}home`, anywhere: g.anywhere });
   if (g.dashboard) continue;
   g.dashboard = `${name}home`;
@@ -255,8 +257,11 @@ export function onText(store: Store, m: Message): boolean {
   const args = t.sub ? (t.subArgs?.[sub ?? ''] ?? []) : (t.args ?? []);
   // quick answers to typed commands clean themselves up, the server picks how long in /setup
   const clean = m.guildId ? store.guild(m.guildId).autoclean : 0;
+  // dashboards and menus posted in the channel stop taking clicks after a while, so old ones don't pile up live
+  const menuLike = dashNames.has(hit.cmd.name) || ['help', 'pings', 'spawns'].includes(hit.cmd.name);
   const after = (sent: Message, temp: boolean) => {
     if (temp && clean > 0 && sent?.id) store.deleteLater(sent.channelId, sent.id, Date.now() + clean * 1000);
+    if (menuLike && sent?.edit) setTimeout(() => void sent.edit({ components: [] }).catch(() => {}), 10 * 60_000).unref?.();
   };
   void run(store, fromText(m, tokens, args, !!t.sub, after), hit.mod, hit.cmd);
   return true;

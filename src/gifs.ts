@@ -37,11 +37,30 @@ export const defaults: Record<string, string[]> = {
   ban: [giphy('GpSELI5HJt5FbBUFPa')],
   // a lone figure walking off down a red hallway
   goodbye: [giphy('Waq81Yz6Vw3GuCxGPZ')],
+  // race week, a cartoon car rolling out
+  f1week: [giphy('5SKyKU6B6fzAwfrKK4')],
+  // onboard down the pit lane, an hour to go
+  f1soon: [giphy('DN0VIGdNuIhGpO1TQP')],
+  // the podium from F1's own page
+  f1win: [giphy('1X8865dbCf8xNrDPG6')],
+  // a plain chequered flag for qualifying and sprints
+  f1result: [giphy('TGL7s5G5jhY4AAnrdA')],
+  // the pitch before anyone walks out
+  matchday: [giphy('3og0IGgnDJx1Rsqyqs')],
+  // a referee about to blow for kick-off
+  kickoff: [giphy('l3vRddpK1l4CDwp1K')],
+  // ball hitting the net, for full time
+  fulltime: [giphy('l4FGt3POE4XhoVEFq')],
+  // popcorn for the day's screening list
+  screening: [giphy('9XxVJUtCiuLwWx8Iin')],
+  // a very pleased Dazai, a new episode is out
+  episode: [giphy('9F6gScqr2xfxCBfOJk')],
 };
 
 // which card kinds show which moment's gif
 export const momentOf: Record<string, string> = {
   help: 'help', ping: 'ping', status: 'status', leaderboard: 'leaderboard', ask: 'ask', welcome: 'welcome', levelup: 'levelup', rankUp: 'levelup', warn: 'warn', timeout: 'timeout', kick: 'kick', ban: 'ban', tempban: 'ban', goodbye: 'goodbye', birthday: 'birthday',
+  f1Week: 'f1week', f1Soon: 'f1soon', f1Win: 'f1win', f1Result: 'f1result', fbDay: 'matchday', fbSoon: 'kickoff', fbFull: 'fulltime', anDay: 'screening', anEp: 'episode',
 };
 
 export const isGifLink = (url: string) => direct.test(url) || tenorPage.test(url) || giphyPage.test(url);

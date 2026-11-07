@@ -285,9 +285,18 @@ const airing: Command = {
     const list = await airingOn(Math.floor(from), Math.floor(from) + 86_400).catch(() => null);
     if (!list) return ctx.reply('AniList didn\'t answer, try again in a moment.');
     const body = list.length
-      ? list.slice(0, 20).map((a) => `<t:${a.airingAt}:t> **[${titleOf(a.media)}](${a.media.siteUrl})** · ep ${a.episode}${a.media.averageScore ? ` · ⭐ ${a.media.averageScore}` : ''}`).join('\n')
+      ? list.slice(0, 20).map((a) => {
+          const mark = a.episode === 1 ? '🆕' : a.media.episodes && a.episode === a.media.episodes ? '🎬' : (a.airingAt * 1000 < Date.now() ? '✅' : '⏳');
+          return `${mark} <t:${a.airingAt}:t> **[${titleOf(a.media)}](${a.media.siteUrl})** · ep ${a.episode}${a.media.averageScore ? ` · ⭐ ${a.media.averageScore}` : ''}`;
+        }).join('\n')
       : 'Nothing airing. A rare quiet day for Yokohama.';
-    return ctx.reply({ embeds: [card({ kind: 'season', title: add ? 'Airing tomorrow' : 'Airing today', emoji: '📡', gif: 'off', body })] });
+    const top = list?.filter((a) => a.media.bannerImage).sort((x, y) => (y.media.popularity ?? 0) - (x.media.popularity ?? 0))[0];
+    const e = card({ kind: 'season', title: add ? 'Airing tomorrow' : 'Airing today', emoji: '📡', gif: 'off', body: `${body}\n\n-# ✅ out · ⏳ later · 🆕 premiere · 🎬 finale` });
+    // the most popular show of the day leads with its banner
+    if (top?.media.bannerImage) e.setImage(top.media.bannerImage);
+    return ctx.reply({ embeds: [e], components: [row(
+      new ButtonBuilder().setCustomId(`nav|airing|owner=${ctx.userId},day=${add ? 'today' : 'tomorrow'},back=animehome`).setLabel(add ? 'Today' : 'Tomorrow').setEmoji('📅').setStyle(ButtonStyle.Secondary),
+    )] });
   },
 };
 
