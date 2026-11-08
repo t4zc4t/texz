@@ -93,6 +93,7 @@ async function named(store: Store, m: Message, spawnId: string, name: string, ho
   await m.channel.send({
     content: roles.length ? `${roles.map((r) => `<@&${r}>`).join(' ')} ${why} spawn, be quick` : undefined,
     embeds: [e],
+    components: [copyRow(name)],
     reply: { messageReference: spawnId, failIfNotExists: false },
     allowedMentions: { roles },
   });
@@ -169,15 +170,27 @@ async function onSpawn(store: Store, m: Message) {
   await m.channel.send({ content: `${tierMark[s.tier]} <@&${role.id}> a **tier ${s.tier}** card just dropped, go claim it`, allowedMentions: { roles: [role.id] } });
 }
 
+// phones can't copy out of an embed, so a button sends the catch line as a plain message you can long press
+const copyRow = (name: string) => row(new ButtonBuilder().setCustomId(`p2c|${name}`.slice(0, 100)).setLabel('Copy for mobile').setEmoji('📋').setStyle(ButtonStyle.Secondary));
+
+export async function onCatchCopy(i: Interaction) {
+  if (!i.isButton() || !i.customId.startsWith('p2c|')) return false;
+  await i.reply({ content: catchLine(i.customId.slice(4)), flags: MessageFlags.Ephemeral });
+  return true;
+}
+
 // the reply to a hint or a search, one name gets its artwork and the catch command
 function answer(pattern: string, fits: { id: number; name: string }[]) {
   if (!fits.length) return { content: `🤔 Nothing fits \`${pattern}\`. Ask Pokétwo for another hint.` };
   if (fits.length === 1) {
     const f = fits[0];
     const e = card({ kind: 'help', title: f.name, emoji: '🔎', gif: 'off', line: '', color: 0xe3350d, body: `#${f.id} · ${typesOf(f.name).map((t) => `${typeMark[t] ?? ''} ${t}`).join(' · ')}${rarityOf(f.name) ? ` · ${rareMark[rarityOf(f.name)!]}` : ''}\n\`\`\`${catchLine(f.name)}\`\`\`` }).setThumbnail(artwork(f.id));
-    return { embeds: [e] };
+    return { embeds: [e], components: [copyRow(f.name)] };
   }
-  return { content: `🔎 Could be ${fits.map((f) => `**${f.name}**`).join(', ')}\n${fits.slice(0, 3).map((f) => `\`${catchLine(f.name)}\``).join('\n')}` };
+  return {
+    content: `🔎 Could be ${fits.map((f) => `**${f.name}**`).join(', ')}\n${fits.slice(0, 3).map((f) => `\`${catchLine(f.name)}\``).join('\n')}`,
+    components: [row(...fits.slice(0, 5).map((f) => new ButtonBuilder().setCustomId(`p2c|${f.name}`.slice(0, 100)).setLabel(f.name.slice(0, 80)).setEmoji('📋').setStyle(ButtonStyle.Secondary)))],
+  };
 }
 
 // is the bot here, has it spawned anything, and could I read it

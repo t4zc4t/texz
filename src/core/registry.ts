@@ -25,7 +25,7 @@ import { report } from '../ops.js';
 import { quoteCommand } from '../modules/quote.js';
 import { onProfileEdit } from '../modules/profile.js';
 import { onShip } from '../modules/ship.js';
-import { onPingsButton, onSpawnButton, spawnsModule } from '../modules/spawns.js';
+import { onCatchCopy, onPingsButton, onSpawnButton, spawnsModule } from '../modules/spawns.js';
 import { fromComponent, fromSlash, fromText, withTokens, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
 import { glance, layout } from './glance.js';
@@ -289,6 +289,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onF1Quiz(store, i)) return;
     if (await onSpawnButton(store, i)) return;
     if (await onPingsButton(store, i)) return;
+    if (await onCatchCopy(i)) return;
     if (await onProfileEdit(store, i)) return;
     if (await onShip(i)) return;
     if (await onBulletinButton(i, store)) return;
