@@ -6,7 +6,7 @@ import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { card } from '../theme.js';
 import { picksOf, savePicks } from './profile.js';
-import { artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve } from '../features/pokedex.js';
+import { TYPES, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeMark, typesOf } from '../features/pokedex.js';
 import { fingerprint, knownCount, learn, recognise } from '../features/pokeid.js';
 
 export const POKETWO_ID = '716390085896962058';
@@ -57,6 +57,7 @@ export function watchSpawns(client: Client, store: Store) {
 const waiting = new Map<string, { id: string; hash: string | null; at: number; name: string | null; rare: boolean; pinged: boolean }>();
 const RARE_ROLE = 'Pokétwo Rare Spawns';
 const rareRole = (guild: Guild, store: Store, make = false) => roleNamed(guild, store, 'p2rare', RARE_ROLE, make);
+const typeRole = (guild: Guild, store: Store, t: string, make = false) => roleNamed(guild, store, `p2type:${t}`, `Pokétwo ${t}`, make);
 const rareMark: Record<string, string> = { legendary: '🌟 Legendary', mythical: '💫 Mythical', 'ultra beast': '🌀 Ultra Beast' };
 
 // a name is known for the spawn: tell the channel how to catch it, and ping for the rare ones
@@ -69,22 +70,29 @@ async function named(store: Store, m: Message, spawnId: string, name: string, ho
   w.rare = !!rare;
   if (w.hash && how !== 'seen') learn(store, w.hash, name);
   if (!store.rules(m.guild.id, 'spawns').enabled) return;
-  const role = rare && !w.pinged ? await rareRole(m.guild, store) : null;
-  if (role) w.pinged = true;
-  // the claim card goes out once, a helper bot already naming it is enough on its own unless it's rare
-  if (how === 'helper' && !role) return;
-  if (!firstTime && !role) return;
+  const types = typesOf(name);
+  // rare hunters and anyone after one of its types, once per spawn
+  const roles: string[] = [];
+  if (!w.pinged) {
+    if (rare) { const r = await rareRole(m.guild, store); if (r) roles.push(r.id); }
+    for (const t of types) { const r = await typeRole(m.guild, store, t); if (r) roles.push(r.id); }
+    if (roles.length) w.pinged = true;
+  }
+  // the claim card goes out once, a helper bot already naming it is enough on its own unless someone needs a ping
+  if (how === 'helper' && !roles.length) return;
+  if (!firstTime && !roles.length) return;
   const id = idOf(name);
   const e = card({
     kind: 'help', title: name, emoji: rare ? '🌟' : '🔎', gif: 'off', line: '', color: rare ? 0xf1c40f : 0xe3350d,
-    body: `${rare ? `**${rareMark[rare]}**\n` : ''}\`\`\`${catchLine(name)}\`\`\``,
+    body: `${rare ? `**${rareMark[rare]}** · ` : ''}${types.map((t) => `${typeMark[t] ?? ''} ${t}`).join(' · ')}\n\`\`\`${catchLine(name)}\`\`\``,
   });
   if (id) e.setThumbnail(artwork(id));
+  const why = [rare && rareMark[rare], ...types].filter(Boolean).join(' · ');
   await m.channel.send({
-    content: role ? `${rareMark[rare!]} spawn <@&${role.id}>, be quick` : undefined,
+    content: roles.length ? `${roles.map((r) => `<@&${r}>`).join(' ')} ${why} spawn, be quick` : undefined,
     embeds: [e],
     reply: { messageReference: spawnId, failIfNotExists: false },
-    allowedMentions: { roles: role ? [role.id] : [] },
+    allowedMentions: { roles },
   });
 }
 
@@ -156,7 +164,7 @@ function answer(pattern: string, fits: { id: number; name: string }[]) {
   if (!fits.length) return { content: `🤔 Nothing fits \`${pattern}\`. Ask Pokétwo for another hint.` };
   if (fits.length === 1) {
     const f = fits[0];
-    const e = card({ kind: 'help', title: f.name, emoji: '🔎', gif: 'off', line: '', color: 0xe3350d, body: `#${f.id} · catch it with\n\`\`\`${catchLine(f.name)}\`\`\`` }).setThumbnail(artwork(f.id));
+    const e = card({ kind: 'help', title: f.name, emoji: '🔎', gif: 'off', line: '', color: 0xe3350d, body: `#${f.id} · ${typesOf(f.name).map((t) => `${typeMark[t] ?? ''} ${t}`).join(' · ')}${rarityOf(f.name) ? ` · ${rareMark[rarityOf(f.name)!]}` : ''}\n\`\`\`${catchLine(f.name)}\`\`\`` }).setThumbnail(artwork(f.id));
     return { embeds: [e] };
   }
   return { content: `🔎 Could be ${fits.map((f) => `**${f.name}**`).join(', ')}\n${fits.slice(0, 3).map((f) => `\`${catchLine(f.name)}\``).join('\n')}` };
@@ -169,7 +177,7 @@ export function spawnStatus(store: Store, guild: Guild, which: 'p2' | 'shoob') {
   const seen = Number(store.getKv(`spawnseen:${guild.id}:${which}`) ?? 0);
   let lastMsg: { at: number; spawn: boolean; title: string } | null = null;
   try { lastMsg = JSON.parse(store.getKv(`spawnlast:${guild.id}:${which}`) ?? 'null'); } catch { /* old value */ }
-  const roles = which === 'p2' ? ['p2rare'] : TIERS.map((t) => `t${t}`);
+  const roles = which === 'p2' ? ['p2rare', ...TYPES.map((t) => `p2type:${t}`)] : TIERS.map((t) => `t${t}`);
   const people = new Set(roles.flatMap((r) => [...(guild.roles.cache.get(store.getKv(`spawnrole:${guild.id}:${r}`) ?? '')?.members.keys() ?? [])])).size;
   return [
     here ? '🟢 in this server' : '⚪ not seen here yet',
@@ -184,10 +192,12 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
   const has = (id?: string | null) => !!id && !!member?.roles.cache.has(id);
   const p2 = has(store.getKv(`spawnrole:${guild.id}:p2rare`));
   const mine = TIERS.filter((t) => has(store.getKv(`spawnrole:${guild.id}:t${t}`)));
+  const myTypes = TYPES.filter((t) => has(store.getKv(`spawnrole:${guild.id}:p2type:${t}`)));
   const e = card({
     kind: 'help', title: 'Spawn pings', emoji: '🎯', gif: 'off',
     body: [
       `${p2 ? '🟢' : '⚫'} 🌟 **Pokétwo rare spawns** · legendary, mythical and ultra beasts only`,
+      `${myTypes.length ? '🟢' : '⚫'} 🧬 **Pokétwo types** · ${myTypes.length ? myTypes.map((t) => `${typeMark[t]} ${t}`).join(' ') : 'none picked, handy when a quest wants a type'}`,
       `🔎 **Claim help** · I name every spawn I've seen caught before, **${knownCount(store)}** known so far, and solve hints`,
       `${mine.length ? '🟢' : '⚫'} 🃏 **Shoob** · ${mine.length ? mine.map((t) => `${tierMark[t]} T${t}`).join(' ') : 'no tiers picked'}`,
       '',
@@ -202,6 +212,8 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
     embeds: [e],
     components: [
       row(new ButtonBuilder().setCustomId('spw|p2').setLabel(p2 ? 'Stop rare spawn pings' : 'Ping me for rare spawns').setEmoji('🌟').setStyle(p2 ? ButtonStyle.Success : ButtonStyle.Secondary)),
+      row(new StringSelectMenuBuilder().setCustomId('spw|types').setPlaceholder('🧬 Which Pokétwo types ping you').setMinValues(0).setMaxValues(TYPES.length)
+        .addOptions(TYPES.map((t) => ({ label: t, value: t, emoji: typeMark[t], default: myTypes.includes(t) })))),
       row(new StringSelectMenuBuilder().setCustomId('spw|tiers').setPlaceholder('🃏 Which Shoob tiers ping you').setMinValues(0).setMaxValues(TIERS.length)
         .addOptions(TIERS.map((t) => ({ label: `Tier ${t}`, value: t, emoji: tierMark[t], default: mine.includes(t as never) })))),
     ],
@@ -239,6 +251,14 @@ export async function onSpawnButton(store: Store, i: Interaction) {
   if (i.customId === 'spw|p2') {
     const role = await rareRole(i.guild, store, true);
     ok = !!role && await (member.roles.cache.has(role.id) ? member.roles.remove(role) : member.roles.add(role)).then(() => true).catch(() => false);
+  } else if (i.isStringSelectMenu() && i.customId === 'spw|types') {
+    // the types for quests, same idea as the tiers
+    for (const t of TYPES) {
+      const want = i.values.includes(t);
+      const role = await typeRole(i.guild, store, t, want);
+      if (!role || member.roles.cache.has(role.id) === want) continue;
+      ok = await (want ? member.roles.add(role) : member.roles.remove(role)).then(() => ok).catch(() => false);
+    }
   } else if (i.isStringSelectMenu()) {
     // add the picked tiers, drop the rest
     for (const t of TIERS) {
@@ -276,6 +296,8 @@ async function pingsPanel(store: Store, guild: Guild, userId: string) {
   if (store.rules(guild.id, 'spawns').enabled) {
     const on = has(store.getKv(`spawnrole:${guild.id}:p2rare`));
     lines.push(`${mark(on)} 🌟 **Rare Pokétwo spawns** · legendary, mythical, ultra beasts`);
+    const types = TYPES.filter((t) => has(store.getKv(`spawnrole:${guild.id}:p2type:${t}`)));
+    lines.push(`${mark(types.length > 0)} 🧬 **Pokétwo types** · ${types.length ? types.map((t) => typeMark[t]).join(' ') : 'none, pick them on the spawn page'}`);
     buttons.push(new ButtonBuilder().setCustomId('pg|p2').setLabel('Rare pokémon').setEmoji('🌟').setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary));
     const tiers = TIERS.filter((t) => has(store.getKv(`spawnrole:${guild.id}:t${t}`)));
     lines.push(`${mark(tiers.length > 0)} 🃏 **Shoob** · ${tiers.length ? tiers.map((t) => `${tierMark[t]} T${t}`).join(' ') : 'no tiers picked'}`);

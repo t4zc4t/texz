@@ -4,13 +4,21 @@ import { fileURLToPath } from 'node:url';
 // every pokémon name with its dex number, regional forms included, from PokeAPI's data
 const file = fileURLToPath(new URL('../../assets/pokemon.json', import.meta.url));
 const plain = (s: string): string => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-type Row = [number, string, string?];
+type Row = [number, string, string, string?];
 let dex: Row[] | null = null;
 const all = () => (dex ??= JSON.parse(readFileSync(file, 'utf8')) as Row[]);
 
 // legendary, mythical or ultra beast, nothing for the rest
-export const rarityOf = (name: string) => all().find(([, n]) => n.toLowerCase() === name.toLowerCase())?.[2] ?? null;
-export const idOf = (name: string) => all().find(([, n]) => n.toLowerCase() === name.toLowerCase())?.[0] ?? null;
+const row = (name: string) => all().find(([, n]) => n.toLowerCase() === name.toLowerCase());
+export const rarityOf = (name: string) => row(name)?.[3] ?? null;
+// "Fire/Flying" as a list, regional forms have their own
+export const typesOf = (name: string) => (row(name)?.[2] ?? '').split('/').filter(Boolean);
+export const TYPES = ['Normal', 'Fire', 'Water', 'Grass', 'Electric', 'Ice', 'Fighting', 'Poison', 'Ground', 'Flying', 'Psychic', 'Bug', 'Rock', 'Ghost', 'Dragon', 'Dark', 'Steel', 'Fairy'];
+export const typeMark: Record<string, string> = {
+  Normal: '⚪', Fire: '🔥', Water: '💧', Grass: '🌿', Electric: '⚡', Ice: '❄️', Fighting: '🥊', Poison: '☠️', Ground: '⛰️',
+  Flying: '🪶', Psychic: '🔮', Bug: '🐛', Rock: '🪨', Ghost: '👻', Dragon: '🐉', Dark: '🌑', Steel: '⚙️', Fairy: '🧚',
+};
+export const idOf = (name: string) => row(name)?.[0] ?? null;
 
 // the longest pokémon name that shows up in a line of text, "a level 12 Alolan Vulpix (♀)" gives Alolan Vulpix
 export function nameIn(text: string): string | null {
@@ -38,7 +46,7 @@ export function solve(pattern: string): { id: number; name: string }[] {
   const hits = all().filter(([, n]) => (blanks ? re.test(plain(n)) : plain(n).includes(p)));
   // without blanks it's a search, names that start with it first
   if (!blanks) hits.sort((a, b) => Number(!plain(a[1]).startsWith(p)) - Number(!plain(b[1]).startsWith(p)) || a[1].length - b[1].length);
-  return hits.map(([id, name, rare]) => ({ id, name, rare: rare ?? null }));
+  return hits.map(([id, name, , rare]) => ({ id, name, rare: rare ?? null }));
 }
 
 export const artwork = (id: number) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;

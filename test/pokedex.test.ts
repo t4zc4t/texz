@@ -32,3 +32,10 @@ test('a learned picture is recognised again', async () => {
   assert.equal(recognise(store, near)?.name, 'Wiglett');
   assert.equal(recognise(store, '0'.repeat(64)), null);
 });
+
+test('types come with every pokémon, regional forms too', async () => {
+  const { typesOf } = await import('../src/features/pokedex.ts');
+  assert.deepEqual(typesOf('Charizard'), ['Fire', 'Flying']);
+  assert.deepEqual(typesOf('Alolan Vulpix'), ['Ice']);
+  assert.deepEqual(typesOf('Wiglett'), ['Water']);
+});

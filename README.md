@@ -84,7 +84,7 @@ Yen comes from `tz daily` (more for every day in a row, up to a week), a little 
 
 ## Spawn pings
 
-`tz spawns` is the spawn page. For Pokétwo, Texz names every spawn it has seen caught before and replies with a ready to paste `@Pokétwo#8236 c <name>`. It starts knowing nothing and learns from each catch, each hint it solves and names other helper bots give, so it gets better with every spawn. Only legendary, mythical and ultra beast spawns ping, for the people who opt in, and shiny catches get a shout. For Shoob, each tier has its own role and a drop only pings that tier. `tz poke p_k_ch_` works out a name by hand.
+`tz spawns` is the spawn page. For Pokétwo, Texz names every spawn it has seen caught before and replies with a ready to paste `@Pokétwo#8236 c <name>`. It starts knowing nothing and learns from each catch, each hint it solves and names other helper bots give, so it gets better with every spawn. Only legendary, mythical and ultra beast spawns ping, for the people who opt in, plus any of the 18 types you pick (handy when a quest wants three Water types). The claim card shows the types too, and shiny catches get a shout. For Shoob, each tier has its own role and a drop only pings that tier. `tz poke p_k_ch_` works out a name by hand.
 
 ## OwO extras
 
