@@ -84,7 +84,7 @@ Yen comes from `tz daily` (more for every day in a row, up to a week), a little 
 
 ## Spawn pings
 
-`tz spawns` lets you opt into Pokétwo spawn pings and pick which Shoob tiers ping you, each tier has its own role. When Pokétwo gives a hint, Texz replies with the names that fit and a ready to paste `@Pokétwo#8236 c <name>`. `tz poke p_k_ch_` works out a name by hand. The same page shows whether each bot is in the server and how many spawns it has seen today.
+`tz spawns` is the spawn page. For Pokétwo, Texz names every spawn it has seen caught before and replies with a ready to paste `@Pokétwo#8236 c <name>`. It starts knowing nothing and learns from each catch, each hint it solves and names other helper bots give, so it gets better with every spawn. Only legendary, mythical and ultra beast spawns ping, for the people who opt in, and shiny catches get a shout. For Shoob, each tier has its own role and a drop only pings that tier. `tz poke p_k_ch_` works out a name by hand.
 
 ## OwO extras
 

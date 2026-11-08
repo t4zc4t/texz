@@ -3,10 +3,25 @@ import { fileURLToPath } from 'node:url';
 
 // every pokémon name with its dex number, regional forms included, from PokeAPI's data
 const file = fileURLToPath(new URL('../../assets/pokemon.json', import.meta.url));
-let dex: [number, string][] | null = null;
-const all = () => (dex ??= JSON.parse(readFileSync(file, 'utf8')) as [number, string][]);
+const plain = (s: string): string => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+type Row = [number, string, string?];
+let dex: Row[] | null = null;
+const all = () => (dex ??= JSON.parse(readFileSync(file, 'utf8')) as Row[]);
 
-const plain = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+// legendary, mythical or ultra beast, nothing for the rest
+export const rarityOf = (name: string) => all().find(([, n]) => n.toLowerCase() === name.toLowerCase())?.[2] ?? null;
+export const idOf = (name: string) => all().find(([, n]) => n.toLowerCase() === name.toLowerCase())?.[0] ?? null;
+
+// the longest pokémon name that shows up in a line of text, "a level 12 Alolan Vulpix (♀)" gives Alolan Vulpix
+export function nameIn(text: string): string | null {
+  const t = ` ${plain(text).replace(/[^a-z0-9.'é: -]/g, ' ')} `;
+  let best: string | null = null;
+  for (const [, n] of all()) {
+    if (n.length > (best?.length ?? 0) && t.includes(` ${plain(n)} `)) best = n;
+  }
+  return best;
+}
+
 
 // Pokétwo's hint, "The pokémon is \_\_k\_\_\_u.", into a pattern
 export function hintOf(text: string): string | null {
@@ -23,7 +38,7 @@ export function solve(pattern: string): { id: number; name: string }[] {
   const hits = all().filter(([, n]) => (blanks ? re.test(plain(n)) : plain(n).includes(p)));
   // without blanks it's a search, names that start with it first
   if (!blanks) hits.sort((a, b) => Number(!plain(a[1]).startsWith(p)) - Number(!plain(b[1]).startsWith(p)) || a[1].length - b[1].length);
-  return hits.map(([id, name]) => ({ id, name }));
+  return hits.map(([id, name, rare]) => ({ id, name, rare: rare ?? null }));
 }
 
 export const artwork = (id: number) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;

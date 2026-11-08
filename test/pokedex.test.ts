@@ -10,3 +10,25 @@ test('pokétwo hints get solved', () => {
   assert.equal(solve('pika')[0].name, 'Pikachu');
   assert.equal(hintOf('Congratulations!'), null);
 });
+
+test('names are found in catch messages and rare ones are marked', async () => {
+  const { nameIn, rarityOf } = await import('../src/features/pokedex.ts');
+  assert.equal(nameIn('Congratulations <@1>! You caught a level 12 Alolan Vulpix (♀)!'.split('caught a level 12 ')[1]), 'Alolan Vulpix');
+  assert.equal(nameIn('Wiglett 【💧】'), 'Wiglett');
+  assert.equal(rarityOf('Mewtwo'), 'legendary');
+  assert.equal(rarityOf('Mew'), 'mythical');
+  assert.equal(rarityOf('Pikachu'), null);
+});
+
+test('a learned picture is recognised again', async () => {
+  const { Store } = await import('../src/db.ts');
+  const { learn, recognise, distance } = await import('../src/features/pokeid.ts');
+  const store = new Store(':memory:');
+  const a = 'f'.repeat(64);
+  const near = `e${'f'.repeat(63)}`;
+  assert.equal(distance(a, near), 1);
+  assert.equal(recognise(store, a), null);
+  learn(store, a, 'Wiglett');
+  assert.equal(recognise(store, near)?.name, 'Wiglett');
+  assert.equal(recognise(store, '0'.repeat(64)), null);
+});
