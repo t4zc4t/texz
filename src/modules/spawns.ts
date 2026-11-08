@@ -1,5 +1,5 @@
 import {
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, Events, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder,
   type Client, type Guild, type Interaction, type Message, type MessageActionRowComponentBuilder,
 } from 'discord.js';
 import type { Store } from '../db.js';
@@ -94,6 +94,7 @@ async function named(store: Store, m: Message, spawnId: string, name: string, ho
   ];
   await m.channel.send({
     content: lines.filter(Boolean).join('\n'),
+    embeds: [pcCopy(name)],
     reply: { messageReference: spawnId, failIfNotExists: false },
     allowedMentions: { roles },
   });
@@ -178,13 +179,21 @@ export async function onCatchCopy(i: Interaction) {
   return true;
 }
 
+// the PC version: a code block with its own copy button on desktop, and the artwork
+function pcCopy(name: string) {
+  const id = idOf(name);
+  const e = new EmbedBuilder().setColor(rarityOf(name) ? 0xf1c40f : 0xe3350d).setDescription(`🖥️ **Click to copy**\n\`\`\`${catchLine(name)}\`\`\``);
+  if (id) e.setThumbnail(artwork(id));
+  return e;
+}
+
 // the reply to a hint or a search, one name gets its artwork and the catch command
 function answer(pattern: string, fits: { id: number; name: string }[]) {
   if (!fits.length) return { content: `🤔 Nothing fits \`${pattern}\`. Ask Pokétwo for another hint.` };
   if (fits.length === 1) {
     const f = fits[0];
     const types = typesOf(f.name);
-    return { content: `## ${f.name}  ${types.map((t) => typeMark[t] ?? '').join('')}\n#${f.id} · ${types.join(' · ')}${rarityOf(f.name) ? ` · ${rareMark[rarityOf(f.name)!]}` : ''}\n📋 Tap to copy: \`${catchLine(f.name)}\`` };
+    return { content: `## ${f.name}  ${types.map((t) => typeMark[t] ?? '').join('')}\n#${f.id} · ${types.join(' · ')}${rarityOf(f.name) ? ` · ${rareMark[rarityOf(f.name)!]}` : ''}\n📋 Tap to copy: \`${catchLine(f.name)}\``, embeds: [pcCopy(f.name)] };
   }
   return { content: `🔎 Could be ${fits.map((f) => `**${f.name}**`).join(', ')}\n${fits.slice(0, 4).map((f) => `📋 \`${catchLine(f.name)}\``).join('\n')}` };
 }
