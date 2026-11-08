@@ -175,7 +175,8 @@ const copyRow = (name: string) => row(new ButtonBuilder().setCustomId(`p2c|${nam
 
 export async function onCatchCopy(i: Interaction) {
   if (!i.isButton() || !i.customId.startsWith('p2c|')) return false;
-  await i.reply({ content: catchLine(i.customId.slice(4)), flags: MessageFlags.Ephemeral });
+  // a real mention, so the copied text still pings Pokétwo after pasting, typed "@Pokétwo#8236" doesn't turn into one on phones
+  await i.reply({ content: `<@${POKETWO_ID}> c ${i.customId.slice(4)}`, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
   return true;
 }
 
