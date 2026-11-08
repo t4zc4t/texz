@@ -5,6 +5,7 @@ import {
 import type { Bulletins, Feed, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { bar, card } from '../theme.js';
+import { pickDefault } from '../gifs.js';
 import { report } from '../ops.js';
 import { SITE, bigSession, facts, flagOf, home, nextRound, onThisDay, questions, schedule, siteLink, teamDot, type Round } from '../feeds/f1.js';
 import { quizButton, quizRound } from './f1quiz.js';
@@ -131,7 +132,7 @@ const weekLines = (r: Round, rel = false) => r.sessions.map((s) => {
   return `${sessionMark(s.type)} ${bigSession(s.type) ? `**${s.label}**` : s.label} · <t:${at}:F>${rel ? ` (<t:${at}:R>)` : ''}`;
 });
 // a server's own gif for a moment, or the default
-const gifIn = (store: Store, gid: string, moment: string) => store.guild(gid).gifs[moment] ?? undefined;
+const gifIn = (store: Store, gid: string, moment: string) => store.guild(gid).gifs[moment] ?? pickDefault(moment) ?? undefined;
 // league marks, so a list of matches is easy to scan
 const leagueMark: Record<string, string> = { 'eng.1': '🦁', 'esp.1': '🇪🇸', 'ita.1': '🇮🇹', 'ger.1': '🇩🇪', 'fra.1': '🇫🇷', 'uefa.champions': '⭐', 'uefa.europa': '🟠', 'fifa.world': '🌍', 'uefa.euro': '🇪🇺', 'ind.1': '🇮🇳' };
 
@@ -185,7 +186,7 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
           const win = s.type === 'Q' || s.type === 'SQ' ? `${s.top3[0].driver} takes pole` : `${s.top3[0].driver} wins`;
           await post(client, b.f1, {
             ping: s.type === 'R', text: s.type === 'R' ? `${win}!` : undefined, react: [flag, s.type === 'R' ? '🏆' : '⏱️'],
-            embed: card({ kind: s.type === 'R' ? 'f1Win' : 'f1Result', title: `${flag} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: gifIn(store, gid, s.type === 'R' ? 'f1win' : 'f1result'), body }),
+            embed: card({ kind: s.type === 'R' ? 'f1Win' : 'f1Result', title: `${flag} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: gifIn(store, gid, s.type === 'R' ? 'f1win' : s.type === 'Q' || s.type === 'SQ' ? 'f1quali' : 'f1result'), body }),
             buttons: [link(`${SITE}/races`, 'Full result on Parc Fermé')],
           });
         }

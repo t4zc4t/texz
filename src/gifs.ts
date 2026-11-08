@@ -37,24 +37,26 @@ export const defaults: Record<string, string[]> = {
   ban: [giphy('GpSELI5HJt5FbBUFPa')],
   // a lone figure walking off down a red hallway
   goodbye: [giphy('Waq81Yz6Vw3GuCxGPZ')],
-  // race week, a cartoon car rolling out
-  f1week: [giphy('5SKyKU6B6fzAwfrKK4')],
-  // onboard down the pit lane, an hour to go
-  f1soon: [giphy('DN0VIGdNuIhGpO1TQP')],
+  // inside a team garage, race week is on
+  f1week: [giphy('mC7KRT90bPiwxaJEAC')],
+  // five red lights under the F1 logo, an hour to go
+  f1soon: [giphy('JTIQnOph9KO3Je2hOG')],
   // the podium from F1's own page
   f1win: [giphy('1X8865dbCf8xNrDPG6')],
-  // a plain chequered flag for qualifying and sprints
-  f1result: [giphy('TGL7s5G5jhY4AAnrdA')],
+  // a little car with Qualifying written over it
+  f1quali: [giphy('IXMcbek4HX1lM6rB4V')],
+  // the chequered flag coming down, for sprints
+  f1result: [giphy('poZ0y7sA2I7sZYuEg1')],
   // the pitch before anyone walks out
   matchday: [giphy('3og0IGgnDJx1Rsqyqs')],
-  // a referee about to blow for kick-off
-  kickoff: [giphy('l3vRddpK1l4CDwp1K')],
-  // ball hitting the net, for full time
-  fulltime: [giphy('l4FGt3POE4XhoVEFq')],
-  // popcorn for the day's screening list
-  screening: [giphy('9XxVJUtCiuLwWx8Iin')],
-  // a very pleased Dazai, a new episode is out
-  episode: [giphy('9F6gScqr2xfxCBfOJk')],
+  // KICK OFF in big letters
+  kickoff: [giphy('MwNg1ZKTccpkJOJhSZ')],
+  // a referee with both arms out, that's full time
+  fulltime: [giphy('l2uqDERe6g00mG42C0')],
+  // chibi Chuuya and Dazai, the day's screenings
+  screening: [giphy('8ocu3nhyHcEAu41hjF')],
+  // Dazai lighting up, a new episode is out
+  episode: [giphy('BXg1C1BgOi1Znvtone')],
 };
 
 // which card kinds show which moment's gif

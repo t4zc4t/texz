@@ -103,7 +103,8 @@ export interface GroupInfo { label: string; emoji: string; about: string; extra?
 export interface Layout { sections: [string, string[]][]; quick: string[] }
 
 const row = <T extends MessageActionRowComponentBuilder>(...c: T[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
-const line = (e: Entry) => `${e.emoji ?? '▫️'} **${e.label}**${needsInput(e) ? ' 📝' : ''} · ${short(e.about, 70)}`;
+// just the name, the menu below carries the descriptions, so the page stays short
+const line = (e: Entry) => `${e.emoji ?? '▫️'} ${e.label}${needsInput(e) ? ' 📝' : ''}`;
 
 // the front page of a group: a line about you, everything sorted into sections, buttons for the quick ones and a menu for all of it
 export function homePage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry[], o: { layout?: Layout; glance?: string | null; off?: string[] } = {}) {
@@ -114,10 +115,10 @@ export function homePage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry
   for (const [title, keys] of o.layout?.sections ?? []) {
     const list = keys.map((k) => byKey.get(k)).filter((e): e is Entry => !!e);
     list.forEach((e) => used.add(e.key));
-    if (list.length) fields.push({ name: title, value: list.map(line).join('\n'), inline: false });
+    if (list.length) fields.push({ name: title, value: list.map(line).join('\n'), inline: true });
   }
   const rest = show.filter((e) => !used.has(e.key));
-  if (rest.length) fields.push({ name: fields.length ? '📂 More' : '📂 Everything', value: rest.map(line).join('\n').slice(0, 1024), inline: false });
+  if (rest.length) fields.push({ name: fields.length ? '📂 More' : '📂 Everything', value: rest.map(line).join('\n').slice(0, 1024), inline: true });
   const quickKeys = o.layout?.quick ?? show.filter((e) => !needsInput(e)).map((e) => e.key);
   const quick = quickKeys.map((k) => byKey.get(k)).filter((e): e is Entry => !!e).slice(0, 5);
   const notes = [
@@ -138,7 +139,7 @@ export function homePage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry
   }
   if (!show.length) notes.push('Nothing to open here yet.');
   return {
-    embeds: [card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: `${notes.join('\n')}\n-# 📝 asks you a question first, the rest open straight away`, fields })],
+    embeds: [card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: `${notes.join('\n')}\n-# 📝 asks first · use the buttons or the menu`, fields })],
     components: rows,
   };
 }

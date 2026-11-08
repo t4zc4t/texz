@@ -13,7 +13,7 @@ export const allModules: Module[] = [];
 const switchable = () => allModules.filter((m) => !m.locked);
 
 // moments an admin can attach a gif to
-export const gifMoments = ['help', 'ping', 'status', 'error', 'huntbot', 'leaderboard', 'ask', 'levelup', 'welcome', 'goodbye', 'ban', 'kick', 'timeout', 'warn', 'giveaway', 'f1week', 'f1soon', 'f1win', 'f1result', 'matchday', 'kickoff', 'fulltime', 'screening', 'episode'];
+export const gifMoments = ['help', 'ping', 'status', 'error', 'huntbot', 'leaderboard', 'ask', 'levelup', 'welcome', 'goodbye', 'ban', 'kick', 'timeout', 'warn', 'giveaway', 'f1week', 'f1soon', 'f1win', 'f1quali', 'f1result', 'matchday', 'kickoff', 'fulltime', 'screening', 'episode'];
 
 function rulesText(store: Store, guildId: string) {
   const g = store.guild(guildId);
@@ -129,7 +129,7 @@ const help: Command = {
     return page(card({
       kind: 'help', title: 'At your service', emoji: '🕵️', gif,
       body: `Everything lives in a few dashboards. Run one, then click, no commands to remember. Slash ones only show to you, typed ones to everyone.\n-# Pick a feature in the second menu to see every command it has, typed and slash.`,
-      fields: dashes.map((d) => ({ name: `${d.emoji} ${d.label} · \`/${d.name}\` or \`${prefix} ${d.name}\``, value: d.description, inline: false })),
+      fields: dashes.map((d) => ({ name: `${d.emoji} ${d.label}`, value: `\`/${d.name}\` · \`${prefix} ${d.name}\``, inline: true })),
     }));
   },
 };

@@ -84,7 +84,7 @@ Yen comes from `tz daily` (more for every day in a row, up to a week), a little 
 
 ## Spawn pings
 
-`tz spawns` gives you buttons to opt into pings for Pokétwo and Shoob spawns. Admins pick the lowest Shoob tier worth a ping with `/fun spawns tier:4`.
+`tz spawns` lets you opt into Pokétwo spawn pings and pick which Shoob tiers ping you, each tier has its own role. When Pokétwo gives a `p!hint`, Texz replies with the names that fit and the catch command. `tz poke p_k_ch_` works out a name by hand. The same page shows whether each bot is in the server and how many spawns it has seen today.
 
 ## OwO extras
 

@@ -10,7 +10,7 @@ export const menu: Record<string, [string, string, string?]> = {
   poll: ['📊', 'Start a poll'], choose: ['🎯', 'Pick for me'], roll: ['🎲', 'Roll dice'], coin: ['🪙', 'Flip a coin'],
   ship: ['💞', 'Ship test'], '8ball': ['🎱', 'Magic 8ball'], guess: ['🔎', 'Guess the anime', 'A picture, four names, first right answer wins yen'],
   quiz: ['🏁', 'F1 quiz', '20 seconds, one try each, harder questions pay more'], trivia: ['🗞️', 'F1 trivia'], onthisday: ['📅', 'On this day in F1'],
-  spawns: ['🃏', 'Spawn pings', 'Pokétwo and Shoob, opt in'],
+  spawns: ['🃏', 'Spawn pings', 'Pokétwo, and Shoob by tier'], pokemon: ['🔎', 'Who\'s that pokémon', 'Solve a Pokétwo hint like p_k_ch_'],
   daily: ['💴', 'Daily yen'], balance: ['👛', 'Balance'], give: ['💸', 'Give yen'], rich: ['🏆', 'Richest'],
   'roleshop.view': ['🛍️', 'Role shop'], 'roleshop.buy': ['🛒', 'Buy a role'], 'roleshop.add': ['➕', 'Stock the shop'], 'roleshop.remove': ['➖', 'Take a role off sale'],
   rank: ['🎖️', 'Rank card'], levels: ['🏆', 'Level leaderboard'], perks: ['✨', 'Rank perks'],
@@ -33,8 +33,8 @@ export const menu: Record<string, [string, string, string?]> = {
 // sections and the quick buttons of each generic dashboard
 export const layout: Record<string, { sections: [string, string[]][]; quick: string[] }> = {
   fun: {
-    sections: [['🏆 Games that pay yen', ['quiz', 'guess']], ['🎉 For the channel', ['ship', 'poll', 'trivia', 'onthisday']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']], ['🔔 Pings', ['spawns']]],
-    quick: ['quiz', 'guess', 'trivia', 'roll', 'coin'],
+    sections: [['🏆 Games that pay yen', ['quiz', 'guess']], ['🎉 For the channel', ['ship', 'poll', 'trivia', 'onthisday']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']], ['🔔 Spawns', ['spawns', 'pokemon']]],
+    quick: ['quiz', 'guess', 'ship', 'spawns', 'roll'],
   },
   eco: {
     sections: [['👛 Your yen', ['daily', 'balance', 'give', 'rich']], ['🛍️ Role shop', ['roleshop.view', 'roleshop.buy', 'roleshop.add', 'roleshop.remove']], ['🏆 Earn more', ['quiz', 'guess']]],
