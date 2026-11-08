@@ -83,17 +83,17 @@ async function named(store: Store, m: Message, spawnId: string, name: string, ho
   // the claim card goes out once, a helper bot already naming it is enough on its own unless someone needs a ping
   if (how === 'helper' && !roles.length) return;
   if (!firstTime && !roles.length) return;
-  const id = idOf(name);
-  const e = card({
-    kind: 'help', title: name, emoji: rare ? '🌟' : '🔎', gif: 'off', line: '', color: rare ? 0xf1c40f : 0xe3350d,
-    body: `${rare ? `**${rareMark[rare]}** · ` : ''}${types.map((t) => `${typeMark[t] ?? ''} ${t}`).join(' · ')}\n\`\`\`${catchLine(name)}\`\`\`${guess && guess.p < 0.85 ? `\n-# ${Math.round(guess.p * 100)}% sure${guess.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}` : ''}`,
-  });
-  if (id) e.setThumbnail(artwork(id));
+  // plain text like the other helper bots: phones can tap the code to copy it, which they can't do inside an embed
   const why = [rare && rareMark[rare], ...types].filter(Boolean).join(' · ');
+  const lines = [
+    roles.length ? `${roles.map((r) => `<@&${r}>`).join(' ')} ${why} spawn, be quick` : null,
+    `## ${rare ? '🌟 ' : ''}${name}  ${types.map((t) => typeMark[t] ?? '').join('')}`,
+    `${rare ? `**${rareMark[rare]}** · ` : ''}${types.join(' · ')}`,
+    `📋 Tap to copy: \`${catchLine(name)}\``,
+    guess && guess.p < 0.85 ? `-# ${Math.round(guess.p * 100)}% sure${guess.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}` : null,
+  ];
   await m.channel.send({
-    content: roles.length ? `${roles.map((r) => `<@&${r}>`).join(' ')} ${why} spawn, be quick` : undefined,
-    embeds: [e],
-    components: [copyRow(name)],
+    content: lines.filter(Boolean).join('\n'),
     reply: { messageReference: spawnId, failIfNotExists: false },
     allowedMentions: { roles },
   });
@@ -170,13 +170,11 @@ async function onSpawn(store: Store, m: Message) {
   await m.channel.send({ content: `${tierMark[s.tier]} <@&${role.id}> a **tier ${s.tier}** card just dropped, go claim it`, allowedMentions: { roles: [role.id] } });
 }
 
-// phones can't copy out of an embed, so a button sends the catch line as a plain message you can long press
-const copyRow = (name: string) => row(new ButtonBuilder().setCustomId(`p2c|${name}`.slice(0, 100)).setLabel('Copy for mobile').setEmoji('📋').setStyle(ButtonStyle.Secondary));
 
 export async function onCatchCopy(i: Interaction) {
   if (!i.isButton() || !i.customId.startsWith('p2c|')) return false;
-  // a real mention, so the copied text still pings Pokétwo after pasting, typed "@Pokétwo#8236" doesn't turn into one on phones
-  await i.reply({ content: `<@${POKETWO_ID}> c ${i.customId.slice(4)}`, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+  // buttons on older claim messages still answer
+  await i.reply({ content: `\`${catchLine(i.customId.slice(4))}\``, flags: MessageFlags.Ephemeral });
   return true;
 }
 
@@ -185,13 +183,10 @@ function answer(pattern: string, fits: { id: number; name: string }[]) {
   if (!fits.length) return { content: `🤔 Nothing fits \`${pattern}\`. Ask Pokétwo for another hint.` };
   if (fits.length === 1) {
     const f = fits[0];
-    const e = card({ kind: 'help', title: f.name, emoji: '🔎', gif: 'off', line: '', color: 0xe3350d, body: `#${f.id} · ${typesOf(f.name).map((t) => `${typeMark[t] ?? ''} ${t}`).join(' · ')}${rarityOf(f.name) ? ` · ${rareMark[rarityOf(f.name)!]}` : ''}\n\`\`\`${catchLine(f.name)}\`\`\`` }).setThumbnail(artwork(f.id));
-    return { embeds: [e], components: [copyRow(f.name)] };
+    const types = typesOf(f.name);
+    return { content: `## ${f.name}  ${types.map((t) => typeMark[t] ?? '').join('')}\n#${f.id} · ${types.join(' · ')}${rarityOf(f.name) ? ` · ${rareMark[rarityOf(f.name)!]}` : ''}\n📋 Tap to copy: \`${catchLine(f.name)}\`` };
   }
-  return {
-    content: `🔎 Could be ${fits.map((f) => `**${f.name}**`).join(', ')}\n${fits.slice(0, 3).map((f) => `\`${catchLine(f.name)}\``).join('\n')}`,
-    components: [row(...fits.slice(0, 5).map((f) => new ButtonBuilder().setCustomId(`p2c|${f.name}`.slice(0, 100)).setLabel(f.name.slice(0, 80)).setEmoji('📋').setStyle(ButtonStyle.Secondary)))],
-  };
+  return { content: `🔎 Could be ${fits.map((f) => `**${f.name}**`).join(', ')}\n${fits.slice(0, 4).map((f) => `📋 \`${catchLine(f.name)}\``).join('\n')}` };
 }
 
 // is the bot here, has it spawned anything, and could I read it
