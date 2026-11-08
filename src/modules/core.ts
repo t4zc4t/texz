@@ -6,6 +6,13 @@ import { isGifLink, resolve } from '../gifs.js';
 import { setupPanel } from '../features/setup.js';
 
 // filled in by the registry so help and config can list every module
+// a few words on what each dashboard holds, for the help page
+const blurb: Record<string, string> = {
+  owo: 'timers, huntbot, gems, weapons', anime: 'search, airing, your list', fun: 'quizzes, quotes, ship, spawns',
+  eco: 'daily, balance, role shop', levels: 'rank card, perks, top', info: 'profile, pings, birthdays',
+  sports: 'F1 and football', mod: 'actions and cases', tools: 'giveaways, posts, stats',
+};
+
 // the dashboards, filled in by the registry, so help can list them
 export const dashList: { name: string; label: string; emoji: string; description: string; home: string; anywhere?: boolean }[] = [];
 export const allModules: Module[] = [];
@@ -47,6 +54,7 @@ function forms(c: Command, prefix: string) {
 
 const help: Command = {
   name: 'help',
+  cooldown: 1,
   data: new SlashCommandBuilder().setName('help').setDescription('Everything Texz can do, by feature')
     .addStringOption((o) => o.setName('feature').setDescription('A feature or command to open')).toJSON(),
   text: { aliases: ['h', 'commands'], args: ['feature'] },
@@ -100,7 +108,6 @@ const help: Command = {
         fields: [
           { name: '⌨️ How to use it', value: usage, inline: false },
           ...(subs.length ? [] : opts.length ? [{ name: '🧩 Options', value: opts.map((o) => `\`${o.name}\` ${o.description}`).join('\n'), inline: false }] : []),
-          { name: '🏷️ Short names', value: t.aliases?.length ? t.aliases.map((a) => `\`${prefix} ${a}\``).join(' ') : 'none', inline: true },
           { name: '📁 Part of', value: m.label, inline: true },
           ...(c.admin ? [{ name: '🔐 Who', value: 'Admins with Manage Server', inline: false }] : []),
         ],
@@ -128,8 +135,8 @@ const help: Command = {
     ));
     return page(card({
       kind: 'help', title: 'At your service', emoji: '🕵️', gif,
-      body: `Everything lives in a few dashboards. Run one, then click, no commands to remember. Slash ones only show to you, typed ones to everyone.\n-# Pick a feature in the second menu to see every command it has, typed and slash.`,
-      fields: dashes.map((d) => ({ name: `${d.emoji} ${d.label}`, value: `\`/${d.name}\` · \`${prefix} ${d.name}\``, inline: true })),
+      body: `Everything lives in a few dashboards. Run one, then click, no commands to remember. Slash ones only show to you, typed ones to everyone.\n\n🖼️ Right click a message → Apps → **Make it a Quote**${ctx.isAdmin ? ' · 🛠️ `/setup` for the admin desk' : ''}\n-# The second menu lists every command a feature has, typed and slash.`,
+      fields: dashes.map((d) => ({ name: `${d.emoji} ${d.label}`, value: `${blurb[d.name] ?? ''}\n\`/${d.name}\` · \`${prefix} ${d.name}\``, inline: true })),
     }));
   },
 };

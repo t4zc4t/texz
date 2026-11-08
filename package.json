@@ -1,6 +1,6 @@
 {
   "name": "texz",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.1.0",
-    "discord.js": "^14.28.0",
+    "discord.js": "^14.28.1",
     "onnxruntime-node": "^1.31.1"
   },
   "devDependencies": {
