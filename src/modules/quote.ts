@@ -64,19 +64,19 @@ export async function framed(store: Store, m: Message, by: string) {
   // a quotes channel picked in /setup gets it, otherwise it goes right where it was asked for
   const chId = m.guildId ? store.guild(m.guildId).quotes.channel : null;
   const ch = chId ? await m.client.channels.fetch(chId).catch(() => null) : null;
-  return { payload, hall: ch?.isSendable() ? ch : null };
+  // the hall copy needs its own file, a sent attachment can't be reused
+  const copy = () => ({ ...payload, files: [new AttachmentBuilder(png, { name: 'quote.png' })] });
+  return { payload, copy, hall: ch?.isSendable() ? ch : null };
 }
 
 export async function onQuote(store: Store, i: MessageContextMenuCommandInteraction) {
   await i.deferReply({ flags: MessageFlags.Ephemeral });
   const q = await framed(store, i.targetMessage, i.user.displayName);
   if (!q) return i.editReply('There\'s nothing in that message I can frame.');
-  if (q.hall) {
-    await q.hall.send(q.payload).catch((err) => report('quote', err));
-    return i.editReply(`🖼️ Framed and hung in <#${q.hall.id}>.`);
-  }
-  await i.editReply('🖼️ Here it is.');
-  return i.followUp(q.payload);
+  // it shows up where it was made, and a copy goes to the quotes channel if there is one
+  await i.editReply(q.hall && q.hall.id !== i.channelId ? `🖼️ Framed, a copy is hanging in <#${q.hall.id}> too.` : '🖼️ Here it is.');
+  await i.followUp(q.payload);
+  if (q.hall && q.hall.id !== i.channelId) await q.hall.send(q.copy()).catch((err) => report('quote', err));
 }
 
 // "tz quote" as a reply to a message, or "/fun view:quote" with a message link
@@ -97,10 +97,7 @@ export const quote: Command = {
     if (!target) return ctx.reply({ content: `🖼️ Reply to a message with \`tz quote\`, paste a message link, or right click a message → Apps → **${QUOTE_MENU}**.`, temp: true });
     const q = await framed(store, target, ctx.displayName ?? 'someone');
     if (!q) return ctx.reply({ content: 'There\'s nothing in that message I can frame.', temp: true });
-    if (q.hall && q.hall.id !== ctx.channelId) {
-      await q.hall.send(q.payload).catch((err) => report('quote', err));
-      return ctx.reply({ content: `🖼️ Framed and hung in <#${q.hall.id}>.`, temp: true });
-    }
-    return ctx.reply({ ...q.payload, public: true });
+    await ctx.reply({ ...q.payload, public: true });
+    if (q.hall && q.hall.id !== ctx.channelId) await q.hall.send(q.copy()).catch((err) => report('quote', err));
   },
 };
