@@ -6,6 +6,7 @@ import type { Bulletins, Feed, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { bar, card } from '../theme.js';
 import { pickDefault } from '../gifs.js';
+import { picksOf } from './profile.js';
 import { f1Card, fixturesCard, matchCard, standingsCard, weekCard } from '../features/matchcard.js';
 import { report } from '../ops.js';
 import { SITE, bigSession, facts, flagOf, home, nextRound, onThisDay, questions, schedule, siteLink, teamDot, type Round } from '../feeds/f1.js';
@@ -165,7 +166,7 @@ const weekLines = (r: Round, rel = false) => r.sessions.map((s) => {
 // a server's own gif for a moment, or the default
 const gifIn = (store: Store, gid: string, moment: string) => store.guild(gid).gifs[moment] ?? pickDefault(moment) ?? undefined;
 // league marks, so a list of matches is easy to scan
-const leagueMark: Record<string, string> = { 'eng.1': '🦁', 'esp.1': '🇪🇸', 'ita.1': '🇮🇹', 'ger.1': '🇩🇪', 'fra.1': '🇫🇷', 'uefa.champions': '⭐', 'uefa.europa': '🟠', 'fifa.world': '🌍', 'uefa.euro': '🇪🇺', 'ind.1': '🇮🇳' };
+const leagueMark: Record<string, string> = { 'eng.1': '🦁', 'esp.1': '🇪🇸', 'ita.1': '🇮🇹', 'ger.1': '🇩🇪', 'fra.1': '🇫🇷', 'uefa.champions': '⭐', 'uefa.europa': '🟠', 'fifa.world': '🌍', 'uefa.euro': '🇪🇺', 'ind.1': '🇮🇳', 'usa.1': '🇺🇸', 'mex.1': '🇲🇽', 'ned.1': '🇳🇱', 'por.1': '🇵🇹', 'sco.1': '🏴', 'tur.1': '🇹🇷', 'sau.1': '🇸🇦', 'bra.1': '🇧🇷', 'arg.1': '🇦🇷', 'uefa.europa.conf': '🟢', 'eng.fa': '🏆', 'eng.league_cup': '🏆', 'esp.copa_del_rey': '🏆', 'concacaf.champions': '🌎', 'conmebol.libertadores': '🌎', 'fifa.cwc': '🌍', 'uefa.nations': '🇪🇺', 'fifa.friendly': '🤝' };
 
 async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][]) {
   const live = guilds.filter(([, b]) => b.f1.on && b.f1.channel);
@@ -524,7 +525,9 @@ const football: Command = {
     const now = Date.now();
     const all: Match[] = [];
     for (const lg of Object.keys(leagues)) all.push(...await matches(lg, new Date(now)).catch(() => []));
-    const mine = all.filter((m) => interesting(m, g.bulletins.football.favs, g.bulletins.football.big)).sort((a, c) => a.date - c.date);
+    // the server's clubs plus the asker's own club
+    const own = picksOf(store, ctx.userId).club;
+    const mine = all.filter((m) => interesting(m, [...g.bulletins.football.favs, ...(own ? [own] : [])], g.bulletins.football.big)).sort((a, c) => a.date - c.date);
     const favs = g.bulletins.football.favs;
     if (!mine.length) return ctx.reply({ embeds: [card({ kind: 'fbDay', title: 'Today on the pitch', emoji: '🏟️', color: names.football.color, gif: 'off', body: 'Nothing big today. A rest day for everyone\'s nerves.' })] });
     // live first, then what's still to come, then the finished ones
