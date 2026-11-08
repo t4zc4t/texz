@@ -1,3 +1,4 @@
+import { report } from './ops.js';
 import { Events, PermissionFlagsBits, type Client, type Message } from 'discord.js';
 import type { Store } from './db.js';
 import { log } from './modules/moderation.js';
@@ -48,13 +49,13 @@ const logOn = (store: Store, guildId: string | null) => !!guildId && store.rules
 
 export function wireEvents(client: Client, store: Store) {
   client.on(Events.MessageCreate, (m) => {
-    void automod(store, m).catch((e) => console.error('automod', e));
-    void giveXp(store, m).catch((e) => console.error('xp', e));
+    void automod(store, m).catch((e) => report('automod', e));
+    void giveXp(store, m).catch((e) => report('xp', e));
     chatPay(store, m);
   });
 
   client.on(Events.GuildMemberAdd, (m) => {
-    if (store.rules(m.guild.id, 'welcome').enabled) void onJoin(store, m).catch((e) => console.error('welcome', e));
+    if (store.rules(m.guild.id, 'welcome').enabled) void onJoin(store, m).catch((e) => report('welcome', e));
     if (logOn(store, m.guild.id)) {
       void log(client, store, m.guild.id, card({
         kind: 'logs', title: 'Member joined', emoji: '📥', gif: 'off',
@@ -64,7 +65,7 @@ export function wireEvents(client: Client, store: Store) {
   });
 
   client.on(Events.GuildMemberRemove, (m) => {
-    if (store.rules(m.guild.id, 'welcome').enabled) void onLeave(store, m).catch((e) => console.error('goodbye', e));
+    if (store.rules(m.guild.id, 'welcome').enabled) void onLeave(store, m).catch((e) => report('goodbye', e));
     if (logOn(store, m.guild.id)) {
       void log(client, store, m.guild.id, card({ kind: 'logs', title: 'Member left', emoji: '📤', gif: 'off', fields: [{ name: '👤 Who', value: `<@${m.id}> · ${m.user?.username ?? '?'}`, inline: true }] }));
     }

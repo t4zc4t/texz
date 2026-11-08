@@ -1,3 +1,4 @@
+import { isOffline, report } from './ops.js';
 import type { Client, EmbedBuilder } from 'discord.js';
 import type { Reminder, Store } from './db.js';
 import { todoLines } from './features/daily.js';
@@ -142,6 +143,8 @@ async function deliver(client: Client, store: Store, r: Reminder, body: EmbedBui
 
 export function startScheduler(client: Client, store: Store) {
   const tick = async () => {
+    // no internet, nothing would arrive, the reminders wait for the connection to come back
+    if (isOffline() || !client.isReady()) return;
     const now = new Date();
     for (const r of store.dueReminders(now.getTime())) {
       const s = store.settings(r.user_id);
@@ -150,15 +153,20 @@ export function startScheduler(client: Client, store: Store) {
         store.db.prepare('UPDATE reminders SET due_at = ? WHERE id = ?').run(later.getTime(), r.id);
         continue;
       }
-      store.deleteReminder(r.id);
-      // timers that went off hours ago while Texz was offline are old news, skip them
-      const stale = ['huntbot', 'pray', 'hunt', 'vote', 'reset', 'lastcall'].includes(r.kind) && now.getTime() - r.due_at > 3 * HOUR;
+      // the reset and last call belong to one day, once it's half a day gone they're dropped and the next ones set
+      const stale = (['reset', 'lastcall', 'hunt'].includes(r.kind) && now.getTime() - r.due_at > 12 * HOUR) || now.getTime() - r.due_at > 24 * HOUR;
       if (stale) {
+        store.deleteReminder(r.id);
         if (r.kind === 'reset' || r.kind === 'lastcall') scheduleDailies(store, r.user_id, new Date(now.getTime() + 60_000));
         continue;
       }
       const body = text(store, r);
-      if (body) await deliver(client, store, r, body).catch((e) => console.error('send failed', e));
+      // missed while the PC or the internet was down: still sent, with a note on when it was due
+      if (body && now.getTime() - r.due_at > 2 * 60_000) body.setDescription(`${body.data.description ?? ''}\n-# ⏰ late, this was due <t:${Math.floor(r.due_at / 1000)}:R> while I was offline`.slice(0, 4096));
+      // only gone from the queue once it's really out, a failed send gets another go next round
+      const sent = body ? await deliver(client, store, r, body).then(() => true).catch((e) => { report('send failed', e); return false; }) : true;
+      if (!sent && now.getTime() - r.due_at < 24 * HOUR) continue;
+      store.deleteReminder(r.id);
       if (r.kind === 'reset' || r.kind === 'lastcall') scheduleDailies(store, r.user_id, new Date(now.getTime() + 60_000));
     }
   };

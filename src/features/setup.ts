@@ -10,7 +10,7 @@ import { card } from '../theme.js';
 import { welcomeCard } from '../modules/welcome.js';
 import { ticketPanel } from '../modules/server.js';
 import { buildBoard } from '../modules/bulletins.js';
-import { perks, rankFor, ranks } from '../modules/levels.js';
+import { fixRankOrder, perks, rankFor, ranks } from '../modules/levels.js';
 import { parseLength } from '../modules/moderation.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
@@ -470,15 +470,14 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       }
       store.saveGuild(i.guild.id, g);
       // highest rank on top, all of them just under Texz, the top ranks shown separately in the member list
+      const ordered = await fixRankOrder(i.guild, g.levels.rewards);
       const list = Object.entries(g.levels.rewards).map(([lvl, rid]) => ({ lvl: Number(lvl), role: i.guild!.roles.cache.get(rid) })).filter((x) => x.role && x.role.position < me.roles.highest.position).sort((a, b) => a.lvl - b.lvl);
-      const top = me.roles.highest.position - 1;
-      await i.guild.roles.setPositions(list.map((x, n) => ({ role: x.role!.id, position: Math.max(1, top - (list.length - 1 - n)) }))).catch(() => {});
       for (const x of list) {
         const p = perks[rankFor(x.lvl).name];
         if (p && x.role!.hoist !== p.hoist && rankFor(x.lvl).at === x.lvl) await x.role!.setHoist(p.hoist, 'rank perk').catch(() => {});
       }
       await i.editReply(setupPanel(store, i.guild, owner, 'rewards'));
-      await i.followUp({ content: `${made ? `✨ ${made} rank roles made. ` : ''}Ranks are in order, highest on top, and Senior Detective and up get their own spot in the member list. \`tz perks\` shows what each one earns.`, flags: MessageFlags.Ephemeral });
+      await i.followUp({ content: `${made ? `✨ ${made} rank roles made. ` : ''}${ordered ? 'Ranks are in order, highest on top,' : '⚠️ Some rank roles couldn\'t move, drag the Texz role above them and press this again.'} and Senior Detective and up get their own spot in the member list. \`tz perks\` shows what each one earns.`, flags: MessageFlags.Ephemeral });
       return true;
     }
     if (action === 'rboost' || action === 'cboost') {

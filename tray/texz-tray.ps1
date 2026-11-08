@@ -180,9 +180,16 @@ $timer.add_Tick({
   }
   if ($script:watchUntil -and (Get-Date) -gt $script:watchUntil) { $script:watchUntil = $null; $script:crashes = 0 }
   $beat = 0
-  if (Test-Path $aliveFile) { [long]::TryParse((Get-Content $aliveFile -Raw), [ref]$beat) | Out-Null }
+  $offline = $false
+  if (Test-Path $aliveFile) {
+    $raw = (Get-Content $aliveFile -Raw).Trim()
+    # "offline:<time>" means the bot is fine but the internet isn't
+    if ($raw.StartsWith('offline:')) { $offline = $true; $raw = $raw.Substring(8) }
+    [long]::TryParse($raw, [ref]$beat) | Out-Null
+  }
   $fresh = $beat -gt 0 -and ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - $beat) -lt 75000
   if (-not $settings.botOn -or -not $running) { $tray.Icon = $icons.off; $status.Text = 'Texz is off'; $tray.Text = 'Texz · off' }
+  elseif ($fresh -and $offline) { $tray.Icon = $icons.stuck; $status.Text = 'Texz is waiting for the internet'; $tray.Text = 'Texz · offline' }
   elseif ($fresh) {
     $up = (Get-Date) - $script:startedAt
     $since = if ($up.TotalHours -ge 1) { '{0}h {1}m' -f [int][math]::Floor($up.TotalHours), $up.Minutes } else { '{0}m' -f [int]$up.TotalMinutes }

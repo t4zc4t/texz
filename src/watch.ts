@@ -1,3 +1,4 @@
+import { report } from './ops.js';
 import { appendFileSync } from 'node:fs';
 import type { Client, Message, PartialMessage } from 'discord.js';
 import type { Store } from './db.js';
@@ -286,6 +287,6 @@ export function watch(client: Client, store: Store) {
     onReply(store, m, p);
   };
 
-  client.on('messageCreate', (m) => void handle(m, false).catch((e) => console.error(e)));
-  client.on('messageUpdate', (_old, m) => void handle(m, true).catch((e) => console.error(e)));
+  client.on('messageCreate', (m) => void handle(m, false).catch((e) => report('owo watch', e)));
+  client.on('messageUpdate', (_old, m) => void handle(m, true).catch((e) => report('owo watch', e)));
 }

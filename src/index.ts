@@ -16,6 +16,7 @@ import { startServerTimers } from './modules/server.js';
 import { startDailyCharacter } from './modules/anime.js';
 import { sweepQuiz } from './modules/f1quiz.js';
 import { watchSpawns } from './modules/spawns.js';
+import { fixRankOrder } from './modules/levels.js';
 import { warmModel } from './features/pokemodel.js';
 import { startBulletins } from './modules/bulletins.js';
 import { onQuote, QUOTE_MENU } from './modules/quote.js';
@@ -42,6 +43,10 @@ const client = new Client({
 client.once(Events.ClientReady, (c) => {
   console.log(`texz online as ${c.user.tag}`);
   look.avatar = c.user.displayAvatarURL();
+  // rank roles drift when people add or move roles, so they're put back in order on every start and once a day
+  const reorder = () => { for (const guild of c.guilds.cache.values()) { const g = store.guild(guild.id); if (store.rules(guild.id, 'levels').enabled && Object.keys(g.levels.rewards).length > 1) void fixRankOrder(guild, g.levels.rewards).catch(() => {}); } };
+  setTimeout(reorder, 30_000).unref?.();
+  setInterval(reorder, 24 * 3600_000).unref?.();
   // look up every gif link once so cards can show them straight away
   const custom = store.db.prepare('SELECT settings FROM guilds').all().flatMap((r) => Object.values((JSON.parse((r as { settings: string }).settings).gifs ?? {}) as Record<string, string>));
   void warmUp(custom).then((n) => console.log(`gifs ready: ${n}`));

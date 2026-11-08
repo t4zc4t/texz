@@ -1,3 +1,4 @@
+import { report } from '../ops.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder,
   type Client, type Guild, type GuildMember, type Interaction, type MessageActionRowComponentBuilder,
@@ -148,7 +149,7 @@ export async function finish(client: Client, store: Store, g: Giveaway) {
 
 export function startGiveaways(client: Client, store: Store) {
   const tick = async () => {
-    for (const g of store.dueGiveaways(Date.now())) await finish(client, store, g).catch((e) => console.error('giveaway', e));
+    for (const g of store.dueGiveaways(Date.now())) await finish(client, store, g).catch((e) => report('giveaway', e));
   };
   setInterval(() => void tick(), 15_000);
   void tick();

@@ -1,4 +1,4 @@
-import { AttachmentBuilder, SlashCommandBuilder, type GuildMember, type Message } from 'discord.js';
+import { AttachmentBuilder, SlashCommandBuilder, type Guild, type GuildMember, type Message } from 'discord.js';
 import { fetchAvatar, rankCard } from '../features/rankcard.js';
 import type { LevelRules, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
@@ -243,3 +243,27 @@ export const levelsModule: Module = {
   commands: [rank, levels, perksCmd, xp],
 };
 
+
+// rank roles in level order, highest rank right under Texz. Discord shifts every role when one moves,
+// so the whole order is worked out first and sent in one go, then checked, and tried once more if it slipped
+export async function fixRankOrder(guild: Guild, rewards: Record<string, string>): Promise<boolean> {
+  const me = await guild.members.fetchMe().catch(() => null);
+  if (!me) return false;
+  await guild.roles.fetch().catch(() => null);
+  const ceiling = me.roles.highest.position;
+  const ranked = Object.entries(rewards).map(([lvl, id]) => ({ lvl: Number(lvl), role: guild.roles.cache.get(id) }))
+    .filter((x): x is { lvl: number; role: NonNullable<typeof x.role> } => !!x.role && x.role.position < ceiling && !x.role.managed)
+    .sort((a, b) => a.lvl - b.lvl);
+  if (ranked.length < 2) return true;
+  const ids = new Set(ranked.map((x) => x.role.id));
+  const inOrder = () => ranked.every((x, n) => n === 0 || x.role.position > ranked[n - 1].role.position);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (inOrder() && ranked.at(-1)!.role.position === ceiling - 1) return true;
+    // everything below Texz from the bottom up, the rank roles taken out and put back on top in level order
+    const below = [...guild.roles.cache.values()].filter((r) => r.position < ceiling && r.id !== guild.id).sort((a, b) => a.position - b.position);
+    const order = [...below.filter((r) => !ids.has(r.id)), ...ranked.map((x) => x.role)];
+    await guild.roles.setPositions(order.map((r, n) => ({ role: r.id, position: n + 1 }))).catch(() => null);
+    await guild.roles.fetch().catch(() => null);
+  }
+  return inOrder();
+}

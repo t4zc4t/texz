@@ -10,7 +10,29 @@ const queue: string[] = [];
 let timer: NodeJS.Timeout | null = null;
 
 // errors land in the console and, batched, in the channel the owner picked in /setup
+// a dropped connection isn't a bug: one line when it goes, one when it's back, no stack dumps in between
+const NET = /ConnectTimeout|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ECONNREFUSED|UND_ERR|fetch failed|socket hang up|getaddrinfo|network/i;
+let offlineSince: number | null = null;
+let lastNetError = 0;
+export const isOffline = () => offlineSince !== null;
+function isNetwork(e: unknown) {
+  const text = e instanceof Error ? `${e.name} ${e.message} ${String((e as { cause?: unknown }).cause ?? '')} ${(e as { code?: string }).code ?? ''}` : String(e);
+  return NET.test(text);
+}
+function backOnlineCheck(ready: boolean) {
+  if (offlineSince && ready && Date.now() - lastNetError > 45_000) {
+    const mins = Math.max(1, Math.round((Date.now() - offlineSince) / 60_000));
+    console.log(`back online after ${mins}m`);
+    offlineSince = null;
+  }
+}
+
 export function report(where: string, e: unknown) {
+  if (isNetwork(e)) {
+    lastNetError = Date.now();
+    if (!offlineSince) { offlineSince = Date.now(); console.log(`offline (${where}), retrying`); }
+    return;
+  }
   console.error(where, e);
   const text = e instanceof Error ? `${e.name}: ${e.message}\n${(e.stack ?? '').split('\n').slice(1, 4).join('\n')}` : String(e);
   queue.push(`**${where}** · <t:${Math.floor(Date.now() / 1000)}:T>\n\`\`\`\n${text.slice(0, 600)}\n\`\`\``);
@@ -62,7 +84,8 @@ export function startOps(c: Client, s: Store) {
   setInterval(daily, 3_600_000);
   // the tray icon reads this to tell "online" from "running but stuck"
   const beat = () => {
-    try { writeFileSync('.alive', String(c.isReady() ? Date.now() : 0)); } catch { /* read-only folder, no tray then */ }
+    backOnlineCheck(c.isReady() && c.ws.ping > 0);
+    try { writeFileSync('.alive', offlineSince ? `offline:${Date.now()}` : String(c.isReady() ? Date.now() : 0)); } catch { /* read-only folder, no tray then */ }
     // dropping a .restart file asks for a clean exit, the tray or runner starts the new build
     if (existsSync('.restart')) { rmSync('.restart', { force: true }); console.log('restart asked for, exiting'); process.exit(0); }
   };

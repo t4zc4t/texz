@@ -11,6 +11,8 @@ export const menu: Record<string, [string, string, string?]> = {
   ship: ['💞', 'Ship test'], '8ball': ['🎱', 'Magic 8ball'], guess: ['🔎', 'Guess the anime', 'A picture, four names, first right answer wins yen'],
   quiz: ['🏁', 'F1 quiz', '20 seconds, one try each, harder questions pay more'], trivia: ['🗞️', 'F1 trivia'], onthisday: ['📅', 'On this day', 'F1, football and anime history for today'],
   quote: ['🖼️', 'Make it a quote', 'Frame a message as a picture, reply with tz quote or paste a link'],
+  'wish.list': ['💝', 'My Shoob wishlist'], 'wish.add': ['➕', 'Wish for a character'], 'wish.remove': ['➖', 'Drop a wish'],
+  dex: ['📕', 'Server Pokédex', 'What\'s been caught here and what\'s missing'], race: ['🏁', 'Catch race', 'Who catches the most this week'],
   crestquiz: ['🛡️', 'Crest quiz', 'Guess the club from its crest, pays yen'],
   spawns: ['🃏', 'Spawn pings', 'Pokétwo, and Shoob by tier'], pokemon: ['🔎', 'Who\'s that pokémon', 'Solve a Pokétwo hint like p_k_ch_'],
   daily: ['💴', 'Daily yen'], balance: ['👛', 'Balance'], give: ['💸', 'Give yen'], rich: ['🏆', 'Richest'],
@@ -35,7 +37,7 @@ export const menu: Record<string, [string, string, string?]> = {
 // sections and the quick buttons of each generic dashboard
 export const layout: Record<string, { sections: [string, string[]][]; quick: string[] }> = {
   fun: {
-    sections: [['🏆 Games that pay yen', ['quiz', 'crestquiz', 'guess']], ['🎉 For the channel', ['quote', 'ship', 'poll', 'trivia', 'onthisday']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']], ['🔔 Spawns', ['spawns', 'pokemon']]],
+    sections: [['🏆 Games that pay yen', ['quiz', 'crestquiz', 'guess']], ['🎉 For the channel', ['quote', 'ship', 'poll', 'trivia', 'onthisday']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']], ['🔔 Pokétwo and Shoob', ['spawns', 'pokemon', 'dex', 'race', 'wish.list', 'wish.add']]],
     quick: ['quiz', 'crestquiz', 'guess', 'onthisday', 'ship'],
   },
   eco: {

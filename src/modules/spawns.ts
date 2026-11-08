@@ -4,9 +4,9 @@ import {
 } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
-import { card } from '../theme.js';
+import { bar, card } from '../theme.js';
 import { picksOf, savePicks } from './profile.js';
-import { TYPES, addExtra, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeMark, typesOf } from '../features/pokedex.js';
+import { TYPES, addExtra, allSpecies, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeMark, typesOf } from '../features/pokedex.js';
 import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize, recognise, remember, type Sparse } from '../features/pokeid.js';
 import { classify, keepSpawn, seedMemory } from '../features/pokemodel.js';
 
@@ -51,6 +51,8 @@ const shoobRole = (guild: Guild, store: Store, t: string, make = false) => roleN
 const last = new Map<string, number>();
 
 export function watchSpawns(client: Client, store: Store) {
+  setInterval(() => void raceTick(client, store).catch(() => {}), 3600_000).unref?.();
+  for (const [k, v] of JSON.parse(store.getKv('p2:catchas') ?? '[]') as [string, string][]) catchAs.set(k, v);
   addExtra(JSON.parse(store.getKv('p2:extra') ?? '[]') as string[]);
   void seedMemory((vec, name) => remember(store, vec, name), memorySize(store) === 0);
   client.on(Events.MessageCreate, (m) => void onSpawn(store, m).catch(() => {}));
@@ -71,6 +73,10 @@ const rareMark: Record<string, string> = { legendary: '🌟 Legendary', mythical
 
 // a variant like "Alolan Vulpix" or "Paldean Tauros" counts as its species for types, rarity and art
 const baseOf = (name: string) => nameIn(name) ?? name;
+
+// the name people actually caught a form with, learned from catches, else the species name
+const catchAs = new Map<string, string>();
+const catchFor = (name: string) => catchAs.get(name.toLowerCase()) ?? baseOf(name);
 
 // Pokétwo's own name for what was caught, trusted as is, so its event forms like Mosslax get learned too
 export function catchName(text: string): string | null {
@@ -93,12 +99,12 @@ function maybeText(name: string, guess?: { p: number; others: string[] }, wrong:
   return [
     `## 🤔 Maybe ${name}?`,
     wrong.length ? `❌ Not ${wrong.join(', not ')}` : null,
-    `📋 Tap to copy: \`${catchLine(baseOf(name))}\``,
+    `📋 Tap to copy: \`${catchLine(catchFor(name))}\``,
     `-# only ${Math.round((guess?.p ?? 0) * 100)}% sure${guess?.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}. It might be one of Pokétwo's special forms, I learn those once they're caught`,
   ].filter(Boolean).join('\n');
 }
 
-function claimText(name: string, roles: string[], guess?: { p: number; others: string[] }) {
+function claimText(name: string, roles: string[], guess?: { p: number; others: string[] }, fresh = false) {
   const base = baseOf(name);
   const rare = rarityOf(base);
   const types = typesOf(base);
@@ -106,8 +112,8 @@ function claimText(name: string, roles: string[], guess?: { p: number; others: s
   return [
     roles.length ? `${roles.map((r) => `<@&${r}>`).join(' ')} ${why} spawn, be quick` : null,
     `## ${rare ? '🌟 ' : ''}${name}  ${types.map((t) => typeMark[t] ?? '').join('')}`,
-    `${rare ? `**${rareMark[rare]}** · ` : ''}${types.join(' · ')}`,
-    `📋 Tap to copy: \`${catchLine(baseOf(name))}\``,
+    `${rare ? `**${rareMark[rare]}** · ` : ''}${types.join(' · ')}${fresh ? ' · 🆕 **not caught here yet!**' : ''}`,
+    `📋 Tap to copy: \`${catchLine(catchFor(name))}\``,
     guess && guess.p < 0.85 ? `-# ${Math.round(guess.p * 100)}% sure${guess.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}` : null,
   ].filter(Boolean).join('\n');
 }
@@ -125,8 +131,10 @@ async function showNow(store: Store, m: Message, w: Waiting, name: string, guess
   if (!ch?.isSendable()) return;
   if (w.sent) {
     // a helper bot or a hint said otherwise, the card gets corrected in place
+    const before = w.shown;
     w.shown = name;
-    await w.sent.edit({ content: `${claimText(name, [])}\n-# corrected`, embeds: [pcCopy(name)], allowedMentions: { parse: [] } }).catch(() => {});
+    w.unsure = false;
+    await w.sent.edit({ content: `${claimText(name, [])}${before ? '\n-# corrected' : ''}`, embeds: [pcCopy(name)], allowedMentions: { parse: [] } }).catch(() => {});
     return;
   }
   const base = baseOf(name);
@@ -138,7 +146,7 @@ async function showNow(store: Store, m: Message, w: Waiting, name: string, guess
   }
   w.shown = name;
   w.sent = await ch.send({
-    content: w.unsure ? maybeText(name, guess) : claimText(name, roles, guess),
+    content: w.unsure ? maybeText(name, guess) : claimText(name, roles, guess, store.catchCount(m.guild.id) >= 100 && !store.caughtNames(m.guild.id).has(base.toLowerCase())),
     embeds: [pcCopy(name)],
     reply: { messageReference: w.id, failIfNotExists: false },
     allowedMentions: { roles },
@@ -203,6 +211,13 @@ async function onSpawn(store: Store, m: Message) {
     const caught = /congratulations.*?you caught a (?:level|lvl\.?)\s*\d+\s+(.+)/i.exec(m.content);
     if (caught) {
       const name = catchName(m.content);
+      // what the catcher typed is a name Pokétwo takes for this one, worth knowing for forms
+      if (name && m.reference?.messageId) {
+        const typed = await m.channel.messages.fetch(m.reference.messageId).then((x) => /\b(?:c|catch)\s+(.+)$/i.exec(x.content)?.[1].trim() ?? null).catch(() => null);
+        if (typed && typed.toLowerCase() !== name.toLowerCase()) catchAs.set(name.toLowerCase(), typed), store.setKv('p2:catchas', JSON.stringify([...catchAs]));
+      }
+      const catcher = /<@!?(\d+)>/.exec(m.content)?.[1];
+      if (name && catcher) { store.addCatch(m.guild.id, catcher, baseOf(name)); store.setKv(`p2:chan:${m.guild.id}`, m.channelId); }
       if (w && name && Date.now() - w.at < 30 * 60_000) await confirm(store, m, w, name, 'catch');
       waiting.delete(m.channelId);
       if (/these colors seem unusual|shiny/i.test(m.content) && name && m.channel.isSendable() && store.rules(m.guild.id, 'spawns').enabled) {
@@ -241,19 +256,66 @@ async function onSpawn(store: Store, m: Message) {
     nw.unsure = !!pick && pick.how === 'model' && pick.p < 0.6;
     nw.others = pick?.others ?? [];
     if (pick) await show(store, m, nw, pick.name, { p: pick.p, others: pick.others });
+    // nothing to go on: say so, so nobody thinks the spawn was missed, and the card fills in once it's named
+    else if (store.rules(m.guild.id, 'spawns').enabled && m.channel.isSendable()) {
+      nw.unsure = true;
+      nw.sent = await m.channel.send({ content: '## 🤔 New one to me\nAsk Pokétwo for a hint and I\'ll solve it. Once it\'s caught I\'ll know it next time.', reply: { messageReference: m.id, failIfNotExists: false }, allowedMentions: { parse: [] } }).catch(() => null);
+    }
     return;
   }
   if (!store.rules(m.guild.id, 'spawns').enabled || !m.channel.isSendable()) return;
   // one ping per channel every 20 seconds, spawns can come in bursts
   const key = `${m.channelId}:${which}`;
   if ((last.get(key) ?? 0) > Date.now() - 20_000) return;
-  // Shoob pings only the people who asked for that tier
-  if (!s.tier) return;
-  const role = await shoobRole(m.guild, store, s.tier);
-  if (!role) return;
+  // Shoob pings the people who asked for that tier, and anyone who wished for this exact character
+  const character = (e?.title ?? '').replace(/[*_`]/g, '').trim();
+  const wishers = character ? wishersOf(store, m.guild, character) : [];
+  const role = s.tier ? await shoobRole(m.guild, store, s.tier) : null;
+  if (!role && !wishers.length) return;
   last.set(key, Date.now());
-  await m.channel.send({ content: `${tierMark[s.tier]} <@&${role.id}> a **tier ${s.tier}** card just dropped, go claim it`, allowedMentions: { roles: [role.id] } });
+  const lines = [
+    role ? `${tierMark[s.tier!]} <@&${role.id}> a **tier ${s.tier}** card just dropped, go claim it` : null,
+    wishers.length ? `💝 ${wishers.map((u) => `<@${u}>`).join(' ')} **${character}** is on your wishlist!` : null,
+  ].filter(Boolean).join('\n');
+  await m.channel.send({ content: lines, allowedMentions: { roles: role ? [role.id] : [], users: wishers } });
 }
+
+// Shoob wishlists: characters people want, matched loosely so "Gojo" finds "Satoru Gojo"
+const wishOf = (store: Store, user: string) => JSON.parse(store.getKv(`shoobwish:${user}`) ?? '[]') as string[];
+function wishersOf(store: Store, guild: Guild, character: string) {
+  const c = character.toLowerCase();
+  return store.kvByPrefix('shoobwish:').filter(({ value }) => (JSON.parse(value) as string[]).some((w) => c.includes(w.toLowerCase()) || w.toLowerCase().includes(c)))
+    .map(({ key }) => key.slice(10)).slice(0, 20);
+}
+
+const wish: Command = {
+  name: 'wish',
+  group: 'fun',
+  data: new SlashCommandBuilder().setName('wish').setDescription('Your Shoob wishlist, a ping when one of these characters drops')
+    .addSubcommand((c) => c.setName('list').setDescription('Your wishlist'))
+    .addSubcommand((c) => c.setName('add').setDescription('Wish for a character').addStringOption((o) => o.setName('character').setDescription('Their name, part of it is fine').setRequired(true).setMaxLength(60)))
+    .addSubcommand((c) => c.setName('remove').setDescription('Take one off').addStringOption((o) => o.setName('character').setDescription('Name as it is on your list').setRequired(true).setMaxLength(60)))
+    .toJSON(),
+  text: { aliases: ['wishlist'], sub: true, subArgs: { add: ['character'], remove: ['character'] } },
+  run: (ctx, store) => {
+    const sub = ctx.sub() ?? 'list';
+    const list = wishOf(store, ctx.userId);
+    const name = (ctx.str('character') ?? '').trim();
+    if (sub === 'add' && name) {
+      if (list.length >= 25) return ctx.reply('Your wishlist is full at 25, take one off first.');
+      if (!list.some((x) => x.toLowerCase() === name.toLowerCase())) list.push(name);
+      store.setKv(`shoobwish:${ctx.userId}`, JSON.stringify(list));
+      return ctx.reply({ content: `💝 **${name}** is on your wishlist, I'll ping you when they drop.`, temp: false });
+    }
+    if (sub === 'remove' && name) {
+      const left = list.filter((x) => x.toLowerCase() !== name.toLowerCase());
+      store.setKv(`shoobwish:${ctx.userId}`, JSON.stringify(left));
+      return ctx.reply(left.length < list.length ? `🗑️ **${name}** is off your wishlist.` : `**${name}** wasn't on it.`);
+    }
+    return ctx.reply({ embeds: [card({ kind: 'help', title: 'Your Shoob wishlist', emoji: '💝', gif: 'off', line: '',
+      body: list.length ? list.map((x) => `• ${x}`).join('\n') : 'Empty. Add someone with `tz wish add Gojo` and I\'ll ping you when they drop, whatever the tier.' })] });
+  },
+};
 
 
 export async function onCatchCopy(i: Interaction) {
@@ -267,7 +329,7 @@ export async function onCatchCopy(i: Interaction) {
 function pcCopy(name: string) {
   // forms like East Sea Gastrodon catch fine by the species name, which is shorter and never wrong
   const id = idOf(baseOf(name));
-  const e = new EmbedBuilder().setColor(rarityOf(name) ? 0xf1c40f : 0xe3350d).setDescription(`🖥️ **Click to copy**\n\`\`\`${catchLine(baseOf(name))}\`\`\``);
+  const e = new EmbedBuilder().setColor(rarityOf(name) ? 0xf1c40f : 0xe3350d).setDescription(`🖥️ **Click to copy**\n\`\`\`${catchLine(catchFor(name))}\`\`\``);
   if (id) e.setThumbnail(artwork(id));
   return e;
 }
@@ -331,6 +393,64 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
         .addOptions(TIERS.map((t) => ({ label: `Tier ${t}`, value: t, emoji: tierMark[t], default: mine.includes(t as never) })))),
     ],
   };
+}
+
+// the server's Pokédex: how much of the dex has been caught here, by generation, and the rare ones still missing
+const GENS: [string, number, number][] = [['Kanto', 1, 151], ['Johto', 152, 251], ['Hoenn', 252, 386], ['Sinnoh', 387, 493], ['Unova', 494, 649], ['Kalos', 650, 721], ['Alola', 722, 809], ['Galar', 810, 905], ['Paldea', 906, 1025]];
+const dex: Command = {
+  name: 'dex',
+  group: 'fun',
+  data: new SlashCommandBuilder().setName('dex').setDescription('The server\'s Pokédex: what has been caught here and what\'s still missing').toJSON(),
+  text: { aliases: ['pokedex', 'caught'] },
+  run: (ctx, store) => {
+    if (!ctx.guildId) return ctx.reply('The Pokédex lives in servers.');
+    const caught = store.caughtNames(ctx.guildId);
+    const species = allSpecies();
+    const have = species.filter((x) => caught.has(x.name.toLowerCase()));
+    const lines = GENS.map(([gen, a, b]) => {
+      const total = species.filter((x) => x.id >= a && x.id <= b).length;
+      const got = have.filter((x) => x.id >= a && x.id <= b).length;
+      return `\`${gen.padEnd(6)}\` ${bar(got, total)} ${got}/${total}`;
+    });
+    const wanted = species.filter((x) => x.rare && !caught.has(x.name.toLowerCase())).slice(0, 12).map((x) => x.name);
+    const mine = store.catchCount(ctx.guildId, ctx.userId);
+    const e = card({
+      kind: 'help', title: 'Server Pokédex', emoji: '📕', gif: 'off', line: '',
+      body: `**${have.length}** of ${species.length} caught here · ${store.catchCount(ctx.guildId)} catches in all · **${mine}** by you\n\n${lines.join('\n')}`,
+      fields: wanted.length ? [{ name: '🌟 Most wanted', value: wanted.join(', '), inline: false }] : [],
+    });
+    return ctx.reply({ embeds: [e] });
+  },
+};
+
+// who catches the most this week, the winner gets yen every Monday
+const weekStart = (d = new Date()) => { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return x.getTime(); };
+const RACE_PRIZE = 300;
+const race: Command = {
+  name: 'race',
+  group: 'fun',
+  data: new SlashCommandBuilder().setName('race').setDescription('This week\'s Pokétwo catch race').toJSON(),
+  text: { aliases: ['catchrace', 'catches'] },
+  run: (ctx, store) => {
+    if (!ctx.guildId) return ctx.reply('The race runs in servers.');
+    const board = store.catchBoard(ctx.guildId, weekStart());
+    const medal = ['🥇', '🥈', '🥉'];
+    const body = board.length ? board.map((r, n) => `${medal[n] ?? `\`${n + 1}.\``} <@${r.user_id}> · **${r.n}**`).join('\n') : 'Nobody has caught anything this week yet. The field is open.';
+    return ctx.reply({ embeds: [card({ kind: 'help', title: 'Catch race · this week', emoji: '🏁', gif: 'off', line: '', body: `${body}\n\n-# ends Monday <t:${Math.floor((weekStart() + 7 * 86_400_000) / 1000)}:R>, first place wins ¥${RACE_PRIZE}` })] });
+  },
+};
+
+// Monday morning: last week's winner gets the prize and a shout where people play
+async function raceTick(client: Client, store: Store) {
+  const start = weekStart();
+  for (const guild of client.guilds.cache.values()) {
+    if (!store.firstTime(guild.id, `race:${start}`)) continue;
+    const last = store.db.prepare('SELECT user_id, COUNT(*) AS n FROM catches WHERE guild_id = ? AND at >= ? AND at < ? GROUP BY user_id ORDER BY n DESC LIMIT 1').get(guild.id, start - 7 * 86_400_000, start) as { user_id: string; n: number } | undefined;
+    const ch = client.channels.cache.get(store.getKv(`p2:chan:${guild.id}`) ?? '');
+    if (!last || !ch?.isSendable()) continue;
+    const paid = store.rules(guild.id, 'economy').enabled && store.pay(guild.id, last.user_id, RACE_PRIZE);
+    await ch.send({ content: `🏁 **Catch race winner:** <@${last.user_id}> with **${last.n}** catches last week${paid ? `, +¥${RACE_PRIZE}` : ''}. A new race starts now.`, allowedMentions: { users: [last.user_id] } }).catch(() => {});
+  }
 }
 
 const spawns: Command = {
@@ -477,5 +597,5 @@ export const spawnsModule: Module = {
   name: 'spawns',
   label: 'Pings and spawns',
   about: 'One panel for every ping, Pokétwo spawns with hint solving, and Shoob pings by tier.',
-  commands: [pings, spawns, pokemon],
+  commands: [pings, spawns, pokemon, dex, race, wish],
 };

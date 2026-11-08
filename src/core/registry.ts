@@ -298,7 +298,7 @@ export async function onComponent(store: Store, i: Interaction) {
   }
   if (i.isModalSubmit() || i.isButton() || i.isStringSelectMenu()) {
     const rp = parseRp(i.customId);
-    if (rp) return onPanel(store, i, rp).catch((e) => console.error('panel', e));
+    if (rp) return onPanel(store, i, rp).catch((e) => report('panel', e));
   }
   // a filled in form from a dashboard pick
   if (i.isModalSubmit() && i.customId.startsWith('ask|')) {
@@ -350,7 +350,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (arm.what === 'filter' && v in filters) { filter = v as Filter; page = 0; }
     if (arm.what === 'sort' && v in sorts) { sort = v as Sort; page = 0; }
   }
-  await i.update(armouryPage(store, arm.userId, page, filter, sort)).catch((e) => console.error('armoury page', e));
+  await i.update(armouryPage(store, arm.userId, page, filter, sort)).catch((e) => report('armoury page', e));
 }
 
 const notYours = 'That\'s someone else\'s control room. Open your own with `tz remind`.';

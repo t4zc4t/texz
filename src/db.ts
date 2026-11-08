@@ -363,6 +363,13 @@ export class Store {
         bio TEXT,
         favourite TEXT
       );
+      CREATE TABLE IF NOT EXISTS catches (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS catches_guild ON catches (guild_id, at);
       CREATE TABLE IF NOT EXISTS kv (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -514,6 +521,29 @@ export class Store {
   }
 
   // bot-wide odds and ends, like where error reports go
+  // every value under a key prefix, like all the Shoob wishlists
+  kvByPrefix(prefix: string): { key: string; value: string }[] {
+    return this.db.prepare("SELECT key, value FROM kv WHERE key LIKE ? ESCAPE '\\'").all(`${prefix.replace(/[\\%_]/g, '\\$&')}%`) as { key: string; value: string }[];
+  }
+
+  // Pokétwo catches seen in the server, for the Pokédex and the weekly race
+  addCatch(guild: string, user: string, name: string) {
+    this.db.prepare('INSERT INTO catches (guild_id, user_id, name, at) VALUES (?, ?, ?, ?)').run(guild, user, name, Date.now());
+  }
+  caughtNames(guild: string): Set<string> {
+    const rows = this.db.prepare('SELECT DISTINCT lower(name) AS n FROM catches WHERE guild_id = ?').all(guild) as { n: string }[];
+    return new Set(rows.map((r) => r.n));
+  }
+  catchBoard(guild: string, since: number, limit = 10): { user_id: string; n: number }[] {
+    return this.db.prepare('SELECT user_id, COUNT(*) AS n FROM catches WHERE guild_id = ? AND at >= ? GROUP BY user_id ORDER BY n DESC LIMIT ?').all(guild, since, limit) as { user_id: string; n: number }[];
+  }
+  catchCount(guild: string, user?: string): number {
+    const row = (user
+      ? this.db.prepare('SELECT COUNT(*) AS n FROM catches WHERE guild_id = ? AND user_id = ?').get(guild, user)
+      : this.db.prepare('SELECT COUNT(*) AS n FROM catches WHERE guild_id = ?').get(guild)) as { n: number };
+    return row.n;
+  }
+
   getKv(key: string): string | null {
     return (this.db.prepare('SELECT value FROM kv WHERE key = ?').get(key) as { value: string } | undefined)?.value ?? null;
   }
