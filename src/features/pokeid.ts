@@ -1,5 +1,9 @@
 import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Store } from '../db.js';
+import { nameIn } from './pokedex.js';
 
 // Pokétwo draws each species the same way every time, so a small fingerprint of the picture is enough to know it again.
 // The bot starts knowing nothing and learns from every catch, every hint it solves and every name another helper bot gives.
@@ -72,3 +76,60 @@ export function learn(store: Store, hash: string, name: string) {
 }
 
 export const knownCount = (store: Store) => new Set(load(store).map(([, n]) => n)).size;
+
+// what the classifier saw, kept as its 20 strongest answers: two spawns of the same variant land close together
+export type Sparse = [number, number][];
+
+const cosine = (a: Sparse, b: Sparse) => {
+  const mb = new Map(b);
+  let dot = 0;
+  for (const [i, v] of a) dot += v * (mb.get(i) ?? 0);
+  const n = (x: Sparse) => Math.sqrt(x.reduce((s, [, v]) => s + v * v, 0));
+  return dot / (n(a) * n(b) || 1);
+};
+
+type Memory = [name: string, vec: Sparse];
+let memory: Memory[] | null = null;
+const mem = (store: Store) => (memory ??= JSON.parse(store.getKv('p2:mem') ?? '[]') as Memory[]);
+
+// every confirmed spawn is remembered with what the classifier saw, newest kept when it gets long
+export function remember(store: Store, vec: Sparse, name: string) {
+  const list = mem(store);
+  list.push([name, vec.map(([i, v]) => [i, Math.round(v * 1e4) / 1e4])]);
+  if (list.length > 4000) list.splice(0, list.length - 4000);
+  store.setKv('p2:mem', JSON.stringify(list));
+}
+
+export const memorySize = (store: Store) => mem(store).length;
+
+export function nearest(store: Store, vec: Sparse): { name: string; cos: number; votes: number } | null {
+  const scored = mem(store).map(([name, v]) => ({ name, cos: cosine(vec, v) })).sort((a, b) => b.cos - a.cos).slice(0, 5);
+  if (!scored.length) return null;
+  const best = scored[0];
+  return { ...best, votes: scored.filter((s) => s.name === best.name && s.cos >= 0.8).length };
+}
+
+export interface Guess { name: string; p: number; how: 'picture' | 'memory' | 'model'; others: string[] }
+
+// the classifier knows species, the memory knows what this server's spawns turned out to be, variants included
+export function decide(store: Store, cls: { top: { name: string; p: number }[]; vec: Sparse } | null, seen: { name: string; sure: boolean } | null): Guess | null {
+  if (seen?.sure) return { name: seen.name, p: 1, how: 'picture', others: [] };
+  const top = cls?.top[0];
+  const nn = cls ? nearest(store, cls.vec) : null;
+  const others = (cls?.top ?? []).slice(1).filter((g) => g.p >= 0.1).map((g) => g.name);
+  if (nn && top && nn.cos >= 0.85 && (nameIn(nn.name) === top.name || top.p < 0.6 || nn.votes >= 2)) {
+    return { name: nn.name, p: Math.max(top.p, nn.cos), how: 'memory', others: nn.name === top.name ? others : [top.name, ...others].filter((x) => x !== nn.name).slice(0, 2) };
+  }
+  if (top && top.p >= 0.35) return { name: top.name, p: top.p, how: 'model', others };
+  if (seen) return { name: seen.name, p: 0.5, how: 'picture', others: [] };
+  return null;
+}
+
+// one line per spawn: what was guessed and what it really was, to see where recognition goes wrong
+const logFile = fileURLToPath(new URL('../../cache/spawnlog.jsonl', import.meta.url));
+export function logSpawn(entry: object) {
+  try {
+    mkdirSync(dirname(logFile), { recursive: true });
+    appendFileSync(logFile, `${JSON.stringify(entry)}\n`);
+  } catch { /* only for checking later */ }
+}

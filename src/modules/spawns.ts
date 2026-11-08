@@ -7,8 +7,8 @@ import type { Command, Module } from '../core/module.js';
 import { card } from '../theme.js';
 import { picksOf, savePicks } from './profile.js';
 import { TYPES, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeMark, typesOf } from '../features/pokedex.js';
-import { download, fingerprint, knownCount, learn, recognise } from '../features/pokeid.js';
-import { classify, keepSpawn } from '../features/pokemodel.js';
+import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize, recognise, remember, type Sparse } from '../features/pokeid.js';
+import { classify, keepSpawn, seedMemory } from '../features/pokemodel.js';
 
 export const POKETWO_ID = '716390085896962058';
 export const SHOOB_ID = '673362753489993749';
@@ -51,64 +51,100 @@ const shoobRole = (guild: Guild, store: Store, t: string, make = false) => roleN
 const last = new Map<string, number>();
 
 export function watchSpawns(client: Client, store: Store) {
+  void seedMemory((vec, name) => remember(store, vec, name), memorySize(store) === 0);
   client.on(Events.MessageCreate, (m) => void onSpawn(store, m).catch(() => {}));
 }
 
 // the spawn waiting in each channel, until someone catches it or the next one comes
-const waiting = new Map<string, { id: string; hash: string | null; image: Buffer | null; at: number; name: string | null; rare: boolean; pinged: boolean; kept?: boolean }>();
+type Waiting = {
+  id: string; channelId: string; hash: string | null; image: Buffer | null; vec: Sparse | null; at: number;
+  guess: { name: string; p: number; how: string } | null; confirmed: string | null; kept?: boolean;
+  sent: Message | null; shown: string | null; pinged: boolean; queue?: Promise<void>;
+};
+const waiting = new Map<string, Waiting>();
 const RARE_ROLE = 'Pokétwo Rare Spawns';
 const rareRole = (guild: Guild, store: Store, make = false) => roleNamed(guild, store, 'p2rare', RARE_ROLE, make);
 const typeRole = (guild: Guild, store: Store, t: string, make = false) => roleNamed(guild, store, `p2type:${t}`, `Pokétwo ${t}`, make);
 const rareMark: Record<string, string> = { legendary: '🌟 Legendary', mythical: '💫 Mythical', 'ultra beast': '🌀 Ultra Beast' };
 
-// a name is known for the spawn: tell the channel how to catch it, and ping for the rare ones
-async function named(store: Store, m: Message, spawnId: string, name: string, how: 'seen' | 'hint' | 'helper', guess?: { p: number; others: string[] }) {
-  const w = waiting.get(m.channelId);
-  if (!w || w.id !== spawnId || !m.guild || !m.channel.isSendable()) return;
-  const firstTime = !w.name;
-  w.name = name;
-  const rare = rarityOf(name);
-  w.rare = !!rare;
-  if (w.hash && how !== 'seen') learn(store, w.hash, name);
-  if (w.image && !w.kept && how !== 'seen') { keepSpawn(w.image, name); w.kept = true; }
-  if (!store.rules(m.guild.id, 'spawns').enabled) return;
-  const types = typesOf(name);
-  // rare hunters and anyone after one of its types, once per spawn
-  const roles: string[] = [];
-  if (!w.pinged) {
-    if (rare) { const r = await rareRole(m.guild, store); if (r) roles.push(r.id); }
-    for (const t of types) { const r = await typeRole(m.guild, store, t); if (r) roles.push(r.id); }
-    if (roles.length) w.pinged = true;
-  }
-  // the claim card goes out once, a helper bot already naming it is enough on its own unless someone needs a ping
-  if (how === 'helper' && !roles.length) return;
-  if (!firstTime && !roles.length) return;
-  // plain text like the other helper bots: phones can tap the code to copy it, which they can't do inside an embed
+// a variant like "Alolan Vulpix" or "Paldean Tauros" counts as its species for types, rarity and art
+const baseOf = (name: string) => nameIn(name) ?? name;
+
+// the full name from another helper bot's reply or Pokétwo's catch line, variant included
+export function fullNameFrom(text: string): string | null {
+  const first = text.split('\n').map((l) => l.replace(/[*_#>`~|]/g, '').trim()).find(Boolean) ?? '';
+  const lead = /^[\p{L}\p{N} .'’:é♀♂()-]+/u.exec(first)?.[0].replace(/\s*\(.*$/, '').trim();
+  if (!lead || !nameIn(lead)) return null;
+  return lead.split(/\s+/).length > 4 ? nameIn(lead) : lead;
+}
+
+function claimText(name: string, roles: string[], guess?: { p: number; others: string[] }) {
+  const base = baseOf(name);
+  const rare = rarityOf(base);
+  const types = typesOf(base);
   const why = [rare && rareMark[rare], ...types].filter(Boolean).join(' · ');
-  const lines = [
+  return [
     roles.length ? `${roles.map((r) => `<@&${r}>`).join(' ')} ${why} spawn, be quick` : null,
     `## ${rare ? '🌟 ' : ''}${name}  ${types.map((t) => typeMark[t] ?? '').join('')}`,
     `${rare ? `**${rareMark[rare]}** · ` : ''}${types.join(' · ')}`,
     `📋 Tap to copy: \`${catchLine(name)}\``,
     guess && guess.p < 0.85 ? `-# ${Math.round(guess.p * 100)}% sure${guess.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}` : null,
-  ];
-  await m.channel.send({
-    content: lines.filter(Boolean).join('\n'),
+  ].filter(Boolean).join('\n');
+}
+
+// post the claim card, or fix it when a better name turns up, one at a time so two answers never make two cards
+function show(store: Store, m: Message, w: Waiting, name: string, guess?: { p: number; others: string[] }) {
+  w.queue = (w.queue ?? Promise.resolve()).then(() => showNow(store, m, w, name, guess)).catch(() => {});
+  return w.queue;
+}
+
+async function showNow(store: Store, m: Message, w: Waiting, name: string, guess?: { p: number; others: string[] }) {
+  if (!m.guild || !store.rules(m.guild.id, 'spawns').enabled) return;
+  if (w.shown === name) return;
+  const ch = m.client.channels.cache.get(w.channelId);
+  if (!ch?.isSendable()) return;
+  if (w.sent) {
+    // a helper bot or a hint said otherwise, the card gets corrected in place
+    w.shown = name;
+    await w.sent.edit({ content: `${claimText(name, [])}\n-# corrected`, embeds: [pcCopy(name)], allowedMentions: { parse: [] } }).catch(() => {});
+    return;
+  }
+  const base = baseOf(name);
+  const roles: string[] = [];
+  if (!w.pinged) {
+    if (rarityOf(base)) { const r = await rareRole(m.guild, store); if (r) roles.push(r.id); }
+    for (const t of typesOf(base)) { const r = await typeRole(m.guild, store, t); if (r) roles.push(r.id); }
+    w.pinged = true;
+  }
+  w.shown = name;
+  w.sent = await ch.send({
+    content: claimText(name, roles, guess),
     embeds: [pcCopy(name)],
-    reply: { messageReference: spawnId, failIfNotExists: false },
+    reply: { messageReference: w.id, failIfNotExists: false },
     allowedMentions: { roles },
-  });
+  }).catch(() => null);
+}
+
+// a name everyone agrees on: from the catch, a one-answer hint or another helper bot
+async function confirm(store: Store, m: Message, w: Waiting, name: string, how: 'catch' | 'hint' | 'helper') {
+  if (w.confirmed && how !== 'catch') return;
+  w.confirmed = name;
+  if (w.hash) learn(store, w.hash, name);
+  if (w.vec) remember(store, w.vec, name);
+  if (w.image && !w.kept) { keepSpawn(w.image, name); w.kept = true; }
+  logSpawn({ at: w.at, guess: w.guess, confirmed: name, how });
+  if (how !== 'catch') await show(store, m, w, name);
 }
 
 async function onSpawn(store: Store, m: Message) {
   if (!m.guild || !m.author.bot || m.author.id === m.client.user.id) return;
   const which = m.author.id === POKETWO_ID ? 'p2' : m.author.id === SHOOB_ID ? 'shoob' : null;
   const w = waiting.get(m.channelId);
-  // another helper bot answering the spawn, its name is worth learning
+  // another helper bot answering the spawn: its name, variant and all, is worth learning
   if (!which) {
-    if (w && m.reference?.messageId === w.id && !w.name) {
-      const name = nameIn(`${m.embeds[0]?.title ?? ''} ${m.content.split('\n')[0]}`);
-      if (name) await named(store, m, w.id, name, 'helper');
+    if (w && m.reference?.messageId === w.id) {
+      const name = fullNameFrom(`${m.embeds[0]?.title ?? ''}\n${m.content}`) ?? fullNameFrom(m.content) ?? fullNameFrom(m.embeds[0]?.description ?? '');
+      if (name) await confirm(store, m, w, name, 'helper');
     }
     return;
   }
@@ -117,17 +153,15 @@ async function onSpawn(store: Store, m: Message) {
     const hint = hintOf(m.content);
     if (hint) {
       const fits = solve(hint).slice(0, 6);
-      if (fits.length === 1 && w) await named(store, m, w.id, fits[0].name, 'hint');
+      if (fits.length === 1 && w) await confirm(store, m, w, fits[0].name, 'hint');
       else if (m.channel.isSendable() && store.rules(m.guild.id, 'spawns').enabled) await m.channel.send({ ...answer(hint, fits), reply: { messageReference: m.id, failIfNotExists: false }, allowedMentions: { parse: [] } });
       return;
     }
     // a catch: now the picture has a name for good
     const caught = /congratulations.*?you caught a (?:level|lvl\.?)\s*\d+\s+(.+)/i.exec(m.content);
     if (caught) {
-      const name = nameIn(caught[1]);
-      if (w && name && w.hash && Date.now() - w.at < 30 * 60_000) learn(store, w.hash, name);
-      // the picture and its confirmed name, kept for checking how well recognition does
-      if (w?.image && name && !w.kept) { keepSpawn(w.image, name); w.kept = true; }
+      const name = fullNameFrom(caught[1].replace(/<a?:\w+:\d+>/g, ' ').replace(/[!✨]/g, ' ')) ?? nameIn(caught[1]);
+      if (w && name && Date.now() - w.at < 30 * 60_000) await confirm(store, m, w, name, 'catch');
       waiting.delete(m.channelId);
       if (/these colors seem unusual|shiny/i.test(m.content) && name && m.channel.isSendable() && store.rules(m.guild.id, 'spawns').enabled) {
         const who = /<@!?(\d+)>/.exec(m.content)?.[1];
@@ -146,17 +180,22 @@ async function onSpawn(store: Store, m: Message) {
   store.setKv(count, String(Number(store.getKv(count) ?? 0) + 1));
   store.setKv(`spawnseen:${m.guild.id}:${which}`, String(Date.now()));
   if (s.kind === 'p2') {
-    const url = e?.image?.url ?? m.attachments.first()?.url ?? null;
-    const image = url ? await download(url) : null;
-    const hash = await fingerprint(image);
-    waiting.set(m.channelId, { id: m.id, hash, image, at: Date.now(), name: null, rare: false, pinged: false });
-    // the same picture seen before wins, otherwise the model has a look
-    const seen = hash ? recognise(store, hash) : null;
-    if (seen?.sure) { await named(store, m, m.id, seen.name, 'seen'); return; }
-    const guesses = image ? await classify(image).catch(() => []) : [];
-    const top = guesses[0];
-    if (top && top.p >= 0.5) await named(store, m, m.id, top.name, 'seen', { p: top.p, others: guesses.slice(1).filter((g) => g.p >= 0.1).map((g) => g.name) });
-    else if (seen) await named(store, m, m.id, seen.name, 'seen');
+    // an unclaimed spawn that never got a name still goes in the log, so misses show up
+    if (w && !w.confirmed) logSpawn({ at: w.at, guess: w.guess, confirmed: null, how: 'fled' });
+    const nw: Waiting = { id: m.id, channelId: m.channelId, hash: null, image: null, vec: null, at: Date.now(), guess: null, confirmed: null, sent: null, shown: null, pinged: false };
+    waiting.set(m.channelId, nw);
+    const url = e?.image?.url ?? e?.image?.proxyURL ?? m.attachments.first()?.url ?? null;
+    // a second try, Discord's CDN sometimes drops the first request
+    nw.image = url ? (await download(url)) ?? (await download(url)) : null;
+    nw.hash = await fingerprint(nw.image);
+    const seen = nw.hash ? recognise(store, nw.hash) : null;
+    const cls = nw.image ? await classify(nw.image).catch(() => null) : null;
+    nw.vec = cls?.vec ?? null;
+    // a helper bot may have answered while the picture was being read, then its name stands
+    if (nw.confirmed) { await show(store, m, nw, nw.confirmed); return; }
+    const pick = decide(store, cls, seen);
+    nw.guess = pick ? { name: pick.name, p: pick.p, how: pick.how } : null;
+    if (pick) await show(store, m, nw, pick.name, { p: pick.p, others: pick.others });
     return;
   }
   if (!store.rules(m.guild.id, 'spawns').enabled || !m.channel.isSendable()) return;
@@ -226,7 +265,7 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
     body: [
       `${p2 ? '🟢' : '⚫'} 🌟 **Pokétwo rare spawns** · legendary, mythical and ultra beasts only`,
       `${myTypes.length ? '🟢' : '⚫'} 🧬 **Pokétwo types** · ${myTypes.length ? myTypes.map((t) => `${typeMark[t]} ${t}`).join(' ') : 'none picked, handy when a quest wants a type'}`,
-      `🔎 **Claim help** · I name every spawn I've seen caught before, **${knownCount(store)}** known so far, and solve hints`,
+      `🔎 **Claim help** · I read every spawn picture, and remember **${memorySize(store)}** confirmed spawns so variants come out right, plus I solve hints`,
       `${mine.length ? '🟢' : '⚫'} 🃏 **Shoob** · ${mine.length ? mine.map((t) => `${tierMark[t]} T${t}`).join(' ') : 'no tiers picked'}`,
       '',
       '-# Shoob only pings the tiers you pick. Most people want 4 and up.',

@@ -39,3 +39,11 @@ test('types come with every pokémon, regional forms too', async () => {
   assert.deepEqual(typesOf('Alolan Vulpix'), ['Ice']);
   assert.deepEqual(typesOf('Wiglett'), ['Water']);
 });
+
+test('full names keep their variant', async () => {
+  const { fullNameFrom } = await import('../src/modules/spawns.ts');
+  assert.equal(fullNameFrom('Drednaw 🐢【🇩🇪 Kamalm】【💧】'), 'Drednaw');
+  assert.equal(fullNameFrom('# Alolan Vulpix 🦊'), 'Alolan Vulpix');
+  assert.equal(fullNameFrom('**Mr. Mime**'), 'Mr. Mime');
+  assert.equal(fullNameFrom('Click to see attachment'), null);
+});

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { nameById } from './pokedex.js';
@@ -78,9 +78,9 @@ const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
 
 // best guesses for a spawn picture: the middle square, where Pokétwo puts the pokémon, at 224x224
-export async function classify(image: Buffer): Promise<{ name: string; p: number }[]> {
+export async function classify(image: Buffer): Promise<{ top: { name: string; p: number }[]; vec: [number, number][] } | null> {
   const m = await load();
-  if (!m) return [];
+  if (!m) return null;
   const img = await loadImage(image);
   const area = 224 * 224;
   // a few squares around the middle, tighter and looser, averaged, so a small pokémon still fills one of them
@@ -98,6 +98,8 @@ export async function classify(image: Buffer): Promise<{ name: string; p: number
   const logits = out[m.run.outputNames[0]].data as Float32Array;
   const classes = logits.length / crops.length;
   const exp = new Array<number>(classes).fill(0);
+  const avg = new Array<number>(classes).fill(0);
+  for (let i = 0; i < logits.length; i++) avg[i % classes] += logits[i] / crops.length;
   for (let n = 0; n < crops.length; n++) {
     const row = logits.subarray(n * classes, (n + 1) * classes);
     const top = Math.max(...row);
@@ -105,7 +107,27 @@ export async function classify(image: Buffer): Promise<{ name: string; p: number
     const z = e.reduce((x, y) => x + y, 0);
     e.forEach((v, i) => { exp[i] += v / z / crops.length; });
   }
-  const sum = 1;
-  return exp.map((v, i) => ({ i, p: v / sum })).sort((a, b) => b.p - a.p).slice(0, 3)
-    .map(({ i, p }) => ({ name: nameById(m.labels.find((l) => l.index === i)?.id ?? -1) ?? '?', p }));
+  const ranked = exp.map((p, i) => ({ i, p })).sort((a, b) => b.p - a.p);
+  return {
+    top: ranked.slice(0, 3).map(({ i, p }) => ({ name: nameById(m.labels.find((l) => l.index === i)?.id ?? -1) ?? '?', p })),
+    // the shape of the raw scores, not just the winner: a white fox and a red fox both say Vulpix, but differ underneath
+    vec: (() => {
+      const top = Math.max(...avg);
+      return avg.map((v, i) => [i, v - (top - 15)] as [number, number]).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 40);
+    })(),
+  };
+}
+
+// the first time memory is empty, the pictures already saved with their names teach it
+export async function seedMemory(add: (vec: [number, number][], name: string) => void, empty: boolean) {
+  if (!empty || !existsSync(spawnDir)) return;
+  const files = readdirSync(spawnDir).filter((f) => f.endsWith('.png'));
+  let n = 0;
+  for (const f of files) {
+    const c = await classify(readFileSync(`${spawnDir}${f}`)).catch(() => null);
+    if (!c) continue;
+    add(c.vec, f.replace(/-\d+\.png$/, '').replace(/_/g, ' '));
+    n++;
+  }
+  if (n) console.log(`pokemon model: remembered ${n} saved spawns`);
 }
