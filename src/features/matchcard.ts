@@ -231,3 +231,191 @@ export async function f1Card(d: F1CardData): Promise<Buffer> {
   });
   return canvas.toBuffer('image/png');
 }
+
+function header(ctx: SKRSContext2D, W: number, title: string, sub: string) {
+  ctx.fillStyle = INK;
+  ctx.fillRect(0, 0, W, ctx.canvas.height);
+  ctx.fillStyle = '#e10600';
+  ctx.fillRect(0, 0, W, 8);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '40px "Texz Serif"';
+  ctx.fillText(fit(ctx, title, W - 80), 40, 66);
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.font = '22px "Texz Sans"';
+  ctx.fillText(fit(ctx, sub, W - 80), 40, 100);
+}
+
+export interface StandingsData {
+  title: string; subtitle: string;
+  drivers: { pos: string; driver: string; team: string; points: number; wins: number }[];
+  teams: { pos: string; team: string; points: number }[];
+}
+
+// drivers as a timing-screen list with a points bar each, teams as bars on the right
+export async function standingsCard(d: StandingsData): Promise<Buffer> {
+  const W = 1100;
+  const drivers = d.drivers.slice(0, 12);
+  const H = 140 + drivers.length * 44 + 30;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+  header(ctx, W, d.title, d.subtitle);
+  const top = drivers[0]?.points || 1;
+  drivers.forEach((r, n) => {
+    const y = 150 + n * 44;
+    const color = f1Color(r.team);
+    // a faint row band every other line
+    if (n % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(30, y - 30, 640, 42); }
+    ctx.fillStyle = n < 3 ? SAND : 'rgba(255,255,255,0.5)';
+    ctx.font = '22px "Texz Sans Bold"';
+    ctx.textAlign = 'right';
+    ctx.fillText(r.pos, 72, y);
+    ctx.fillStyle = color;
+    ctx.fillRect(86, y - 24, 6, 30);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '23px "Texz Sans Bold"';
+    ctx.fillText(fit(ctx, r.driver, 250), 104, y);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '18px "Texz Sans"';
+    ctx.fillText(fit(ctx, r.team, 110), 365, y);
+    // points bar
+    const w = Math.max(4, (r.points / top) * 100);
+    ctx.fillStyle = `${color}88`;
+    ctx.fillRect(485, y - 20, w, 22);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '20px "Texz Sans Bold"';
+    ctx.fillText(String(r.points), 485 + w + 8, y - 2);
+    if (r.wins) {
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.font = '16px "Texz Sans"';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${r.wins}W`, 668, y - 2);
+      ctx.textAlign = 'left';
+    }
+  });
+  // constructors
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = '20px "Texz Sans Bold"';
+  ctx.fillText('CONSTRUCTORS', 720, 128);
+  const teams = d.teams.slice(0, 10);
+  const best = teams[0]?.points || 1;
+  teams.forEach((t, n) => {
+    const y = 160 + n * 44;
+    const color = f1Color(t.team);
+    ctx.fillStyle = color;
+    ctx.fillRect(720, y - 20, Math.max(6, (t.points / best) * 250), 26);
+    // dark letters on the bright team colours
+    const v = parseInt(color.slice(1), 16);
+    const light = ((v >> 16) * 0.299 + ((v >> 8) & 255) * 0.587 + (v & 255) * 0.114) > 150;
+    ctx.fillStyle = light ? INK : '#ffffff';
+    ctx.font = '18px "Texz Sans Bold"';
+    ctx.fillText(fit(ctx, `${t.pos}  ${t.team}`, 230), 728, y);
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'right';
+    ctx.fillText(String(t.points), W - 30, y);
+    ctx.textAlign = 'left';
+  });
+  return canvas.toBuffer('image/png');
+}
+
+export interface WeekData { title: string; subtitle: string; tz: string; sessions: { label: string; start: number; big: boolean }[]; next?: number }
+
+// the weekend's sessions as a schedule board, in the reader's own time zone
+export async function weekCard(d: WeekData): Promise<Buffer> {
+  const W = 1000;
+  const H = 150 + d.sessions.length * 62 + 20;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+  header(ctx, W, d.title, d.subtitle);
+  const day = new Intl.DateTimeFormat('en-GB', { timeZone: d.tz, weekday: 'short', day: 'numeric', month: 'short' });
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone: d.tz, hour: '2-digit', minute: '2-digit' });
+  d.sessions.forEach((s, n) => {
+    const y = 160 + n * 62;
+    const done = s.start < Date.now() - 2 * 3600_000;
+    const next = d.next === s.start;
+    ctx.fillStyle = next ? 'rgba(225,6,0,0.18)' : s.big ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)';
+    ctx.fillRect(30, y - 38, W - 60, 54);
+    ctx.fillStyle = s.big ? '#e10600' : 'rgba(255,255,255,0.25)';
+    ctx.fillRect(30, y - 38, 6, 54);
+    ctx.globalAlpha = done ? 0.4 : 1;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `${s.big ? '26px "Texz Sans Bold"' : '24px "Texz Sans"'}`;
+    ctx.textAlign = 'left';
+    ctx.fillText(s.label, 56, y);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '22px "Texz Sans"';
+    ctx.fillText(day.format(s.start), W - 190, y);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '26px "Texz Sans Bold"';
+    ctx.fillText(time.format(s.start), W - 56, y);
+    ctx.globalAlpha = 1;
+    if (next) {
+      ctx.fillStyle = '#e10600';
+      ctx.font = '16px "Texz Sans Bold"';
+      ctx.textAlign = 'right';
+      ctx.fillText('NEXT UP', W - 330, y - 2);
+    }
+  });
+  ctx.textAlign = 'left';
+  return canvas.toBuffer('image/png');
+}
+
+export interface FixtureRow { home: Side; away: Side; league: string; state: 'pre' | 'in' | 'post'; when: number; detail: string }
+
+// a day of football on one board: crests, names, the time or the score
+export async function fixturesCard(title: string, rows: FixtureRow[], tz: string): Promise<Buffer> {
+  const W = 1000;
+  const list = rows.slice(0, 12);
+  const H = 130 + list.length * 64 + 20;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = INK;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#2ecc71';
+  ctx.fillRect(0, 0, W, 8);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '40px "Texz Serif"';
+  ctx.textAlign = 'left';
+  ctx.fillText(title, 40, 66);
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font = '20px "Texz Sans"';
+  ctx.fillText(`times in ${tz === 'Asia/Kolkata' ? 'IST' : tz}`, 40, 98);
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+  for (const [n, r] of list.entries()) {
+    const y = 140 + n * 64;
+    ctx.fillStyle = n % 2 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)';
+    ctx.fillRect(30, y, W - 60, 56);
+    const mid = W / 2;
+    // the middle: kick-off time, LIVE score or full-time score
+    ctx.textAlign = 'center';
+    if (r.state === 'pre') {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '24px "Texz Sans Bold"';
+      ctx.fillText(time.format(r.when), mid, y + 36);
+    } else {
+      ctx.fillStyle = r.state === 'in' ? '#e74c3c' : '#ffffff';
+      ctx.font = '28px "Texz Sans Bold"';
+      ctx.fillText(`${r.home.score ?? 0} - ${r.away.score ?? 0}`, mid, y + 34);
+      ctx.fillStyle = r.state === 'in' ? '#e74c3c' : 'rgba(255,255,255,0.45)';
+      ctx.font = '13px "Texz Sans Bold"';
+      ctx.fillText(r.state === 'in' ? `LIVE ${r.detail}`.slice(0, 16) : 'FT', mid, y + 51);
+    }
+    for (const [s, side] of [[r.home, -1], [r.away, 1]] as [Side, number][]) {
+      const img = await crest(s.logo);
+      const cx = mid + side * 100;
+      if (img) ctx.drawImage(img, cx - 20, y + 8, 40, 40);
+      else badge(ctx, cx, y + 28, 18, hex(s.color, '#555b66'), s.short || s.name);
+      ctx.fillStyle = s.winner ? SAND : '#ffffff';
+      ctx.font = '22px "Texz Sans Bold"';
+      ctx.textAlign = side < 0 ? 'right' : 'left';
+      ctx.fillText(fit(ctx, s.name, 190), cx + side * 34, y + 36);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = '14px "Texz Sans"';
+    ctx.textAlign = 'left';
+    ctx.fillText(fit(ctx, r.league, 120), 44, y + 34);
+  }
+  return canvas.toBuffer('image/png');
+}

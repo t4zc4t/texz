@@ -382,15 +382,15 @@ export interface CardOptions {
 const fillVars = (t: string, vars: Record<string, string> = {}) => t.replace(/\{(\w+)\}/g, (all, k: string) => vars[k] ?? all);
 
 export function card(o: CardOptions): EmbedBuilder {
+  // clean by default: a title, the content, one quiet line at the bottom
   const e = new EmbedBuilder()
     .setColor(o.color ?? COLOR)
-    .setAuthor({ name: 'Texz · Armed Detective Agency', iconURL: look.avatar ?? undefined })
-    .setTitle(`${o.emoji ? `${o.emoji}  ` : ''}${o.title}`);
+    .setTitle(`${o.emoji ? `${o.emoji}  ` : ''}${o.title}`.slice(0, 256));
   // the content leads, Dazai's line sits quietly in the footer, an empty line means none at all
   const flavour = o.line === '' ? '' : (o.line ? fillVars(o.line, o.vars) : say(o.kind, o.vars));
   e.setDescription((o.body ? o.body : flavour ? `*${flavour}*` : '\u200b').slice(0, 4096))
-    .setFooter({ text: (o.body && flavour ? flavour : say('footer')).slice(0, 2048) })
-    .setTimestamp(o.at ?? Date.now());
+    .setFooter({ text: (o.body && flavour ? flavour : say('footer')).slice(0, 2048), iconURL: look.avatar ?? undefined });
+  if (o.at) e.setTimestamp(o.at);
   for (const f of (o.fields ?? []).slice(0, 25)) {
     if (f.value) e.addFields({ name: f.name.slice(0, 256), value: f.value.slice(0, 1024), inline: f.inline });
   }
