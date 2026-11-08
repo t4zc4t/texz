@@ -93,7 +93,7 @@ function maybeText(name: string, guess?: { p: number; others: string[] }, wrong:
   return [
     `## 🤔 Maybe ${name}?`,
     wrong.length ? `❌ Not ${wrong.join(', not ')}` : null,
-    `📋 Tap to copy: \`${catchLine(name)}\``,
+    `📋 Tap to copy: \`${catchLine(baseOf(name))}\``,
     `-# only ${Math.round((guess?.p ?? 0) * 100)}% sure${guess?.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}. It might be one of Pokétwo's special forms, I learn those once they're caught`,
   ].filter(Boolean).join('\n');
 }
@@ -107,7 +107,7 @@ function claimText(name: string, roles: string[], guess?: { p: number; others: s
     roles.length ? `${roles.map((r) => `<@&${r}>`).join(' ')} ${why} spawn, be quick` : null,
     `## ${rare ? '🌟 ' : ''}${name}  ${types.map((t) => typeMark[t] ?? '').join('')}`,
     `${rare ? `**${rareMark[rare]}** · ` : ''}${types.join(' · ')}`,
-    `📋 Tap to copy: \`${catchLine(name)}\``,
+    `📋 Tap to copy: \`${catchLine(baseOf(name))}\``,
     guess && guess.p < 0.85 ? `-# ${Math.round(guess.p * 100)}% sure${guess.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}` : null,
   ].filter(Boolean).join('\n');
 }
@@ -265,8 +265,9 @@ export async function onCatchCopy(i: Interaction) {
 
 // the PC version: a code block with its own copy button on desktop, and the artwork
 function pcCopy(name: string) {
-  const id = idOf(name);
-  const e = new EmbedBuilder().setColor(rarityOf(name) ? 0xf1c40f : 0xe3350d).setDescription(`🖥️ **Click to copy**\n\`\`\`${catchLine(name)}\`\`\``);
+  // forms like East Sea Gastrodon catch fine by the species name, which is shorter and never wrong
+  const id = idOf(baseOf(name));
+  const e = new EmbedBuilder().setColor(rarityOf(name) ? 0xf1c40f : 0xe3350d).setDescription(`🖥️ **Click to copy**\n\`\`\`${catchLine(baseOf(name))}\`\`\``);
   if (id) e.setThumbnail(artwork(id));
   return e;
 }
