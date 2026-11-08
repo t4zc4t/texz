@@ -7,7 +7,8 @@ import type { Command, Module } from '../core/module.js';
 import { card } from '../theme.js';
 import { picksOf, savePicks } from './profile.js';
 import { TYPES, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeMark, typesOf } from '../features/pokedex.js';
-import { fingerprint, knownCount, learn, recognise } from '../features/pokeid.js';
+import { download, fingerprint, knownCount, learn, recognise } from '../features/pokeid.js';
+import { keepSpawn } from '../features/pokemodel.js';
 
 export const POKETWO_ID = '716390085896962058';
 export const SHOOB_ID = '673362753489993749';
@@ -54,7 +55,7 @@ export function watchSpawns(client: Client, store: Store) {
 }
 
 // the spawn waiting in each channel, until someone catches it or the next one comes
-const waiting = new Map<string, { id: string; hash: string | null; at: number; name: string | null; rare: boolean; pinged: boolean }>();
+const waiting = new Map<string, { id: string; hash: string | null; image: Buffer | null; at: number; name: string | null; rare: boolean; pinged: boolean; kept?: boolean }>();
 const RARE_ROLE = 'Pokétwo Rare Spawns';
 const rareRole = (guild: Guild, store: Store, make = false) => roleNamed(guild, store, 'p2rare', RARE_ROLE, make);
 const typeRole = (guild: Guild, store: Store, t: string, make = false) => roleNamed(guild, store, `p2type:${t}`, `Pokétwo ${t}`, make);
@@ -69,6 +70,7 @@ async function named(store: Store, m: Message, spawnId: string, name: string, ho
   const rare = rarityOf(name);
   w.rare = !!rare;
   if (w.hash && how !== 'seen') learn(store, w.hash, name);
+  if (w.image && !w.kept && how !== 'seen') { keepSpawn(w.image, name); w.kept = true; }
   if (!store.rules(m.guild.id, 'spawns').enabled) return;
   const types = typesOf(name);
   // rare hunters and anyone after one of its types, once per spawn
@@ -122,6 +124,8 @@ async function onSpawn(store: Store, m: Message) {
     if (caught) {
       const name = nameIn(caught[1]);
       if (w && name && w.hash && Date.now() - w.at < 30 * 60_000) learn(store, w.hash, name);
+      // the picture and its confirmed name, kept for checking how well recognition does
+      if (w?.image && name && !w.kept) { keepSpawn(w.image, name); w.kept = true; }
       waiting.delete(m.channelId);
       if (/these colors seem unusual|shiny/i.test(m.content) && name && m.channel.isSendable() && store.rules(m.guild.id, 'spawns').enabled) {
         const who = /<@!?(\d+)>/.exec(m.content)?.[1];
@@ -141,8 +145,9 @@ async function onSpawn(store: Store, m: Message) {
   store.setKv(`spawnseen:${m.guild.id}:${which}`, String(Date.now()));
   if (s.kind === 'p2') {
     const url = e?.image?.url ?? m.attachments.first()?.url ?? null;
-    const hash = url ? await fingerprint(url) : null;
-    waiting.set(m.channelId, { id: m.id, hash, at: Date.now(), name: null, rare: false, pinged: false });
+    const image = url ? await download(url) : null;
+    const hash = await fingerprint(image);
+    waiting.set(m.channelId, { id: m.id, hash, image, at: Date.now(), name: null, rare: false, pinged: false });
     const seen = hash ? recognise(store, hash) : null;
     if (seen) await named(store, m, m.id, seen.name, 'seen');
     return;

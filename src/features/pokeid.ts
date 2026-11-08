@@ -7,11 +7,17 @@ import type { Store } from '../db.js';
 const SIZE = 16;
 
 // a difference hash: shrink to 17x16 in grey, then one bit per pixel for "brighter than the one to its right"
-export async function fingerprint(url: string): Promise<string | null> {
+export async function download(url: string): Promise<Buffer | null> {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return null;
-    const img = await loadImage(Buffer.from(await res.arrayBuffer()));
+    return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
+  } catch { return null; }
+}
+
+export async function fingerprint(buf: Buffer | null): Promise<string | null> {
+  if (!buf) return null;
+  try {
+    const img = await loadImage(buf);
     const c = createCanvas(SIZE + 1, SIZE);
     const ctx = c.getContext('2d');
     ctx.drawImage(img, 0, 0, SIZE + 1, SIZE);
