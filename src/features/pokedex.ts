@@ -27,4 +27,5 @@ export function solve(pattern: string): { id: number; name: string }[] {
 }
 
 export const artwork = (id: number) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
-export const catchLine = (name: string) => `p!c ${name.toLowerCase()}`;
+// how people here actually catch, pasted as is it mentions Pokétwo
+export const catchLine = (name: string) => `@Pokétwo#8236 c ${name}`;

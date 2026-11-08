@@ -1,11 +1,12 @@
 import {
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder,
+  ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder,
   type Client, type Guild, type Interaction, type MessageActionRowComponentBuilder,
 } from 'discord.js';
 import type { Bulletins, Feed, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { bar, card } from '../theme.js';
 import { pickDefault } from '../gifs.js';
+import { f1Card, matchCard } from '../features/matchcard.js';
 import { report } from '../ops.js';
 import { SITE, bigSession, facts, flagOf, home, nextRound, onThisDay, questions, schedule, siteLink, teamDot, type Round } from '../feeds/f1.js';
 import { quizButton, quizRound } from './f1quiz.js';
@@ -96,7 +97,7 @@ function remember(channel: string, ping: boolean) {
   if (ping) sentLog.set(`${channel}:ping`, [...(sentLog.get(`${channel}:ping`) ?? []), Date.now()].slice(-20));
 }
 
-async function post(client: Client, feed: Feed, content: { text?: string; embed: EmbedBuilder; ping?: boolean; buttons?: ButtonBuilder[]; react?: string[]; users?: string[]; fanRoles?: string[] }) {
+async function post(client: Client, feed: Feed, content: { text?: string; embed: EmbedBuilder; ping?: boolean; buttons?: ButtonBuilder[]; react?: string[]; users?: string[]; fanRoles?: string[]; image?: Buffer | null }) {
   if (!feed.channel) return;
   const ok = allowed(feed.channel, !!content.ping);
   if (!ok.post) return;
@@ -115,13 +116,31 @@ async function post(client: Client, feed: Feed, content: { text?: string; embed:
   const fan = fans.map((r) => `<@&${r}>`).join(' ');
   const sent = await ch.send({
     content: [ping, fan, users.map((u) => `<@${u}>`).join(' '), content.text].filter(Boolean).join(' ') || undefined,
-    embeds: [content.embed],
+    // a drawn card replaces the gif when there is one
+    embeds: [content.image ? content.embed.setImage('attachment://card.png') : content.embed],
+    files: content.image ? [{ attachment: content.image, name: 'card.png' }] : [],
     components: content.buttons?.length ? [row(...content.buttons)] : [],
     allowedMentions: { roles: [...(ping && feed.role ? [feed.role] : []), ...fans], users },
   }).catch((e) => { report('bulletin post', e); return null; });
   // a reaction or two so people can follow along
   for (const r of content.react ?? []) await sent?.react(r).catch(() => {});
 }
+
+// one drawing per match or session, shared by every server that posts it
+const drawn = new Map<string, Promise<Buffer | null>>();
+const drawOnce = (key: string, make: () => Promise<Buffer>) => {
+  if (!drawn.has(key)) {
+    if (drawn.size > 200) drawn.delete(drawn.keys().next().value!);
+    drawn.set(key, make().catch((e) => { report('card drawing', e); return null; }));
+  }
+  return drawn.get(key)!;
+};
+const sideOf = (t: Match['home'], played: boolean) => ({ name: t.name, short: t.short, color: t.color, logo: t.logo, ...(played ? { score: t.score, winner: t.winner } : {}) });
+const matchImage = (m: Match, played: boolean) => drawOnce(`${m.id}:${played ? 'ft' : 'ko'}`, () => matchCard({
+  home: sideOf(m.home, played), away: sideOf(m.away, played), league: leagues[m.league]?.name ?? m.league,
+  status: played ? (m.detail || 'Full time') : `Kick-off ${new Date(m.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })} IST`,
+  venue: m.venue, goals: played ? m.goals.map((g) => ({ who: g.who, clock: g.clock, home: g.team === m.home.id })) : [],
+}));
 
 const link = (url: string, label: string) => new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(url).setLabel(label);
 const sessionWord: Record<string, string> = { Q: 'Qualifying', SQ: 'Sprint qualifying', S: 'Sprint', R: 'Grand Prix' };
@@ -175,18 +194,20 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
           if (!store.firstTime(gid, `f1:res:${r.round}:${s.type}`)) continue;
           const medal = ['🥇', '🥈', '🥉'];
           let body = s.top3.map((d, i) => `${medal[i]} ${teamDot(d.team)} **${d.driver}** · ${d.team}`).join('\n');
+          let rows = s.top3.map((d, i) => ({ pos: String(i + 1), driver: d.driver, team: d.team }));
           if (s.type === 'R') {
             const h = await home().catch(() => null);
             if (h && h.lastRace.round === r.round) {
-              const rest = h.lastRace.results.slice(3, 10).map((d) => `\`${d.pos.padStart(2)}\` ${teamDot(d.team)} ${d.driver} · ${d.team}`).join('\n');
+              rows = h.lastRace.results.slice(0, 10).map((d) => ({ pos: d.pos, driver: d.driver, team: d.team, extra: d.pos === '1' ? undefined : d.gap }));
               const champ = h.standings.slice(0, 3).map((d) => `${d.pos}. ${d.driver} **${d.points}**`).join(' · ');
-              body += `${rest ? `\n${rest}` : ''}\n\n**Championship** · ${champ}`;
+              body += `\n\n**Championship** · ${champ}`;
             }
           }
           const win = s.type === 'Q' || s.type === 'SQ' ? `${s.top3[0].driver} takes pole` : `${s.top3[0].driver} wins`;
+          const image = await drawOnce(`f1:${r.round}:${s.type}:${rows.length}`, () => f1Card({ title: r.name, subtitle: `${sessionWord[s.type] ?? s.label} · round ${r.round} · ${r.circuit.name}`, rows }));
           await post(client, b.f1, {
-            ping: s.type === 'R', text: s.type === 'R' ? `${win}!` : undefined, react: [flag, s.type === 'R' ? '🏆' : '⏱️'],
-            embed: card({ kind: s.type === 'R' ? 'f1Win' : 'f1Result', title: `${flag} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: gifIn(store, gid, s.type === 'R' ? 'f1win' : s.type === 'Q' || s.type === 'SQ' ? 'f1quali' : 'f1result'), body }),
+            ping: s.type === 'R', text: s.type === 'R' ? `${win}!` : undefined, react: [flag, s.type === 'R' ? '🏆' : '⏱️'], image,
+            embed: card({ kind: s.type === 'R' ? 'f1Win' : 'f1Result', title: `${flag} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: image ? 'off' : gifIn(store, gid, s.type === 'R' ? 'f1win' : s.type === 'Q' || s.type === 'SQ' ? 'f1quali' : 'f1result'), body }),
             buttons: [link(`${SITE}/races`, 'Full result on Parc Fermé')],
           });
         }
@@ -320,15 +341,17 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
         await post(client, b.football, {
           users, fanRoles,
           ping: true, text: `kick-off <t:${unix(m.date)}:R>`, react: [clubDot(m.home), clubDot(m.away), '⚽'].filter((x, i, a) => a.indexOf(x) === i),
-          embed: card({ kind: 'fbSoon', title: `${clubDot(m.home)} ${m.home.name} vs ${m.away.name} ${clubDot(m.away)}`, emoji: '', color: names.football.color, gif: gifIn(store, gid, 'kickoff'), body: `${leagueOf(m)}${m.venue ? `\n🏟️ ${m.venue}` : ''}\n⏰ Kick-off <t:${unix(m.date)}:t>` }).setThumbnail(m.home.logo ?? m.away.logo),
+          embed: card({ kind: 'fbSoon', title: `${clubDot(m.home)} ${m.home.name} vs ${m.away.name} ${clubDot(m.away)}`, emoji: '', color: names.football.color, gif: 'off', body: `${leagueOf(m)}${m.venue ? `\n🏟️ ${m.venue}` : ''}\n⏰ Kick-off <t:${unix(m.date)}:t>` }),
+          image: await matchImage(m, false),
         });
       }
       if (m.state === 'post' && now - m.date < 8 * HOUR && store.firstTime(gid, `fb:ft:${m.id}`)) {
         const scorers = m.goals.map((g) => `${g.clock} ${g.who} (${g.team === m.home.id ? m.home.short : m.away.short})`).join(' · ');
         await post(client, b.football, {
           react: [m.home.winner ? '🏠' : m.away.winner ? '✈️' : '🤝'],
-          embed: card({ kind: 'fbFull', title: `${clubDot(m.home)} ${m.home.name} ${m.home.score} - ${m.away.score} ${m.away.name} ${clubDot(m.away)}`, emoji: '', color: names.football.color, gif: gifIn(store, gid, 'fulltime'),
-            body: `${leagueOf(m)} · ${m.detail}\n${m.home.winner ? `🏆 **${m.home.name}** win` : m.away.winner ? `🏆 **${m.away.name}** win` : '🤝 Honours even'}${scorers ? `\n\n⚽ ${scorers}` : ''}` }).setThumbnail((m.home.winner ? m.home.logo : m.away.winner ? m.away.logo : null) ?? m.home.logo),
+          embed: card({ kind: 'fbFull', title: `${clubDot(m.home)} ${m.home.name} ${m.home.score} - ${m.away.score} ${m.away.name} ${clubDot(m.away)}`, emoji: '', color: names.football.color, gif: 'off',
+            body: `${leagueOf(m)} · ${m.detail}\n${m.home.winner ? `🏆 **${m.home.name}** win` : m.away.winner ? `🏆 **${m.away.name}** win` : '🤝 Honours even'}${scorers ? `\n\n⚽ ${scorers}` : ''}` }),
+          image: await matchImage(m, true),
         });
       }
     }
@@ -426,9 +449,11 @@ const f1: Command = {
       }
       if (view.startsWith('last')) {
         const h = await home();
-        const medal = ['🥇', '🥈', '🥉'];
-        const body = h.lastRace.results.slice(0, 10).map((d, i) => `${medal[i] ?? `\`${d.pos.padStart(2)}\``} ${teamDot(d.team)} **${d.driver}** · ${d.team} · ${d.gap}`).join('\n');
-        return ctx.reply({ embeds: [card({ kind: 'f1Win', title: `${h.lastRace.name} · ${h.lastRace.dateLabel}`, emoji: '🏁', color: names.f1.color, gif: ctx.guildId ? gifIn(store, ctx.guildId, 'f1win') : undefined, body })], components: [site] });
+        const rows = h.lastRace.results.slice(0, 10).map((d) => ({ pos: d.pos, driver: d.driver, team: d.team, extra: d.pos === '1' ? undefined : d.gap }));
+        const image = await drawOnce(`f1last:${h.lastRace.round}`, () => f1Card({ title: h.lastRace.name, subtitle: `Race result · ${h.lastRace.dateLabel}`, rows }));
+        const e = card({ kind: 'f1Win', title: `${h.lastRace.name} · ${h.lastRace.dateLabel}`, emoji: '🏁', color: names.f1.color, gif: 'off', line: '', body: `🏆 **${rows[0]?.driver}** won for ${rows[0]?.team}` });
+        if (image) e.setImage('attachment://card.png');
+        return ctx.reply({ embeds: [e], files: image ? [new AttachmentBuilder(image, { name: 'card.png' })] : [], components: [site] });
       }
       const { rounds } = await schedule();
       const r: Round | null = nextRound(rounds);

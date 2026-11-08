@@ -85,7 +85,7 @@ async function onSpawn(store: Store, m: Message) {
     const role = await p2Role(m.guild, store);
     if (!role) return;
     last.set(key, Date.now());
-    await m.channel.send({ content: `🔴 <@&${role.id}> a wild pokémon appeared\n-# stuck? type \`p!hint\` and I'll work out the name`, allowedMentions: { roles: [role.id] } });
+    await m.channel.send({ content: `🔴 <@&${role.id}> a wild pokémon appeared\n-# stuck? ask Pokétwo for a hint and I'll work out the name`, allowedMentions: { roles: [role.id] } });
     return;
   }
   // Shoob pings only the people who asked for that tier
@@ -98,13 +98,13 @@ async function onSpawn(store: Store, m: Message) {
 
 // the reply to a hint or a search, one name gets its artwork and the catch command
 function answer(pattern: string, fits: { id: number; name: string }[]) {
-  if (!fits.length) return { content: `🤔 Nothing fits \`${pattern}\`. Try another \`p!hint\`.` };
+  if (!fits.length) return { content: `🤔 Nothing fits \`${pattern}\`. Ask Pokétwo for another hint.` };
   if (fits.length === 1) {
     const f = fits[0];
     const e = card({ kind: 'help', title: f.name, emoji: '🔎', gif: 'off', line: '', color: 0xe3350d, body: `#${f.id} · catch it with\n\`\`\`${catchLine(f.name)}\`\`\`` }).setThumbnail(artwork(f.id));
     return { embeds: [e] };
   }
-  return { content: `🔎 Could be ${fits.map((f) => `**${f.name}**`).join(', ')}\n${fits.slice(0, 3).map((f) => `\`${catchLine(f.name)}\``).join(' · ')}` };
+  return { content: `🔎 Could be ${fits.map((f) => `**${f.name}**`).join(', ')}\n${fits.slice(0, 3).map((f) => `\`${catchLine(f.name)}\``).join('\n')}` };
 }
 
 // is the bot here, has it spawned anything, and could I read it
@@ -132,7 +132,7 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
   const e = card({
     kind: 'help', title: 'Spawn pings', emoji: '🎯', gif: 'off',
     body: [
-      `${p2 ? '🟢' : '⚫'} 🔴 **Pokétwo** · every wild pokémon, and I solve \`p!hint\` for you`,
+      `${p2 ? '🟢' : '⚫'} 🔴 **Pokétwo** · every wild pokémon, and I solve Pokétwo's hints for you`,
       `${mine.length ? '🟢' : '⚫'} 🃏 **Shoob** · ${mine.length ? mine.map((t) => `${tierMark[t]} T${t}`).join(' ') : 'no tiers picked'}`,
       '',
       '-# Shoob only pings the tiers you pick. Most people want 4 and up.',

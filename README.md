@@ -70,7 +70,7 @@ Starboard, tickets and the character of the day are all set in `/setup`.
 
 `/setup` → Bulletins → **Set up the board** makes a category called *Agency Bulletin Board* with three channels and a role for each, with a pinned button to pick the role up:
 
-- **🏎️ paddock gossip:** the race week schedule a day before, a ping an hour before qualifying, sprints and the race, the podium and championship after each one, and a bit of paddock trivia every evening. It all comes from [Parc Fermé](https://parc-ferme.pages.dev), so nothing here needs an API key. `tz f1`, `tz f1 standings` and `tz f1 last` work any time. Mornings bring an "on this day" post, and `tz f1 quiz` runs a 419 question quiz where the first right answer wins yen (more for the hard ones). `tz f1 trivia` and `tz f1 today` show a fact or today in history.
+- **🏎️ paddock gossip:** the race week schedule a day before, a ping an hour before qualifying, sprints and the race, the podium and championship after each one, and a bit of paddock trivia every evening. It all comes from [Parc Fermé](https://parc-ferme.pages.dev), so nothing here needs an API key. `tz f1`, `tz f1 standings` and `tz f1 last` work any time, results come as a drawn podium in team colours, and football kick-offs and full-time scores come as a card with both crests, VS or the score, and who scored. Mornings bring an "on this day" post, and `tz f1 quiz` runs a 419 question quiz where the first right answer wins yen (more for the hard ones). `tz f1 trivia` and `tz f1 today` show a fact or today in history.
 - **⚽ pitch side reports:** the morning's list of matches worth watching, a ping 30 minutes before kick-off and the full-time score with scorers. Big games are the World Cup and Euros, two big clubs meeting, or a big club in Europe, plus every match of the server's favourite clubs (`/football fav Real Madrid`). Scores come from ESPN's public scoreboard.
 - **📺 yokohama screenings:** the day's airing schedule in the morning and a ping when a new episode is out, with official watch links. Popular shows are posted on their own, and admins add any other show with `/anime track`.
 
@@ -84,7 +84,7 @@ Yen comes from `tz daily` (more for every day in a row, up to a week), a little 
 
 ## Spawn pings
 
-`tz spawns` lets you opt into Pokétwo spawn pings and pick which Shoob tiers ping you, each tier has its own role. When Pokétwo gives a `p!hint`, Texz replies with the names that fit and the catch command. `tz poke p_k_ch_` works out a name by hand. The same page shows whether each bot is in the server and how many spawns it has seen today.
+`tz spawns` lets you opt into Pokétwo spawn pings and pick which Shoob tiers ping you, each tier has its own role. When Pokétwo gives a hint, Texz replies with the names that fit and a ready to paste `@Pokétwo#8236 c <name>`. `tz poke p_k_ch_` works out a name by hand. The same page shows whether each bot is in the server and how many spawns it has seen today.
 
 ## OwO extras
 
