@@ -521,6 +521,11 @@ export class Store {
   }
 
   // bot-wide odds and ends, like where error reports go
+  // list activity since a time, for the weekly anime recap
+  listActivity(since: number): { user_id: string; title: string; status: string; kind: string }[] {
+    return this.db.prepare('SELECT user_id, title, status, kind FROM watchlist WHERE updated_at >= ?').all(since) as { user_id: string; title: string; status: string; kind: string }[];
+  }
+
   // every value under a key prefix, like all the Shoob wishlists
   kvByPrefix(prefix: string): { key: string; value: string }[] {
     return this.db.prepare("SELECT key, value FROM kv WHERE key LIKE ? ESCAPE '\\'").all(`${prefix.replace(/[\\%_]/g, '\\$&')}%`) as { key: string; value: string }[];

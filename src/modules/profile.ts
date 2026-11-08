@@ -1,3 +1,4 @@
+import { BADGES, badgesOf } from './missions.js';
 import {
   ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, MessageFlags, ModalBuilder, SlashCommandBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle,
   type Interaction, type MessageActionRowComponentBuilder,
@@ -162,6 +163,9 @@ export const profile: Command = {
     const id = who ?? ctx.userId;
     const m = ctx.guild ? await ctx.guild.members.fetch(id).catch(() => null) : null;
     const png = await drawProfile(store, id, ctx.guildId, m);
-    return ctx.reply({ files: [new AttachmentBuilder(png, { name: 'profile.png' })] });
+    // badges as a line above the card, emoji draw better in Discord than on the canvas
+    const have = ctx.guildId ? badgesOf(store, ctx.guildId, id) : [];
+    const line = BADGES.filter((b) => have.includes(b.id)).map((b) => b.emoji).join(' ');
+    return ctx.reply({ content: line ? `🏅 ${line}` : undefined, files: [new AttachmentBuilder(png, { name: 'profile.png' })] });
   },
 };

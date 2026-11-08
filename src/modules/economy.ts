@@ -1,3 +1,4 @@
+import { track } from './missions.js';
 import { PermissionFlagsBits, SlashCommandBuilder, type Message } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
@@ -48,7 +49,8 @@ const daily: Command = {
     const r = claimDaily(store, ctx.guildId, ctx.userId);
     if (!r.ok) return ctx.reply({ content: `⏳ Already collected today. Next one <t:${Math.floor(r.next / 1000)}:R>.`, temp: true });
     const w = store.wallet(ctx.guildId, ctx.userId);
-    return ctx.reply({ content: `💴 **+${fmt(r.got)}** · day ${r.streak} in a row · you have **${fmt(w.yen)}**\n-# ${say('ecoDaily')}`, temp: true });
+    const extra = track(store, ctx.guildId, ctx.userId, 'daily');
+    return ctx.reply({ content: [`💴 **+${fmt(r.got)}** · day ${r.streak} in a row · you have **${fmt(w.yen)}**`, ...extra, `-# ${say('ecoDaily')}`].join('\n'), temp: !extra.length });
   },
 };
 

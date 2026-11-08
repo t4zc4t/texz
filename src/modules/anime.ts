@@ -1,3 +1,4 @@
+import { track } from './missions.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, StringSelectMenuBuilder,
   type MessageActionRowComponentBuilder,
@@ -12,6 +13,7 @@ import { RED, card, say } from '../theme.js';
 import { listMenu, watchlist } from './watchlist.js';
 import { GUESS_PAY } from './economy.js';
 import { addWin } from './f1quiz.js';
+import { watchparty } from './watchparty.js';
 import { zonedTime } from '../time.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
@@ -263,6 +265,7 @@ const home: Command = {
         { label: 'Search an anime', value: 'anime', emoji: '🔍' }, { label: 'Search a manga', value: 'manga', emoji: '📚' },
         { label: 'Find a character', value: 'character', emoji: '🎭' }, { label: 'Add to my list', value: 'watchlist.add', emoji: '➕' },
         { label: 'Airing on another day', value: 'airing', emoji: '📅' }, { label: 'My pings', value: 'pings', emoji: '🔔' },
+        { label: 'Plan a watch party', value: 'watchparty', emoji: '🍿' },
       )),
     ];
     return ctx.reply({ embeds: [card({ kind: 'season', title: 'Anime dashboard', emoji: '📺', gif: 'off', fields,
@@ -356,7 +359,8 @@ export async function onGuess(store: Store, i: import('discord.js').Interaction)
     if (b.custom_id === `gs|${id}|${r.answer}`) b.style = ButtonStyle.Success;
   }
   await i.update({ components: rows as never });
-  await i.followUp({ content: `🎉 <@${i.user.id}> got it: **${r.titles[r.answer]}**${paid ? ` · +¥${GUESS_PAY}` : ''}. ${say('guessWin')}`, allowedMentions: { users: [i.user.id] } });
+  const extra = track(store, i.guildId, i.user.id, 'guesswin');
+  await i.followUp({ content: [`🎉 <@${i.user.id}> got it: **${r.titles[r.answer]}**${paid ? ` · +¥${GUESS_PAY}` : ''}. ${say('guessWin')}`, ...extra].join('\n'), allowedMentions: { users: [i.user.id] } });
   return true;
 }
 
@@ -385,7 +389,7 @@ export const anime: Module = {
   name: 'anime',
   label: 'Anime and manga',
   about: 'Search anime, manga and characters, seasons, trending picks, new-episode alerts and your own watch list',
-  commands: [home, lookup('ANIME'), lookup('MANGA'), character, airing, daily, season, trend, random, alerts, watchlist],
+  commands: [home, lookup('ANIME'), lookup('MANGA'), character, airing, daily, season, watchparty, trend, random, alerts, watchlist],
 };
 
 // ---------- buttons and menus ----------

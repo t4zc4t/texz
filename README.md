@@ -11,14 +11,14 @@ Each one is a single slash command and the same word typed after `tz`. Buttons o
 | Dashboard | What's in it |
 |---|---|
 | `/owo` | huntbot, gems, zoo, weapons and armoury, quests, the shop, reminders and quest buddies |
-| `/anime` | search anime, manga and characters, airing today, your list, the season, episode alerts |
-| `/fun` | F1 quiz, crest quiz, guess the anime, on this day, make it a quote, ship, polls, dice and spawn pings |
+| `/anime` | search anime, manga and characters, airing today, your list, watch parties, the weekly recap |
+| `/fun` | today's mission and badges, F1 quiz, crest quiz, guess the anime, on this day, make it a quote, ship, polls, Pokédex, catch race, Shoob wishlist |
 | `/eco` | daily yen, balance, giving, the richest, the role shop and the games that pay |
 | `/levels` | rank card, rank perks, the leaderboard, xp tools for admins |
 | `/info` | your profile card, your pings, birthdays, avatars, user dossiers, the server, afk |
-| `/sports` | the next Grand Prix, standings, last race, F1 trivia and today's football |
+| `/sports` | the next Grand Prix, standings, last race, predictions, F1 trivia and today's football |
 | `/mod` | warn, timeout, kick, ban, purge, lock, slowmode and the case archive |
-| `/tools` | giveaways, role pickers, planned announcements and server activity |
+| `/tools` | giveaways, role pickers, planned announcements, server activity and setup backups |
 
 `/setup` is the admin front desk, `/ping` checks the bot, and right clicking a message gives **Make it a Quote**.
 
@@ -36,7 +36,7 @@ texz reads your OwO commands and OwO's replies in channels it can see and keeps 
 
 ## Anime
 
-`tz anime <title>`, `tz manga <title>` and `tz char <name>` pull full cards from AniList, with official watch links, related shows and a 📋 menu to put it on your list. `tz wl` is your list with filters and quick +1 episode buttons. 🔔 on an airing show gets you a DM for every new episode. `tz airing` shows today's schedule in your timezone, `tz guess` is a guess the anime game that pays yen, and there's a character of the day.
+`tz anime <title>`, `tz manga <title>` and `tz char <name>` pull full cards from AniList, with official watch links, related shows and a 📋 menu to put it on your list. `tz wl` is your list with filters and quick +1 episode buttons. 🔔 on an airing show gets you a DM for every new episode. `tz airing` shows today's schedule in your timezone, `tz guess` is a guess the anime game that pays yen, and there's a character of the day. `tz wp 21:00 frieren` plans a watch party with a server event, a ping for everyone who has the show on their list and a spoiler thread, and every Sunday the anime board posts what the server watched that week.
 
 AniList allows 30 requests a minute right now, so texz paces itself and keeps answers for half an hour.
 
@@ -48,7 +48,9 @@ AniList allows 30 requests a minute right now, so texz paces itself and keeps an
 - **⚽ Football** from ESPN's public scoreboards: the morning's matches worth watching, a kick-off card with both crests and VS, and a full-time card with the score and scorers. Big games are the World Cup and Euros, two big clubs meeting, or a big club in Europe, plus every match of the server's favourite clubs and anyone's own club. Over 25 leagues and cups are covered, MLS included. "On this day" comes from Wikipedia.
 - **📺 Anime** from AniList: the day's screenings, a ping when an episode is out (premieres and finales marked), and "on this day" with anniversaries and character birthdays.
 
-`tz otd` shows today's history for all three, `tz f1 quiz` and `tz crest` run quizzes that pay yen, and `tz football` shows today's matches as one board.
+`tz otd` shows today's history for all three, `tz f1 quiz` and `tz crest` run quizzes that pay yen, and `tz football` shows today's matches as one board. Race day opens a live chat thread that closes with the podium, and anyone with a club in their profile gets pinged the moment their club scores.
+
+`tz predict` lets people call the podium before each race and the result of the day's big matches. Right calls pay yen and show up under the result, and `tz predtop` is the season table.
 
 ## Pokétwo and Shoob
 
@@ -56,7 +58,7 @@ AniList allows 30 requests a minute right now, so texz paces itself and keeps an
 - **Pings:** only for what matters. Legendary, mythical and ultra beast spawns, any of the 18 types you pick for quests, and a shout for shiny catches.
 - **Shoob:** a role per tier, so a drop only pings the people who want that tier.
 
-`tz spawns` is where people opt in, with a status box for each bot.
+`tz spawns` is where people opt in, with a status box for each bot. `tz dex` is the server's Pokédex by generation with the most wanted legends, and spawns not caught here yet get a 🆕. `tz race` is the weekly catch race, the winner gets yen on Monday. For Shoob, `tz wish add Gojo` pings you when that character drops, whatever the tier.
 
 ## Pings
 
@@ -68,9 +70,13 @@ Levels are off until an admin turns them on. Ranks go from Stray up to Living Le
 
 Yen comes from `tz daily` (more for every day in a row), chatting a little, and the quizzes and guess game. `tz bal`, `tz give`, `tz rich` and a role shop (`tz shop` on `/eco`) cover the rest. `tz profile` draws a profile card with your picks and colour.
 
+## Missions and badges
+
+Every day the server gets one Agency mission (make a quote, win two quiz questions, catch a Water type and so on) that pays yen, more for a streak. Badges come from catches, quiz wins, quotes, dailies and perfect podium calls, and show above your profile card. `tz mission` shows both.
+
 ## Fun
 
-Make it a Quote turns a message into the classic black and white quote picture, from the right click menu, by replying with `tz quote`, or with a message link. It posts where you made it and a copy goes to the quotes channel if one is set. There's also an 8 question ship test, polls, dice, coin, 8ball and pick for me.
+Make it a Quote turns a message into the classic black and white quote picture, from the right click menu, by replying with `tz quote`, or with a message link. It posts where you made it and a copy goes to the quotes channel if one is set, and every Sunday the quote with the most reactions becomes quote of the week. There's also an 8 question ship test, polls, dice, coin, 8ball and pick for me.
 
 ## Moderation and server tools
 
@@ -95,7 +101,7 @@ Slash commands register themselves when they change, so there's no separate depl
 
 On Windows, double click `tray/texz-tray.vbs` once. A dot appears next to the clock (green online, orange starting, grey off) with a menu to turn it on or off, restart, rebuild, start with Windows, and update from GitHub once a day, rolling back if an update crashes in its first minute. Output goes to `texz.log`. Any always on Linux box with Node works too.
 
-A copy of the database is saved daily in `backups/` (last seven kept), and the owner can pick a channel in `/setup` → Logs where texz reports its own errors.
+A copy of the database is saved daily in `backups/` (last seven kept), and the owner can pick a channel in `/setup` → Logs where texz reports its own errors. A dropped internet connection is one line in the log instead of an error, the tray shows it, and reminders that came due while offline are sent once it's back, marked late. Every Sunday the owner gets a short check-up in DMs with uptime, errors, spawn accuracy and the most used commands. `/tools view:backup` saves a server's setup to a file that can be loaded here or on another server.
 
 ## Tests
 

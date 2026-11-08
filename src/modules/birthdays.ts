@@ -1,3 +1,5 @@
+import { AttachmentBuilder } from 'discord.js';
+import { birthdayCard, fetchAvatar } from '../features/rankcard.js';
 import { PermissionFlagsBits, SlashCommandBuilder, type Client } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
@@ -77,8 +79,10 @@ export function startBirthdays(client: Client, store: Store) {
         if (!ch?.isSendable()) continue;
         const vars = { user: `<@${m.id}>`, name: m.displayName, server: guild.name };
         const e = card({ kind: 'birthday', title: `Happy birthday, ${m.displayName}!`, emoji: '🎂', vars, line: g.birthdays.message ?? undefined, gif: g.gifs.birthday ?? null });
-        e.setThumbnail(m.displayAvatarURL({ size: 256, forceStatic: false }));
-        await ch.send({ content: `<@${m.id}>`, embeds: [e], allowedMentions: { users: [m.id] } }).catch(() => {});
+        // a drawn card with their face, the gif stays in the embed if there is one
+        const png = await birthdayCard({ name: m.displayName, server: guild.name, avatar: await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 512 })) }).catch(() => null);
+        if (png) e.setImage('attachment://birthday.png'); else e.setThumbnail(m.displayAvatarURL({ size: 256, forceStatic: false }));
+        await ch.send({ content: `<@${m.id}>`, embeds: [e], files: png ? [new AttachmentBuilder(png, { name: 'birthday.png' })] : [], allowedMentions: { users: [m.id] } }).catch(() => {});
       }
     }
   };

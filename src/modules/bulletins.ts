@@ -6,6 +6,7 @@ import type { Bulletins, Feed, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { bar, card } from '../theme.js';
 import { pickDefault } from '../gifs.js';
+import { predict, predictTop, scoreMatch, scoreRace } from './predict.js';
 import { animeThisDay, footballThisDay } from '../feeds/thisday.js';
 import { picksOf } from './profile.js';
 import { f1Card, fixturesCard, matchCard, standingsCard, weekCard } from '../features/matchcard.js';
@@ -126,6 +127,7 @@ async function post(client: Client, feed: Feed, content: { text?: string; embed:
   }).catch((e) => { report('bulletin post', e); return null; });
   // a reaction or two so people can follow along
   for (const r of content.react ?? []) await sent?.react(r).catch(() => {});
+  return sent;
 }
 
 // one drawing per match or session, shared by every server that posts it
@@ -195,11 +197,19 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
       if (bigSession(s.type) && now > start - HOUR && now < start) {
         for (const [gid, b] of live) {
           if (!store.firstTime(gid, `f1:pre:${r.round}:${s.type}`)) continue;
-          await post(client, b.f1, {
+          const pre = await post(client, b.f1, {
             ping: true, text: `${sessionWord[s.type] ?? s.label} <t:${unix(start)}:R>`,
             react: ['🚦', flag],
             embed: card({ kind: 'f1Soon', title: `${sessionMark(s.type)} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: gifIn(store, gid, 'f1soon'), body: `🔴🔴🔴🔴🔴 Lights out <t:${unix(start)}:t>, ${r.circuit.name}.` }),
           });
+          // race day gets a live chat thread, closed with the podium once it's over
+          if (s.type === 'R' && pre) {
+            const thread = await pre.startThread({ name: `🏁 ${r.name} live`.slice(0, 100), autoArchiveDuration: 1440 }).catch(() => null);
+            if (thread) {
+              store.setKv(`f1thread:${gid}:${r.round}`, thread.id);
+              await thread.send(`Lights out <t:${unix(start)}:R>. Predictions close at the start, \`tz predict\` if you haven't called the podium yet.`).catch(() => {});
+            }
+          }
         }
       }
       // results once Parc Fermé has them, only for fresh sessions so a new board doesn't get flooded
@@ -215,6 +225,19 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
               rows = h.lastRace.results.slice(0, 10).map((d) => ({ pos: d.pos, driver: d.driver, team: d.team, extra: d.pos === '1' ? undefined : d.gap }));
               const champ = h.standings.slice(0, 3).map((d) => `${d.pos}. ${d.driver} **${d.points}**`).join(' · ');
               body += `\n\n**Championship** · ${champ}`;
+            }
+          }
+          // podium calls get paid the moment the result is in
+          if (s.type === 'R') {
+            const called = scoreRace(store, gid, r.round, s.top3.map((d) => d.driver));
+            if (called.length) body += `\n\n${called.join('\n')}`;
+            // the race thread gets the podium and is locked
+            const tid = store.getKv(`f1thread:${gid}:${r.round}`);
+            const thread = tid ? await client.channels.fetch(tid).catch(() => null) : null;
+            if (thread?.isThread()) {
+              await thread.send(`🏁 **Chequered flag.** ${s.top3.map((d, n) => `${['🥇', '🥈', '🥉'][n]} ${d.driver}`).join(' · ')}\nThread's closed, thanks for watching.`).catch(() => {});
+              await thread.setLocked(true).catch(() => {});
+              await thread.setArchived(true).catch(() => {});
             }
           }
           const win = s.type === 'Q' || s.type === 'SQ' ? `${s.top3[0].driver} takes pole` : `${s.top3[0].driver} wins`;
@@ -365,10 +388,11 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
       }
       if (m.state === 'post' && now - m.date < 8 * HOUR && store.firstTime(gid, `fb:ft:${m.id}`)) {
         const scorers = m.goals.map((g) => `${g.clock} ${g.who} (${g.team === m.home.id ? m.home.short : m.away.short})`).join(' · ');
+        const called = scoreMatch(store, gid, m);
         await post(client, b.football, {
           react: [m.home.winner ? '🏠' : m.away.winner ? '✈️' : '🤝'],
           embed: card({ kind: 'fbFull', title: `${clubDot(m.home)} ${m.home.name} ${m.home.score} - ${m.away.score} ${m.away.name} ${clubDot(m.away)}`, emoji: '', color: names.football.color, gif: 'off',
-            body: `${leagueOf(m)} · ${m.detail}\n${m.home.winner ? `🏆 **${m.home.name}** win` : m.away.winner ? `🏆 **${m.away.name}** win` : '🤝 Honours even'}${scorers ? `\n\n⚽ ${scorers}` : ''}` }),
+            body: `${leagueOf(m)} · ${m.detail}\n${m.home.winner ? `🏆 **${m.home.name}** win` : m.away.winner ? `🏆 **${m.away.name}** win` : '🤝 Honours even'}${scorers ? `\n\n⚽ ${scorers}` : ''}${called.length ? `\n\n${called.join('\n')}` : ''}` }),
           image: await matchImage(m, true),
         });
       }
@@ -440,6 +464,35 @@ export async function animeHistory() {
   return e;
 }
 
+// Sunday evening: what the server watched this week
+export function animeRecap(store: Store, guild: Guild) {
+  const rows = store.listActivity(Date.now() - 7 * 24 * HOUR).filter((r) => r.kind === 'ANIME' && guild.members.cache.has(r.user_id));
+  if (!rows.length) return null;
+  const count = <T,>(list: T[]) => [...list.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<T, number>())].sort((a, b) => b[1] - a[1]);
+  const shows = count(rows.map((r) => r.title));
+  const finished = rows.filter((r) => r.status === 'completed');
+  const people = count(rows.map((r) => r.user_id));
+  const e = card({ kind: 'anDay', title: 'This week in anime', emoji: '📺', color: names.anime.color, gif: 'off', line: '', body: '',
+    fields: [
+      { name: '🔥 Most watched', value: shows.slice(0, 5).map(([t, n], i) => `${i + 1}. **${t}** · ${n} ${n === 1 ? 'person' : 'people'}`).join('\n'), inline: false },
+      { name: '🎬 Finished this week', value: finished.length ? finished.slice(0, 6).map((r) => `<@${r.user_id}> · ${r.title}`).join('\n') : 'Nobody wrapped a show up this week.', inline: false },
+      { name: '🏆 Busiest watcher', value: `<@${people[0][0]}> with ${people[0][1]} list update${people[0][1] === 1 ? '' : 's'}`, inline: false },
+    ] });
+  return e;
+}
+
+export const recap: Command = {
+  name: 'recap',
+  group: 'anime',
+  data: new SlashCommandBuilder().setName('recap').setDescription('What the server watched this week').toJSON(),
+  text: { aliases: ['week'] },
+  run: (ctx, store) => {
+    if (!ctx.guild) return ctx.reply('The recap is per server.');
+    const e = animeRecap(store, ctx.guild);
+    return ctx.reply(e ? { embeds: [e] } : 'Nobody touched their list this week. Quiet week in Yokohama.');
+  },
+};
+
 async function historyTick(client: Client, store: Store, guilds: [string, Bulletins][]) {
   const d = new Date();
   if (d.getUTCHours() < 5) return;
@@ -448,6 +501,14 @@ async function historyTick(client: Client, store: Store, guilds: [string, Bullet
   if (fb.length) {
     const e = await footballHistory().catch(() => null);
     if (e) for (const [, b] of fb) await post(client, b.football, { embed: e, react: ['⚽'] });
+  }
+  // Sunday, mid evening in India
+  if (d.getUTCDay() === 0 && d.getUTCHours() >= 13) {
+    for (const [gid, b] of guilds.filter(([g, x]) => x.anime.on && x.anime.channel && store.firstTime(g, `an:recap:${key}`))) {
+      const guild = client.guilds.cache.get(gid);
+      const e = guild ? animeRecap(store, guild) : null;
+      if (e) await post(client, b.anime, { embed: e, react: ['📺'] });
+    }
   }
   const an = guilds.filter(([gid, b]) => b.anime.on && b.anime.channel && store.firstTime(gid, `an:otd:${key}`));
   if (an.length) {
@@ -468,6 +529,45 @@ export function startBulletins(client: Client, store: Store) {
   };
   setInterval(() => void tick(), 10 * 60_000);
   setTimeout(() => void tick(), 30_000);
+  // goals for people's own clubs are checked every two minutes while those clubs are playing
+  setInterval(() => void goalTick(client, store).catch((e) => report('goal pings', e)), 2 * 60_000);
+}
+
+const norm = (x: string) => x.toLowerCase();
+async function goalTick(client: Client, store: Store) {
+  const picks = store.allPicks().filter((p) => p.club && p.ping !== false);
+  if (!picks.length) return;
+  const clubs = [...new Set(picks.map((p) => norm(p.club!)))];
+  const hit = (name: string) => clubs.some((c) => norm(name).includes(c));
+  for (const l of Object.keys(leagues)) {
+    // the cached list says who is live, then only those leagues get a fresh look
+    const cached = await matches(l, new Date()).catch(() => [] as Match[]);
+    if (!cached.some((m) => m.state === 'in' && (hit(m.home.name) || hit(m.away.name)))) continue;
+    const fresh = await matches(l, new Date(), 60_000).catch(() => [] as Match[]);
+    for (const m of fresh.filter((x) => (x.state === 'in' || x.state === 'post') && (hit(x.home.name) || hit(x.away.name)))) {
+      const seen = Number(store.getKv(`goals:${m.id}`) ?? -1);
+      store.setKv(`goals:${m.id}`, String(m.goals.length));
+      // the first look at a match only notes the count, so joining mid game doesn't replay old goals
+      if (seen < 0 || m.goals.length <= seen) continue;
+      for (const g of m.goals.slice(seen)) {
+        const side = g.team === m.home.id ? m.home : m.away;
+        const fans = picks.filter((p) => norm(side.name).includes(norm(p.club!)));
+        if (!fans.length) continue;
+        for (const guild of client.guilds.cache.values()) {
+          const b = store.guild(guild.id).bulletins.football;
+          if (!b.on || !b.channel || !store.rules(guild.id, 'bulletins').enabled) continue;
+          const here = fans.filter((f) => guild.members.cache.has(f.user)).map((f) => f.user);
+          if (!here.length) continue;
+          const ch = client.channels.cache.get(b.channel);
+          if (!ch?.isSendable()) continue;
+          await ch.send({
+            content: `⚽ **GOAL ${side.name}!** ${g.who} ${g.clock}\n${clubDot(m.home)} ${m.home.name} **${m.home.score} - ${m.away.score}** ${m.away.name} ${clubDot(m.away)}\n${here.map((u) => `<@${u}>`).join(' ')}`,
+            allowedMentions: { users: here },
+          }).catch(() => {});
+        }
+      }
+    }
+  }
 }
 
 // ---------- commands ----------
@@ -639,6 +739,6 @@ export const bulletins: Module = {
   name: 'bulletins',
   label: 'Bulletins',
   about: 'Grand Prix results and race day pings, big football matches and your clubs, new anime episodes, each in its own channel with a role to get pinged. Set up in /setup',
-  commands: [f1, football, track],
+  commands: [f1, football, track, predict, predictTop, recap],
 };
 

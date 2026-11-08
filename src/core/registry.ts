@@ -9,6 +9,7 @@ import { core, allModules, dashList } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
 import { anime, onAnimeComponent, onGuess } from '../modules/anime.js';
 import { onF1Quiz } from '../modules/f1quiz.js';
+import { onPredict } from '../modules/predict.js';
 import { economy } from '../modules/economy.js';
 import { bulletins, onBulletinButton } from '../modules/bulletins.js';
 import { onWatchlist } from '../modules/watchlist.js';
@@ -21,7 +22,7 @@ import { birthdays } from '../modules/birthdays.js';
 import { onServerComponent, server } from '../modules/server.js';
 import { onSetup, useModules } from '../features/setup.js';
 import { RED, card, type Kind } from '../theme.js';
-import { report } from '../ops.js';
+import { countUse, report } from '../ops.js';
 import { quoteCommand } from '../modules/quote.js';
 import { onProfileEdit } from '../modules/profile.js';
 import { onShip } from '../modules/ship.js';
@@ -172,6 +173,7 @@ async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command, cool = tru
   // buttons on dashboards move between pages, they don't count
   const wait = cool ? coolingDown(ctx, cmd) : 0;
   if (wait) return ctx.reply({ content: `⏳ Easy, give it **${wait}s**. Even Dazai takes breaks between schemes.`, temp: true });
+  countUse(cmd.name);
   try {
     await cmd.run(ctx, store);
   } catch (e) {
@@ -290,6 +292,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onSpawnButton(store, i)) return;
     if (await onPingsButton(store, i)) return;
     if (await onCatchCopy(i)) return;
+    if (await onPredict(store, i)) return;
     if (await onProfileEdit(store, i)) return;
     if (await onShip(i)) return;
     if (await onBulletinButton(i, store)) return;

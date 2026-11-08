@@ -1,3 +1,4 @@
+import { track } from './missions.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder,
   type Client, type Guild, type Interaction, type Message, type MessageActionRowComponentBuilder,
@@ -217,7 +218,17 @@ async function onSpawn(store: Store, m: Message) {
         if (typed && typed.toLowerCase() !== name.toLowerCase()) catchAs.set(name.toLowerCase(), typed), store.setKv('p2:catchas', JSON.stringify([...catchAs]));
       }
       const catcher = /<@!?(\d+)>/.exec(m.content)?.[1];
-      if (name && catcher) { store.addCatch(m.guild.id, catcher, baseOf(name)); store.setKv(`p2:chan:${m.guild.id}`, m.channelId); }
+      if (name && catcher) {
+        store.addCatch(m.guild.id, catcher, baseOf(name));
+        store.setKv(`p2:chan:${m.guild.id}`, m.channelId);
+        // missions and badges: the catch, its types and whether it was a legend
+        const extra = [
+          ...track(store, m.guild.id, catcher, 'catch'),
+          ...typesOf(baseOf(name)).flatMap((t) => track(store, m.guild!.id, catcher, `catchType:${t}`)),
+          ...(rarityOf(baseOf(name)) ? track(store, m.guild.id, catcher, 'catchRare') : []),
+        ];
+        if (extra.length && m.channel.isSendable()) await m.channel.send({ content: extra.join('\n'), allowedMentions: { users: [catcher] } }).catch(() => {});
+      }
       if (w && name && Date.now() - w.at < 30 * 60_000) await confirm(store, m, w, name, 'catch');
       waiting.delete(m.channelId);
       if (/these colors seem unusual|shiny/i.test(m.content) && name && m.channel.isSendable() && store.rules(m.guild.id, 'spawns').enabled) {

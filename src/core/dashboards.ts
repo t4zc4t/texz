@@ -1,5 +1,5 @@
 import {
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, LabelBuilder, ModalBuilder, RoleSelectMenuBuilder,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, FileUploadBuilder, LabelBuilder, ModalBuilder, RoleSelectMenuBuilder,
   StringSelectMenuBuilder, TextInputBuilder, TextInputStyle, UserSelectMenuBuilder,
   type MessageActionRowComponentBuilder, type ModalSubmitInteraction,
 } from 'discord.js';
@@ -9,7 +9,7 @@ import { card } from '../theme.js';
 import { menu } from './glance.js';
 
 // option types from discord
-const SUB = 1, GROUP = 2, STR = 3, INT = 4, BOOL = 5, USER = 6, CHANNEL = 7, ROLE = 8, NUM = 10;
+const SUB = 1, GROUP = 2, STR = 3, INT = 4, BOOL = 5, USER = 6, CHANNEL = 7, ROLE = 8, NUM = 10, FILE = 11;
 
 export interface RawOpt { type: number; name: string; description: string; required?: boolean; choices?: { name: string; value: string | number }[]; options?: RawOpt[]; max_length?: number; min_value?: number; max_value?: number }
 
@@ -65,6 +65,7 @@ export function askModal(e: Entry, owner: string, back: string) {
     const id = `f_${o.name}`;
     if (o.type === USER) label.setUserSelectMenuComponent(new UserSelectMenuBuilder().setCustomId(id).setRequired(!!o.required).setMaxValues(1));
     else if (o.type === ROLE) label.setRoleSelectMenuComponent(new RoleSelectMenuBuilder().setCustomId(id).setRequired(!!o.required).setMaxValues(1));
+    else if (o.type === FILE) label.setFileUploadComponent(new FileUploadBuilder().setCustomId(id).setRequired(!!o.required).setMaxValues(1));
     else if (o.type === CHANNEL) label.setChannelSelectMenuComponent(new ChannelSelectMenuBuilder().setCustomId(id).setRequired(!!o.required).setMaxValues(1));
     else if (o.type === BOOL || o.choices?.length) {
       const choices = o.type === BOOL ? [{ name: 'yes', value: 'yes' }, { name: 'no', value: 'no' }] : o.choices!.slice(0, 25);
@@ -91,6 +92,7 @@ export function readModal(i: ModalSubmitInteraction, e: Entry): Record<string, s
       if (o.type === USER) { const u = i.fields.getSelectedUsers(id)?.first(); if (u) out[o.name] = u.id; continue; }
       if (o.type === ROLE) { const r = i.fields.getSelectedRoles(id)?.first(); if (r) out[o.name] = r.id; continue; }
       if (o.type === CHANNEL) { const c = i.fields.getSelectedChannels(id)?.first(); if (c) out[o.name] = c.id; continue; }
+      if (o.type === FILE) { const f = i.fields.getUploadedFiles(id)?.first(); if (f) out[o.name] = f.url; continue; }
       if (o.type === BOOL || o.choices?.length) { const v = i.fields.getStringSelectValues(id)?.[0]; if (v) out[o.name] = v; continue; }
       const v = i.fields.getTextInputValue(id).trim();
       if (v) out[o.name] = v;

@@ -23,6 +23,8 @@ export interface Ctx {
   latency(): number;
   client: Client;
   displayName: string;
+  // an attached file's link: a slash option or the first file on a typed message
+  attachment?: (name: string) => string | null;
   // the message a typed command replied to, if any
   replyTo?: () => Promise<Message | null>;
   sub(): string | null;
@@ -56,6 +58,7 @@ export function fromSlash(i: ChatInputCommandInteraction, sub?: string | null): 
     latency: () => i.client.ws.ping,
     client: i.client,
     displayName: (i.member && 'displayName' in i.member ? (i.member as GuildMember).displayName : null) ?? i.user.displayName,
+    attachment: (n) => ('options' in i && 'getAttachment' in (i.options as object) ? (i.options as ChatInputCommandInteraction['options']).getAttachment(n)?.url ?? null : null),
     sub: () => (sub === undefined ? i.options.getSubcommand(false) : sub),
     str: (n) => i.options.getString(n),
     int: (n) => i.options.getInteger(n),
@@ -93,6 +96,7 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
     bool: (n) => (opts[n] ? ['yes', 'on', 'true', '1'].includes(opts[n].toLowerCase()) : null),
     // ids from a form or a fixed option, a pasted mention works too
     user: (n) => opts[n]?.match(/(\d{15,})/)?.[1] ?? null,
+    attachment: (n) => (opts[n]?.startsWith('https://') ? opts[n] : null),
     channel: (n) => opts[n]?.match(/(\d{15,})/)?.[1] ?? null,
     role: (n) => opts[n]?.match(/(\d{15,})/)?.[1] ?? null,
     reply: (r) => {
@@ -146,6 +150,7 @@ export function fromText(m: Message, tokens: string[], argNames: string[], hasSu
     client: m.client,
     displayName: m.member?.displayName ?? m.author.displayName,
     replyTo: async () => (m.reference?.messageId ? m.fetchReference().catch(() => null) : null),
+    attachment: () => m.attachments.first()?.url ?? null,
     sub: () => sub,
     str: (n) => values.get(n) ?? null,
     int: (n) => {

@@ -1,3 +1,4 @@
+import { track } from './missions.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type Interaction, type MessageActionRowComponentBuilder } from 'discord.js';
 import { SlashCommandBuilder } from 'discord.js';
 import type { Store } from '../db.js';
@@ -89,7 +90,8 @@ export async function onF1Quiz(store: Store, i: Interaction) {
   const amount = payFor(r.q);
   const paid = economy && store.pay(i.guildId!, i.user.id, amount) ? amount : 0;
   await i.update({ components: lock(r.q.answer) as never });
-  await i.followUp({ embeds: [reveal(r.q, i.user.id, paid)], components: [doneRow(r.q, r.kind)], allowedMentions: { users: [i.user.id] } });
+  const extra = track(store, i.guildId, i.user.id, 'quizwin');
+  await i.followUp({ content: extra.join('\n') || undefined, embeds: [reveal(r.q, i.user.id, paid)], components: [doneRow(r.q, r.kind)], allowedMentions: { users: [i.user.id] } });
   return true;
 }
 

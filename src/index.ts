@@ -11,7 +11,7 @@ import { startBirthdays } from './modules/birthdays.js';
 import { watchEpisodes } from './anime/alerts.js';
 import { wireEvents } from './events.js';
 import { watch } from './watch.js';
-import { report, startOps, syncCommands } from './ops.js';
+import { report, startHealth, startOps, syncCommands } from './ops.js';
 import { startServerTimers } from './modules/server.js';
 import { startDailyCharacter } from './modules/anime.js';
 import { sweepQuiz } from './modules/f1quiz.js';
@@ -19,7 +19,7 @@ import { watchSpawns } from './modules/spawns.js';
 import { fixRankOrder } from './modules/levels.js';
 import { warmModel } from './features/pokemodel.js';
 import { startBulletins } from './modules/bulletins.js';
-import { onQuote, QUOTE_MENU } from './modules/quote.js';
+import { onQuote, QUOTE_MENU, startQuoteOfWeek } from './modules/quote.js';
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) throw new Error('DISCORD_TOKEN is missing, copy .env.example to .env and fill it in');
@@ -61,6 +61,8 @@ client.once(Events.ClientReady, (c) => {
   startDailyCharacter(client, store);
   watchSpawns(client, store);
   warmModel();
+  startQuoteOfWeek(client, store);
+  startHealth(client, store);
   sweepQuiz(async (id, payload) => {
     const ch = await client.channels.fetch(id).catch(() => null);
     if (ch?.isSendable()) await ch.send(payload as never);

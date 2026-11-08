@@ -1,4 +1,5 @@
-import { AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, type Message, type MessageContextMenuCommandInteraction } from 'discord.js';
+import { track } from './missions.js';
+import { type Client, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, type Message, type MessageContextMenuCommandInteraction } from 'discord.js';
 import { SlashCommandBuilder } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
@@ -66,7 +67,7 @@ export async function framed(store: Store, m: Message, by: string) {
   const ch = chId ? await m.client.channels.fetch(chId).catch(() => null) : null;
   // the hall copy needs its own file, a sent attachment can't be reused
   const copy = () => ({ ...payload, files: [new AttachmentBuilder(png, { name: 'quote.png' })] });
-  return { payload, copy, hall: ch?.isSendable() ? ch : null };
+  return { payload, copy, hall: ch?.isSendable() ? ch : null, author: m.author.id };
 }
 
 export async function onQuote(store: Store, i: MessageContextMenuCommandInteraction) {
@@ -75,8 +76,11 @@ export async function onQuote(store: Store, i: MessageContextMenuCommandInteract
   if (!q) return i.editReply('There\'s nothing in that message I can frame.');
   // it shows up where it was made, and a copy goes to the quotes channel if there is one
   await i.editReply(q.hall && q.hall.id !== i.channelId ? `🖼️ Framed, a copy is hanging in <#${q.hall.id}> too.` : '🖼️ Here it is.');
-  await i.followUp(q.payload);
-  if (q.hall && q.hall.id !== i.channelId) await q.hall.send(q.copy()).catch((err) => report('quote', err));
+  const here = await i.followUp(q.payload).catch(() => null);
+  const extra = track(store, i.guildId, i.user.id, 'quote');
+  if (extra.length) await i.followUp({ content: extra.join('\n'), allowedMentions: { users: [i.user.id] } });
+  const hung = q.hall && q.hall.id !== i.channelId ? await q.hall.send(q.copy()).catch((err) => { report('quote', err); return null; }) : null;
+  if (i.guildId) remember(store, i.guildId, hung ?? here, q.author);
 }
 
 // "tz quote" as a reply to a message, or "/fun view:quote" with a message link
@@ -97,7 +101,42 @@ export const quote: Command = {
     if (!target) return ctx.reply({ content: `🖼️ Reply to a message with \`tz quote\`, paste a message link, or right click a message → Apps → **${QUOTE_MENU}**.`, temp: true });
     const q = await framed(store, target, ctx.displayName ?? 'someone');
     if (!q) return ctx.reply({ content: 'There\'s nothing in that message I can frame.', temp: true });
-    await ctx.reply({ ...q.payload, public: true });
-    if (q.hall && q.hall.id !== ctx.channelId) await q.hall.send(q.copy()).catch((err) => report('quote', err));
+    const here = await ctx.reply({ ...q.payload, public: true }) as Message | null;
+    const extra = track(store, ctx.guildId, ctx.userId, 'quote');
+    if (extra.length) await ctx.reply({ content: extra.join('\n'), public: true });
+    const hung = q.hall && q.hall.id !== ctx.channelId ? await q.hall.send(q.copy()).catch((err) => { report('quote', err); return null; }) : null;
+    if (ctx.guildId) remember(store, ctx.guildId, hung ?? (here && 'id' in here ? here : null), q.author);
   },
 };
+
+// every quote of the week is kept, the one with the most reactions gets featured on Sunday
+function remember(store: Store, guild: string, m: { id: string; channelId: string } | null, author: string) {
+  if (!m) return;
+  const list = (JSON.parse(store.getKv(`quotes:${guild}`) ?? '[]') as { id: string; ch: string; author: string; at: number }[])
+    .filter((q) => q.at > Date.now() - 8 * 86_400_000);
+  list.push({ id: m.id, ch: m.channelId, author, at: Date.now() });
+  store.setKv(`quotes:${guild}`, JSON.stringify(list.slice(-300)));
+}
+
+export function startQuoteOfWeek(client: Client, store: Store) {
+  const tick = async () => {
+    const d = new Date();
+    if (d.getUTCDay() !== 0 || d.getUTCHours() < 14) return;
+    for (const guild of client.guilds.cache.values()) {
+      if (!store.firstTime(guild.id, `qotw:${d.toISOString().slice(0, 10)}`)) continue;
+      const list = (JSON.parse(store.getKv(`quotes:${guild.id}`) ?? '[]') as { id: string; ch: string; author: string; at: number }[]).filter((q) => q.at > Date.now() - 7 * 86_400_000);
+      let best: { msg: Message; author: string; n: number } | null = null;
+      for (const q of list) {
+        const ch = await client.channels.fetch(q.ch).catch(() => null);
+        const msg = ch && 'messages' in ch ? await ch.messages.fetch(q.id).catch(() => null) : null;
+        if (!msg) continue;
+        const n = msg.reactions.cache.reduce((sum, r) => sum + r.count, 0);
+        if (n > 0 && (!best || n > best.n)) best = { msg, author: q.author, n };
+      }
+      if (!best) continue;
+      const extra = track(store, guild.id, best.author, 'quoteOfWeek');
+      await best.msg.reply({ content: [`🏆 **Quote of the week**, ${best.n} reaction${best.n === 1 ? '' : 's'}. Words by <@${best.author}>.`, ...extra].join('\n'), allowedMentions: { users: [best.author] } }).catch(() => {});
+    }
+  };
+  setInterval(() => void tick().catch((e) => report('quote of the week', e)), 3600_000).unref?.();
+}

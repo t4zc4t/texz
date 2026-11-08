@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { Client } from 'discord.js';
@@ -23,11 +23,20 @@ function backOnlineCheck(ready: boolean) {
   if (offlineSince && ready && Date.now() - lastNetError > 45_000) {
     const mins = Math.max(1, Math.round((Date.now() - offlineSince) / 60_000));
     console.log(`back online after ${mins}m`);
+    offlineMs += Date.now() - offlineSince;
     offlineSince = null;
   }
 }
 
+// counted for the weekly health report
+const started = Date.now();
+let errors = 0;
+let offlineMs = 0;
+const uses = new Map<string, number>();
+export const countUse = (name: string) => uses.set(name, (uses.get(name) ?? 0) + 1);
+
 export function report(where: string, e: unknown) {
+  if (!isNetwork(e)) errors++;
   if (isNetwork(e)) {
     lastNetError = Date.now();
     if (!offlineSince) { offlineSince = Date.now(); console.log(`offline (${where}), retrying`); }
@@ -101,3 +110,38 @@ export async function syncCommands(c: Client<true>, s: Store, defs: unknown[]) {
   s.setKv('commandsHash', hash);
   console.log(`slash commands updated: ${defs.length}`);
 }
+
+// Sunday, a short note to whoever owns the bot: how the week went
+async function healthReport(c: Client, s: Store) {
+  const d = new Date();
+  const key = `health:${d.toISOString().slice(0, 10)}`;
+  if (d.getUTCDay() !== 0 || d.getUTCHours() < 15 || s.getKv(key)) return;
+  s.setKv(key, '1');
+  const app = await c.application?.fetch().catch(() => null);
+  const ownerId = app?.owner && 'members' in app.owner ? app.owner.ownerId : app?.owner?.id;
+  const owner = ownerId ? await c.users.fetch(ownerId).catch(() => null) : null;
+  if (!owner) return;
+  const up = Date.now() - started;
+  const hours = (ms: number) => `${Math.floor(ms / 3600_000)}h ${Math.floor((ms % 3600_000) / 60_000)}m`;
+  let spawns = '';
+  try {
+    const week = Date.now() - 7 * 86_400_000;
+    const lines = readFileSync(join('cache', 'spawnlog.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { at: number; guess: { name: string } | null; confirmed: string | null }).filter((x) => x.at > week);
+    const sure = lines.filter((x) => x.confirmed);
+    const right = sure.filter((x) => x.guess && x.guess.name.toLowerCase() === x.confirmed!.toLowerCase()).length;
+    if (lines.length) spawns = `🔎 Pokétwo: ${lines.length} spawns, ${right}/${sure.length} named exactly`;
+  } catch { /* no log yet */ }
+  let dbSize = '';
+  try { dbSize = `${(statSync(process.env.DB_PATH || 'texz.db').size / 1_048_576).toFixed(1)} MB`; } catch { /* in memory */ }
+  const top = [...uses].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, k]) => `${n} ${k}`).join(' · ');
+  const text = [
+    '🩺 **Texz weekly check-up**',
+    `⏱️ Up ${hours(up)} since the last restart${offlineMs ? `, offline for ${hours(offlineMs)} of it` : ''}`,
+    `🧯 ${errors} error${errors === 1 ? '' : 's'} reported`,
+    spawns,
+    top ? `⌨️ Most used: ${top}` : '',
+    dbSize ? `🗄️ Database ${dbSize}, ${c.guilds.cache.size} server${c.guilds.cache.size === 1 ? '' : 's'}` : '',
+  ].filter(Boolean).join('\n');
+  await owner.send(text).catch(() => {});
+}
+export const startHealth = (c: Client, s: Store) => setInterval(() => void healthReport(c, s).catch(() => {}), 3600_000).unref?.();

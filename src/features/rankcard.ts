@@ -392,3 +392,60 @@ export async function classicQuote(d: { name: string; handle: string; text: stri
   ctx.fillText('Texz', W - 20, H - 16);
   return c.toBuffer('image/png');
 }
+
+// a birthday card: their face in a gold ring, confetti, and the day written big
+export async function birthdayCard(d: { name: string; avatar: Buffer | null; server: string; age?: number | null }): Promise<Buffer> {
+  const W = 1100, H = 520;
+  const c = createCanvas(W, H);
+  const ctx = c.getContext('2d');
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#16131c');
+  bg.addColorStop(1, '#2a1d14');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  // confetti, the same pattern for the same name so it doesn't look random every time
+  let seed = 0;
+  for (const ch of d.name) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32);
+  const colours = ['#c2a46e', '#e8c87a', '#c0272f', '#e8e2d6', '#8fb3c9'];
+  for (let n = 0; n < 90; n++) {
+    ctx.save();
+    ctx.translate(rnd() * W, rnd() * H);
+    ctx.rotate(rnd() * Math.PI);
+    ctx.fillStyle = colours[n % colours.length];
+    ctx.globalAlpha = 0.35 + rnd() * 0.5;
+    ctx.fillRect(-6, -2, 12 + rnd() * 8, 4);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  const cx = 260, cy = H / 2, r = 150;
+  const av = d.avatar ? await loadImage(d.avatar).catch(() => null) : null;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+  if (av) ctx.drawImage(av, cx - r, cy - r, r * 2, r * 2);
+  else { ctx.fillStyle = '#2b2f3a'; ctx.fillRect(cx - r, cy - r, r * 2, r * 2); }
+  ctx.restore();
+  ctx.strokeStyle = '#c2a46e';
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r + 8, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#c2a46e';
+  ctx.font = '700 34px "Texz Serif", serif';
+  ctx.fillText('HAPPY BIRTHDAY', 470, 170);
+  ctx.fillStyle = '#ffffff';
+  let size = 76;
+  ctx.font = `700 ${size}px "Texz Sans Bold", sans-serif`;
+  while (ctx.measureText(d.name).width > 580 && size > 36) { size -= 4; ctx.font = `700 ${size}px "Texz Sans Bold", sans-serif`; }
+  ctx.fillText(d.name, 470, 260);
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.font = '34px "Texz Quote", serif';
+  ctx.fillText(d.age ? `${d.age} years of being wonderful` : 'from everyone at the Agency', 470, 320);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.font = '22px "Texz Sans", sans-serif';
+  ctx.fillText(d.server, 470, 380);
+  return c.toBuffer('image/png');
+}

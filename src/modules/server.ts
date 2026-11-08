@@ -1,3 +1,4 @@
+import { backupCmd } from './backupcmd.js';
 import {
   ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, Events, MessageFlags, OverwriteType, PermissionFlagsBits,
   SlashCommandBuilder, type Client, type Guild, type Interaction, type MessageActionRowComponentBuilder, type MessageReaction, type PartialMessageReaction,
@@ -251,5 +252,5 @@ export const server: Module = {
   name: 'server',
   label: 'Server tools',
   about: 'Starboard, tickets, planned announcements and activity stats. Starboard and tickets are set up in /setup',
-  commands: [announce, stats],
+  commands: [announce, stats, backupCmd],
 };
