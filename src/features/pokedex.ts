@@ -19,6 +19,8 @@ export const typeMark: Record<string, string> = {
   Flying: '🪶', Psychic: '🔮', Bug: '🐛', Rock: '🪨', Ghost: '👻', Dragon: '🐉', Dark: '🌑', Steel: '⚙️', Fairy: '🧚',
 };
 export const idOf = (name: string) => row(name)?.[0] ?? null;
+// the plain species name for a dex number, the first entry is never a regional form
+export const nameById = (id: number) => all().find(([i]) => i === id)?.[1] ?? null;
 
 // the longest pokémon name that shows up in a line of text, "a level 12 Alolan Vulpix (♀)" gives Alolan Vulpix
 export function nameIn(text: string): string | null {

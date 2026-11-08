@@ -16,7 +16,7 @@ import { startServerTimers } from './modules/server.js';
 import { startDailyCharacter } from './modules/anime.js';
 import { sweepQuiz } from './modules/f1quiz.js';
 import { watchSpawns } from './modules/spawns.js';
-import { ensureModel } from './features/pokemodel.js';
+import { warmModel } from './features/pokemodel.js';
 import { startBulletins } from './modules/bulletins.js';
 import { onQuote } from './modules/quote.js';
 
@@ -55,7 +55,7 @@ client.once(Events.ClientReady, (c) => {
   startServerTimers(client, store);
   startDailyCharacter(client, store);
   watchSpawns(client, store);
-  void ensureModel();
+  warmModel();
   sweepQuiz(async (id, payload) => {
     const ch = await client.channels.fetch(id).catch(() => null);
     if (ch?.isSendable()) await ch.send(payload as never);

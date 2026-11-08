@@ -8,7 +8,7 @@ import { card } from '../theme.js';
 import { picksOf, savePicks } from './profile.js';
 import { TYPES, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeMark, typesOf } from '../features/pokedex.js';
 import { download, fingerprint, knownCount, learn, recognise } from '../features/pokeid.js';
-import { keepSpawn } from '../features/pokemodel.js';
+import { classify, keepSpawn } from '../features/pokemodel.js';
 
 export const POKETWO_ID = '716390085896962058';
 export const SHOOB_ID = '673362753489993749';
@@ -62,7 +62,7 @@ const typeRole = (guild: Guild, store: Store, t: string, make = false) => roleNa
 const rareMark: Record<string, string> = { legendary: '🌟 Legendary', mythical: '💫 Mythical', 'ultra beast': '🌀 Ultra Beast' };
 
 // a name is known for the spawn: tell the channel how to catch it, and ping for the rare ones
-async function named(store: Store, m: Message, spawnId: string, name: string, how: 'seen' | 'hint' | 'helper') {
+async function named(store: Store, m: Message, spawnId: string, name: string, how: 'seen' | 'hint' | 'helper', guess?: { p: number; others: string[] }) {
   const w = waiting.get(m.channelId);
   if (!w || w.id !== spawnId || !m.guild || !m.channel.isSendable()) return;
   const firstTime = !w.name;
@@ -86,7 +86,7 @@ async function named(store: Store, m: Message, spawnId: string, name: string, ho
   const id = idOf(name);
   const e = card({
     kind: 'help', title: name, emoji: rare ? '🌟' : '🔎', gif: 'off', line: '', color: rare ? 0xf1c40f : 0xe3350d,
-    body: `${rare ? `**${rareMark[rare]}** · ` : ''}${types.map((t) => `${typeMark[t] ?? ''} ${t}`).join(' · ')}\n\`\`\`${catchLine(name)}\`\`\``,
+    body: `${rare ? `**${rareMark[rare]}** · ` : ''}${types.map((t) => `${typeMark[t] ?? ''} ${t}`).join(' · ')}\n\`\`\`${catchLine(name)}\`\`\`${guess && guess.p < 0.85 ? `\n-# ${Math.round(guess.p * 100)}% sure${guess.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}` : ''}`,
   });
   if (id) e.setThumbnail(artwork(id));
   const why = [rare && rareMark[rare], ...types].filter(Boolean).join(' · ');
@@ -148,8 +148,13 @@ async function onSpawn(store: Store, m: Message) {
     const image = url ? await download(url) : null;
     const hash = await fingerprint(image);
     waiting.set(m.channelId, { id: m.id, hash, image, at: Date.now(), name: null, rare: false, pinged: false });
+    // the same picture seen before wins, otherwise the model has a look
     const seen = hash ? recognise(store, hash) : null;
-    if (seen) await named(store, m, m.id, seen.name, 'seen');
+    if (seen?.sure) { await named(store, m, m.id, seen.name, 'seen'); return; }
+    const guesses = image ? await classify(image).catch(() => []) : [];
+    const top = guesses[0];
+    if (top && top.p >= 0.5) await named(store, m, m.id, top.name, 'seen', { p: top.p, others: guesses.slice(1).filter((g) => g.p >= 0.1).map((g) => g.name) });
+    else if (seen) await named(store, m, m.id, seen.name, 'seen');
     return;
   }
   if (!store.rules(m.guild.id, 'spawns').enabled || !m.channel.isSendable()) return;
