@@ -41,7 +41,7 @@ const groups: Record<string, Group> = {
   owo: { label: 'OwO', emoji: '🐾', about: '', description: 'OwO dashboard: huntbot, gems, zoo, weapons, quests, shop and reminders', anywhere: true, dashboard: 'status' },
   anime: { label: 'Anime', emoji: '📺', about: '', description: 'Anime dashboard, or a title to search', anywhere: true, dashboard: 'animehome' },
   fun: { label: 'Games and trivia', emoji: '🎲', about: 'Games for the whole channel, trivia that pays yen, and the small stuff.', description: 'Games, trivia, ship, polls, dice and spawn pings', anywhere: true },
-  eco: { label: 'Yen', emoji: '💴', about: 'Claim, spend and give yen. The quiz and the guess game pay out too.', description: 'Yen: daily, balance, giving, the richest, the role shop and games that pay', extra: ['quiz', 'guess'] },
+  eco: { label: 'Yen', emoji: '💴', about: 'Claim, spend and give yen. The quiz and the guess game pay out too.', description: 'Yen: daily, balance, giving, the richest, the role shop and games that pay', extra: ['quiz', 'crestquiz', 'guess'] },
   levels: { label: 'Levels', emoji: '🎖️', about: 'Ranks, perks and the roster.', description: 'Rank cards, perks, the leaderboard and xp tools' },
   info: { label: 'You and the server', emoji: '🗂️', about: 'Your profile, your pings, birthdays and a look at people and the server.', description: 'Profile, pings, birthdays, avatars, away notes and the server', anywhere: true },
   sports: { label: 'Sports', emoji: '🏁', about: 'Formula 1 from Parc Fermé and football from the big leagues.', description: 'F1 races, standings, quiz and football matches', anywhere: true },

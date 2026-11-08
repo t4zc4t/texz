@@ -9,6 +9,7 @@ import { profile } from './profile.js';
 import { ship } from './ship.js';
 import { f1Quiz, f1Today, f1Trivia } from './bulletins.js';
 import { guess } from './anime.js';
+import { crestQuiz } from './f1quiz.js';
 
 const unix = (ms: number) => Math.floor(ms / 1000);
 
@@ -336,5 +337,5 @@ export const utility: Module = {
   name: 'utility',
   label: 'Utility and fun',
   about: 'Avatars, user and server info, polls, choose, dice, coin, 8ball and AFK',
-  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk, guess, f1Quiz, f1Trivia, f1Today],
+  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk, guess, f1Quiz, f1Trivia, f1Today, crestQuiz],
 };

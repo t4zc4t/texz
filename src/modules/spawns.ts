@@ -6,7 +6,7 @@ import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { card } from '../theme.js';
 import { picksOf, savePicks } from './profile.js';
-import { TYPES, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeMark, typesOf } from '../features/pokedex.js';
+import { TYPES, addExtra, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeMark, typesOf } from '../features/pokedex.js';
 import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize, recognise, remember, type Sparse } from '../features/pokeid.js';
 import { classify, keepSpawn, seedMemory } from '../features/pokemodel.js';
 
@@ -51,6 +51,7 @@ const shoobRole = (guild: Guild, store: Store, t: string, make = false) => roleN
 const last = new Map<string, number>();
 
 export function watchSpawns(client: Client, store: Store) {
+  addExtra(JSON.parse(store.getKv('p2:extra') ?? '[]') as string[]);
   void seedMemory((vec, name) => remember(store, vec, name), memorySize(store) === 0);
   client.on(Events.MessageCreate, (m) => void onSpawn(store, m).catch(() => {}));
 }
@@ -60,6 +61,7 @@ type Waiting = {
   id: string; channelId: string; hash: string | null; image: Buffer | null; vec: Sparse | null; at: number;
   guess: { name: string; p: number; how: string } | null; confirmed: string | null; kept?: boolean;
   sent: Message | null; shown: string | null; pinged: boolean; queue?: Promise<void>;
+  others: string[]; wrong: string[]; unsure: boolean;
 };
 const waiting = new Map<string, Waiting>();
 const RARE_ROLE = 'Pokétwo Rare Spawns';
@@ -70,12 +72,30 @@ const rareMark: Record<string, string> = { legendary: '🌟 Legendary', mythical
 // a variant like "Alolan Vulpix" or "Paldean Tauros" counts as its species for types, rarity and art
 const baseOf = (name: string) => nameIn(name) ?? name;
 
+// Pokétwo's own name for what was caught, trusted as is, so its event forms like Mosslax get learned too
+export function catchName(text: string): string | null {
+  const t = text.replace(/<a?:\w+:\d+>/g, ' ').replace(/✨/g, ' ');
+  const m = /you caught a (?:level|lvl\.?)\s*\d+\s+(.+?)(?=\s*(?:[♂♀⚲❔?!(]|$))/i.exec(t);
+  const name = m?.[1].replace(/\s+/g, ' ').trim();
+  return name && name.length <= 40 ? name : null;
+}
+
 // the full name from another helper bot's reply or Pokétwo's catch line, variant included
 export function fullNameFrom(text: string): string | null {
   const first = text.split('\n').map((l) => l.replace(/[*_#>`~|]/g, '').trim()).find(Boolean) ?? '';
   const lead = /^[\p{L}\p{N} .'’:é♀♂()-]+/u.exec(first)?.[0].replace(/\s*\(.*$/, '').trim();
   if (!lead || !nameIn(lead)) return null;
   return lead.split(/\s+/).length > 4 ? nameIn(lead) : lead;
+}
+
+// an unsure guess says so up front, so nobody wastes a catch on it without thinking
+function maybeText(name: string, guess?: { p: number; others: string[] }, wrong: string[] = []) {
+  return [
+    `## 🤔 Maybe ${name}?`,
+    wrong.length ? `❌ Not ${wrong.join(', not ')}` : null,
+    `📋 Tap to copy: \`${catchLine(name)}\``,
+    `-# only ${Math.round((guess?.p ?? 0) * 100)}% sure${guess?.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}. It might be one of Pokétwo's special forms, I learn those once they're caught`,
+  ].filter(Boolean).join('\n');
 }
 
 function claimText(name: string, roles: string[], guess?: { p: number; others: string[] }) {
@@ -111,14 +131,14 @@ async function showNow(store: Store, m: Message, w: Waiting, name: string, guess
   }
   const base = baseOf(name);
   const roles: string[] = [];
-  if (!w.pinged) {
+  if (!w.pinged && !w.unsure) {
     if (rarityOf(base)) { const r = await rareRole(m.guild, store); if (r) roles.push(r.id); }
     for (const t of typesOf(base)) { const r = await typeRole(m.guild, store, t); if (r) roles.push(r.id); }
     w.pinged = true;
   }
   w.shown = name;
   w.sent = await ch.send({
-    content: claimText(name, roles, guess),
+    content: w.unsure ? maybeText(name, guess) : claimText(name, roles, guess),
     embeds: [pcCopy(name)],
     reply: { messageReference: w.id, failIfNotExists: false },
     allowedMentions: { roles },
@@ -131,6 +151,11 @@ async function confirm(store: Store, m: Message, w: Waiting, name: string, how: 
   w.confirmed = name;
   if (w.hash) learn(store, w.hash, name);
   if (w.vec) remember(store, w.vec, name);
+  // a form the dex doesn't have gets added for hints
+  if (!idOf(name)) {
+    const list = JSON.parse(store.getKv('p2:extra') ?? '[]') as string[];
+    if (!list.includes(name)) { list.push(name); store.setKv('p2:extra', JSON.stringify(list)); addExtra([name]); }
+  }
   if (w.image && !w.kept) { keepSpawn(w.image, name); w.kept = true; }
   logSpawn({ at: w.at, guess: w.guess, confirmed: name, how });
   if (how !== 'catch') await show(store, m, w, name);
@@ -149,6 +174,23 @@ async function onSpawn(store: Store, m: Message) {
     return;
   }
   if (which === 'p2') {
+    // someone tried the name on the card and Pokétwo said no: cross it out and offer the next one
+    if (w && w.sent && !w.confirmed && /wrong pok[eé]mon/i.test(m.content) && m.reference?.messageId) {
+      const tried = await m.channel.messages.fetch(m.reference.messageId).then((x) => /\b(?:c|catch)\s+(.+)$/i.exec(x.content)?.[1].trim() ?? null).catch(() => null);
+      if (tried && w.shown && tried.toLowerCase() === w.shown.toLowerCase()) {
+        w.wrong.push(w.shown);
+        const next = w.others.find((o) => !w.wrong.includes(o));
+        w.unsure = true;
+        w.shown = next ?? null;
+        await w.sent.edit({
+          content: next ? maybeText(next, { p: 0, others: w.others.filter((o) => o !== next && !w.wrong.includes(o)) }, w.wrong).replace(/only 0% sure/, 'next best guess')
+            : `## ❌ Not ${w.wrong.join(', not ')}\nThis looks like one of Pokétwo's special forms I haven't seen yet. Ask Pokétwo for a hint and I'll solve it, and once it's caught I'll know it next time.`,
+          embeds: next ? [pcCopy(next)] : [],
+          allowedMentions: { parse: [] },
+        }).catch(() => {});
+      }
+      return;
+    }
     // a hint: answer it, and if only one name fits, that's the spawn
     const hint = hintOf(m.content);
     if (hint) {
@@ -160,7 +202,7 @@ async function onSpawn(store: Store, m: Message) {
     // a catch: now the picture has a name for good
     const caught = /congratulations.*?you caught a (?:level|lvl\.?)\s*\d+\s+(.+)/i.exec(m.content);
     if (caught) {
-      const name = fullNameFrom(caught[1].replace(/<a?:\w+:\d+>/g, ' ').replace(/[!✨]/g, ' ')) ?? nameIn(caught[1]);
+      const name = catchName(m.content);
       if (w && name && Date.now() - w.at < 30 * 60_000) await confirm(store, m, w, name, 'catch');
       waiting.delete(m.channelId);
       if (/these colors seem unusual|shiny/i.test(m.content) && name && m.channel.isSendable() && store.rules(m.guild.id, 'spawns').enabled) {
@@ -182,7 +224,7 @@ async function onSpawn(store: Store, m: Message) {
   if (s.kind === 'p2') {
     // an unclaimed spawn that never got a name still goes in the log, so misses show up
     if (w && !w.confirmed) logSpawn({ at: w.at, guess: w.guess, confirmed: null, how: 'fled' });
-    const nw: Waiting = { id: m.id, channelId: m.channelId, hash: null, image: null, vec: null, at: Date.now(), guess: null, confirmed: null, sent: null, shown: null, pinged: false };
+    const nw: Waiting = { id: m.id, channelId: m.channelId, hash: null, image: null, vec: null, at: Date.now(), guess: null, confirmed: null, sent: null, shown: null, pinged: false, others: [], wrong: [], unsure: false };
     waiting.set(m.channelId, nw);
     const url = e?.image?.url ?? e?.image?.proxyURL ?? m.attachments.first()?.url ?? null;
     // a second try, Discord's CDN sometimes drops the first request
@@ -195,6 +237,9 @@ async function onSpawn(store: Store, m: Message) {
     if (nw.confirmed) { await show(store, m, nw, nw.confirmed); return; }
     const pick = decide(store, cls, seen);
     nw.guess = pick ? { name: pick.name, p: pick.p, how: pick.how } : null;
+    // a weak guess from the model alone is often one of Pokétwo's own event forms, so it's shown as a maybe and pings nobody
+    nw.unsure = !!pick && pick.how === 'model' && pick.p < 0.6;
+    nw.others = pick?.others ?? [];
     if (pick) await show(store, m, nw, pick.name, { p: pick.p, others: pick.others });
     return;
   }

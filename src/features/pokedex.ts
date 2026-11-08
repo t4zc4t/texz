@@ -39,13 +39,18 @@ export function hintOf(text: string): string | null {
   return m ? m[1].trim() : null;
 }
 
+// Pokétwo's own forms learned from catches, like Mosslax, so hints can find them too
+const extra = new Set<string>();
+export const addExtra = (names: string[]) => names.forEach((n) => extra.add(n));
+
 // names that fit a hint, underscores are unknown letters and everything else has to line up
 export function solve(pattern: string): { id: number; name: string }[] {
   const p = plain(pattern.trim());
   if (!p) return [];
   const blanks = p.includes('_');
   const re = new RegExp(`^${p.split('').map((c) => (c === '_' ? '.' : c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))).join('')}$`);
-  const hits = all().filter(([, n]) => (blanks ? re.test(plain(n)) : plain(n).includes(p)));
+  const pool: Row[] = [...all(), ...[...extra].filter((n) => !row(n)).map((n): Row => [0, n, ''])];
+  const hits = pool.filter(([, n]) => (blanks ? re.test(plain(n)) : plain(n).includes(p)));
   // without blanks it's a search, names that start with it first
   if (!blanks) hits.sort((a, b) => Number(!plain(a[1]).startsWith(p)) - Number(!plain(b[1]).startsWith(p)) || a[1].length - b[1].length);
   return hits.map(([id, name, , rare]) => ({ id, name, rare: rare ?? null }));

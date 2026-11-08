@@ -47,3 +47,11 @@ test('full names keep their variant', async () => {
   assert.equal(fullNameFrom('**Mr. Mime**'), 'Mr. Mime');
   assert.equal(fullNameFrom('Click to see attachment'), null);
 });
+
+test('catch lines give the exact name Pokétwo used', async () => {
+  const { catchName } = await import('../src/modules/spawns.ts');
+  assert.equal(catchName('Congratulations <@1>! You caught a Level 1 Mosslax♂ (48.39%)!'), 'Mosslax');
+  assert.equal(catchName('Congratulations <@1>! You caught a Level 11 Roaming Gimmighoul ❔ (46.77%)!'), 'Roaming Gimmighoul');
+  assert.equal(catchName('Congratulations <@1>! You caught a Level 14 Smoliv<:female:123> (53.76%)!'), 'Smoliv');
+  assert.equal(catchName('Congratulations <@1>! You caught a Level 9 ✨ Alolan Vulpix ♀ (12%)!'), 'Alolan Vulpix');
+});

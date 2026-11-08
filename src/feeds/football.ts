@@ -99,3 +99,40 @@ export function clubDot(t: Team) {
   return circles.reduce((best, cur) => (dist(cur[1], c) < dist(best[1], c) ? cur : best))[0];
 }
 const dist = (a: number[], b: number[]) => a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0);
+
+// every club in the big leagues with its crest, for the crest quiz
+interface EspnTeams { sports: { leagues: { teams: { team: { id: string; displayName: string; logos?: { href: string }[] } }[] }[] }[] }
+let clubs: { at: number; list: { name: string; logo: string; league: string }[] } | null = null;
+export async function allClubs() {
+  if (clubs && Date.now() - clubs.at < 24 * 3600_000) return clubs.list;
+  const out: { name: string; logo: string; league: string }[] = [];
+  for (const l of ['eng.1', 'esp.1', 'ita.1', 'ger.1', 'fra.1', 'usa.1', 'por.1', 'ned.1']) {
+    try {
+      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${l}/teams`, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) continue;
+      const j = (await res.json()) as EspnTeams;
+      for (const t of j.sports[0]?.leagues[0]?.teams ?? []) {
+        const logo = t.team.logos?.[0]?.href;
+        if (logo) out.push({ name: t.team.displayName, logo, league: leagues[l]?.name ?? l });
+      }
+    } catch { /* one league missing is fine */ }
+  }
+  if (out.length) clubs = { at: Date.now(), list: out };
+  return out;
+}
+
+// a crest and four clubs from the same league to pick from
+export async function crestQuestions() {
+  const list = await allClubs();
+  const shuffle = <T>(a: T[]) => a.map((x) => [Math.random(), x] as const).sort((p, q) => p[0] - q[0]).map(([, x]) => x);
+  return shuffle(list).slice(0, 40).map((c) => {
+    const others = shuffle(list.filter((o) => o.league === c.league && o.name !== c.name)).slice(0, 3).map((o) => o.name);
+    const options = shuffle([c.name, ...others]);
+    const big = isBigClub(c.name);
+    return {
+      id: `crest-${c.name}`, q: 'Whose crest is this?', options, answer: options.indexOf(c.name), image: c.logo,
+      explain: `That's **${c.name}**, ${c.league}.`, difficulty: big ? 'easy' : c.league === 'MLS' || c.league === 'Eredivisie' || c.league === 'Primeira Liga' ? 'hard' : 'medium',
+      category: c.league,
+    };
+  });
+}

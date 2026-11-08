@@ -6,6 +6,7 @@ import type { Bulletins, Feed, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { bar, card } from '../theme.js';
 import { pickDefault } from '../gifs.js';
+import { animeThisDay, footballThisDay } from '../feeds/thisday.js';
 import { picksOf } from './profile.js';
 import { f1Card, fixturesCard, matchCard, standingsCard, weekCard } from '../features/matchcard.js';
 import { report } from '../ops.js';
@@ -263,8 +264,8 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
       }
     }
   }
-  // on this day in F1, mid morning in India
-  if (d.getUTCHours() === 5) {
+  // on this day in F1, mid morning in India, or as soon as the bot is up after that
+  if (d.getUTCHours() >= 5) {
     const key = `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
     const list = (await onThisDay().catch(() => null))?.days[key] ?? [];
     if (list.length) {
@@ -412,6 +413,49 @@ async function animeTick(client: Client, store: Store, guilds: [string, Bulletin
   }
 }
 
+// football and anime history for the day, mid morning in India like the F1 one
+const dayLabel = (d = new Date()) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+
+export async function footballHistory() {
+  const { events, born } = await footballThisDay();
+  const fields = [
+    events.length ? { name: '📜 It happened today', value: events.slice(0, 4).map((e) => `**${e.year}** · ${e.text}`).join('\n').slice(0, 1024), inline: false } : null,
+    born.length ? { name: '🎂 Born today', value: born.slice(0, 6).map((e) => `**${e.year}** · ${e.text.split(',')[0]}${e.text.includes(',') ? ` · ${e.text.split(',').slice(1).join(',').trim()}` : ''}`).join('\n').slice(0, 1024), inline: false } : null,
+  ].filter((f): f is { name: string; value: string; inline: boolean } => !!f);
+  if (!fields.length) return null;
+  return card({ kind: 'fbDay', title: `On this day in football · ${dayLabel()}`, emoji: '📅', color: names.football.color, gif: 'off', line: '', body: '', fields });
+}
+
+export async function animeHistory() {
+  const { premieres, birthdays } = await animeThisDay();
+  const year = new Date().getUTCFullYear();
+  const fields = [
+    premieres.length ? { name: '🎬 First aired today', value: premieres.slice(0, 5).map((p) => `**[${p.title}](${p.url})** · ${p.year}, ${year - p.year} year${year - p.year === 1 ? '' : 's'} ago`).join('\n').slice(0, 1024), inline: false } : null,
+    birthdays.length ? { name: '🎂 Character birthdays', value: birthdays.slice(0, 6).map((c) => `**[${c.name}](${c.url})**${c.from ? ` · ${c.from}` : ''}`).join('\n').slice(0, 1024), inline: false } : null,
+  ].filter((f): f is { name: string; value: string; inline: boolean } => !!f);
+  if (!fields.length) return null;
+  const e = card({ kind: 'anDay', title: `On this day in anime · ${dayLabel()}`, emoji: '📅', color: names.anime.color, gif: 'off', line: '', body: '', fields });
+  const face = birthdays[0]?.image ?? premieres[0]?.cover;
+  if (face) e.setThumbnail(face);
+  return e;
+}
+
+async function historyTick(client: Client, store: Store, guilds: [string, Bulletins][]) {
+  const d = new Date();
+  if (d.getUTCHours() < 5) return;
+  const key = d.toISOString().slice(0, 10);
+  const fb = guilds.filter(([gid, b]) => b.football.on && b.football.channel && store.firstTime(gid, `fb:otd:${key}`));
+  if (fb.length) {
+    const e = await footballHistory().catch(() => null);
+    if (e) for (const [, b] of fb) await post(client, b.football, { embed: e, react: ['⚽'] });
+  }
+  const an = guilds.filter(([gid, b]) => b.anime.on && b.anime.channel && store.firstTime(gid, `an:otd:${key}`));
+  if (an.length) {
+    const e = await animeHistory().catch(() => null);
+    if (e) for (const [, b] of an) await post(client, b.anime, { embed: e, react: ['🎂', '📺'] });
+  }
+}
+
 export function startBulletins(client: Client, store: Store) {
   const tick = async () => {
     const guilds = [...client.guilds.cache.keys()].filter((id) => store.rules(id, 'bulletins').enabled).map((id) => [id, store.guild(id).bulletins] as [string, Bulletins]);
@@ -419,6 +463,7 @@ export function startBulletins(client: Client, store: Store) {
     await f1Tick(client, store, guilds).catch((e) => report('f1 feed', e));
     await footballTick(client, store, guilds).catch((e) => report('football feed', e));
     await animeTick(client, store, guilds).catch((e) => report('anime feed', e));
+    await historyTick(client, store, guilds).catch((e) => report('history feed', e));
     store.forgetOldSent(Date.now() - 30 * 24 * HOUR);
   };
   setInterval(() => void tick(), 10 * 60_000);
@@ -495,7 +540,31 @@ const asView = (name: string, view: string, about: string, aliases: string[]): C
 });
 export const f1Quiz = asView('quiz', 'quiz', 'F1 quiz, first right answer wins yen', ['f1quiz', 'fq']);
 export const f1Trivia = asView('trivia', 'trivia', 'A random bit of F1 trivia', ['fact', 'f1fact']);
-export const f1Today = asView('onthisday', 'today', 'What happened in F1 on this day', ['otd']);
+const f1Story = asView('f1otd', 'today', 'What happened in F1 on this day', []);
+// history for today: F1 from Parc Fermé, football from Wikipedia, anime from AniList
+export const f1Today: Command = {
+  name: 'onthisday',
+  group: 'fun',
+  data: new SlashCommandBuilder().setName('onthisday').setDescription('F1, football and anime history for today')
+    .addStringOption((o) => o.setName('topic').setDescription('Which one').addChoices({ name: 'F1', value: 'f1' }, { name: 'football', value: 'football' }, { name: 'anime', value: 'anime' })).toJSON(),
+  text: { aliases: ['otd', 'history'], args: ['topic'] },
+  run: async (ctx, store) => {
+    const topic = (ctx.str('topic') ?? '').toLowerCase();
+    if (topic.startsWith('f1')) return f1Story.run(ctx, store);
+    const which = topic.startsWith('foot') || topic.startsWith('soc') ? 'football' : topic.startsWith('ani') ? 'anime' : null;
+    const embeds = (await Promise.all([
+      !which || which === 'football' ? footballHistory().catch(() => null) : null,
+      !which || which === 'anime' ? animeHistory().catch(() => null) : null,
+    ])).filter((e): e is EmbedBuilder => !!e);
+    if (!embeds.length) return ctx.reply('Nothing on file for today, or the history books are closed for a minute. Try again soon.');
+    const buttons = row(
+      new ButtonBuilder().setCustomId(`nav|onthisday|owner=${ctx.userId},topic=f1`).setLabel('F1').setEmoji('🏎️').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`nav|onthisday|owner=${ctx.userId},topic=football`).setLabel('Football').setEmoji('⚽').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`nav|onthisday|owner=${ctx.userId},topic=anime`).setLabel('Anime').setEmoji('📺').setStyle(ButtonStyle.Secondary),
+    );
+    return ctx.reply({ embeds, components: [buttons] });
+  },
+};
 
 const football: Command = {
   name: 'football',

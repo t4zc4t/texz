@@ -9,7 +9,8 @@ import { winsOf } from '../modules/f1quiz.js';
 export const menu: Record<string, [string, string, string?]> = {
   poll: ['📊', 'Start a poll'], choose: ['🎯', 'Pick for me'], roll: ['🎲', 'Roll dice'], coin: ['🪙', 'Flip a coin'],
   ship: ['💞', 'Ship test'], '8ball': ['🎱', 'Magic 8ball'], guess: ['🔎', 'Guess the anime', 'A picture, four names, first right answer wins yen'],
-  quiz: ['🏁', 'F1 quiz', '20 seconds, one try each, harder questions pay more'], trivia: ['🗞️', 'F1 trivia'], onthisday: ['📅', 'On this day in F1'],
+  quiz: ['🏁', 'F1 quiz', '20 seconds, one try each, harder questions pay more'], trivia: ['🗞️', 'F1 trivia'], onthisday: ['📅', 'On this day', 'F1, football and anime history for today'],
+  crestquiz: ['🛡️', 'Crest quiz', 'Guess the club from its crest, pays yen'],
   spawns: ['🃏', 'Spawn pings', 'Pokétwo, and Shoob by tier'], pokemon: ['🔎', 'Who\'s that pokémon', 'Solve a Pokétwo hint like p_k_ch_'],
   daily: ['💴', 'Daily yen'], balance: ['👛', 'Balance'], give: ['💸', 'Give yen'], rich: ['🏆', 'Richest'],
   'roleshop.view': ['🛍️', 'Role shop'], 'roleshop.buy': ['🛒', 'Buy a role'], 'roleshop.add': ['➕', 'Stock the shop'], 'roleshop.remove': ['➖', 'Take a role off sale'],
@@ -33,11 +34,11 @@ export const menu: Record<string, [string, string, string?]> = {
 // sections and the quick buttons of each generic dashboard
 export const layout: Record<string, { sections: [string, string[]][]; quick: string[] }> = {
   fun: {
-    sections: [['🏆 Games that pay yen', ['quiz', 'guess']], ['🎉 For the channel', ['ship', 'poll', 'trivia', 'onthisday']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']], ['🔔 Spawns', ['spawns', 'pokemon']]],
-    quick: ['quiz', 'guess', 'ship', 'spawns', 'roll'],
+    sections: [['🏆 Games that pay yen', ['quiz', 'crestquiz', 'guess']], ['🎉 For the channel', ['ship', 'poll', 'trivia', 'onthisday']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']], ['🔔 Spawns', ['spawns', 'pokemon']]],
+    quick: ['quiz', 'crestquiz', 'guess', 'onthisday', 'ship'],
   },
   eco: {
-    sections: [['👛 Your yen', ['daily', 'balance', 'give', 'rich']], ['🛍️ Role shop', ['roleshop.view', 'roleshop.buy', 'roleshop.add', 'roleshop.remove']], ['🏆 Earn more', ['quiz', 'guess']]],
+    sections: [['👛 Your yen', ['daily', 'balance', 'give', 'rich']], ['🛍️ Role shop', ['roleshop.view', 'roleshop.buy', 'roleshop.add', 'roleshop.remove']], ['🏆 Earn more', ['quiz', 'crestquiz', 'guess']]],
     quick: ['daily', 'balance', 'rich', 'roleshop.view', 'quiz'],
   },
   levels: {
