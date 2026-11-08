@@ -1,4 +1,5 @@
 import {
+  type Client,
   ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits, type MessageActionRowComponentBuilder,
   type ButtonInteraction, type ChatInputCommandInteraction, type ModalSubmitInteraction, type Guild, type GuildMember, type Message, type StringSelectMenuInteraction,
 } from 'discord.js';
@@ -20,6 +21,10 @@ export interface Ctx {
   isAdmin: boolean;
   viaText: boolean;
   latency(): number;
+  client: Client;
+  displayName: string;
+  // the message a typed command replied to, if any
+  replyTo?: () => Promise<Message | null>;
   sub(): string | null;
   str(name: string): string | null;
   int(name: string): number | null;
@@ -49,6 +54,8 @@ export function fromSlash(i: ChatInputCommandInteraction, sub?: string | null): 
     isAdmin: !!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild),
     viaText: false,
     latency: () => i.client.ws.ping,
+    client: i.client,
+    displayName: (i.member && 'displayName' in i.member ? (i.member as GuildMember).displayName : null) ?? i.user.displayName,
     sub: () => (sub === undefined ? i.options.getSubcommand(false) : sub),
     str: (n) => i.options.getString(n),
     int: (n) => i.options.getInteger(n),
@@ -78,6 +85,8 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
     isAdmin: !!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild),
     viaText: true,
     latency: () => i.client.ws.ping,
+    client: i.client,
+    displayName: (i.member && 'displayName' in i.member ? (i.member as GuildMember).displayName : null) ?? i.user.displayName,
     sub: () => opts.sub ?? null,
     str: (n) => opts[n] ?? null,
     int: (n) => (opts[n] ? Number.parseInt(opts[n], 10) : null),
@@ -134,6 +143,9 @@ export function fromText(m: Message, tokens: string[], argNames: string[], hasSu
     isAdmin: !!m.member?.permissions.has(PermissionFlagsBits.ManageGuild),
     viaText: true,
     latency: () => m.client.ws.ping,
+    client: m.client,
+    displayName: m.member?.displayName ?? m.author.displayName,
+    replyTo: async () => (m.reference?.messageId ? m.fetchReference().catch(() => null) : null),
     sub: () => sub,
     str: (n) => values.get(n) ?? null,
     int: (n) => {

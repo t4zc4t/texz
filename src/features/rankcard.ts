@@ -6,6 +6,7 @@ const fontDir = fileURLToPath(new URL('../../assets/fonts/', import.meta.url));
 GlobalFonts.registerFromPath(`${fontDir}inter-latin-400-normal.woff2`, 'Texz Sans');
 GlobalFonts.registerFromPath(`${fontDir}inter-latin-700-normal.woff2`, 'Texz Sans Bold');
 GlobalFonts.registerFromPath(`${fontDir}cinzel-latin-700-normal.woff2`, 'Texz Serif');
+GlobalFonts.registerFromPath(`${fontDir}playfair-display-latin-400-italic.woff2`, 'Texz Quote');
 
 const SAND = '#c2a46e';
 const SAND_DEFAULT = SAND;
@@ -169,7 +170,7 @@ export async function rankCard(d: RankCardData): Promise<Buffer> {
 // avatars come from Discord's CDN, a slow or failed fetch just means the letter fallback
 export async function fetchAvatar(url: string): Promise<Buffer | null> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
     return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
   } catch {
     return null;
@@ -341,5 +342,53 @@ export async function quoteCard(d: QuoteData): Promise<Buffer> {
     ctx.drawImage(img, left, y, imgW, imgH);
     ctx.restore();
   }
+  return c.toBuffer('image/png');
+}
+
+// the classic one: their face in black and white fading into the dark, the words in italics on the right
+export async function classicQuote(d: { name: string; handle: string; text: string; avatar: Buffer | null; at: number }): Promise<Buffer> {
+  const W = 1200, H = 630;
+  const c = createCanvas(W, H);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+  const av = d.avatar ? await loadImage(d.avatar).catch(() => null) : null;
+  if (av) {
+    ctx.drawImage(av, 0, 0, H, H);
+    // grey it out
+    const px = ctx.getImageData(0, 0, H, H);
+    for (let i = 0; i < px.data.length; i += 4) {
+      const g = px.data[i] * 0.299 + px.data[i + 1] * 0.587 + px.data[i + 2] * 0.114;
+      px.data[i] = px.data[i + 1] = px.data[i + 2] = g;
+    }
+    ctx.putImageData(px, 0, 0);
+    const fade = ctx.createLinearGradient(H * 0.35, 0, H, 0);
+    fade.addColorStop(0, 'rgba(0,0,0,0)');
+    fade.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, 0, H, H);
+  }
+  // the words, as big as they can be while still fitting
+  const box = { x: 600, w: 540, top: 70, bottom: H - 150 };
+  let size = 54, lines: string[] = [];
+  for (; size >= 22; size -= 2) {
+    ctx.font = `${size}px "Texz Quote", serif`;
+    lines = wrap(ctx, d.text, box.w, 40);
+    if (lines.length * size * 1.3 <= box.bottom - box.top) break;
+  }
+  const lh = size * 1.3;
+  let y = box.top + (box.bottom - box.top - lines.length * lh) / 2 + size;
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  for (const l of lines) { ctx.fillText(l, box.x + box.w / 2, y); y += lh; }
+  ctx.font = '30px "Texz Quote", serif';
+  ctx.fillText(`- ${d.name}`, box.x + box.w / 2, H - 100);
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '20px "Texz Sans", sans-serif';
+  ctx.fillText(`@${d.handle}`, box.x + box.w / 2, H - 68);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = '14px "Texz Sans", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('Texz', W - 20, H - 16);
   return c.toBuffer('image/png');
 }

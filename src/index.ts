@@ -18,7 +18,7 @@ import { sweepQuiz } from './modules/f1quiz.js';
 import { watchSpawns } from './modules/spawns.js';
 import { warmModel } from './features/pokemodel.js';
 import { startBulletins } from './modules/bulletins.js';
-import { onQuote } from './modules/quote.js';
+import { onQuote, QUOTE_MENU } from './modules/quote.js';
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) throw new Error('DISCORD_TOKEN is missing, copy .env.example to .env and fill it in');
@@ -79,7 +79,7 @@ client.once(Events.ClientReady, (c) => {
 
 client.on(Events.InteractionCreate, (i) => {
   if (i.isChatInputCommand()) void onSlash(store, i);
-  else if (i.isMessageContextMenuCommand() && i.commandName === 'Quote') void onQuote(store, i).catch((e) => report('quote', e));
+  else if (i.isMessageContextMenuCommand() && (i.commandName === QUOTE_MENU || i.commandName === 'Quote')) void onQuote(store, i).catch((e) => report('quote', e));
   else void onComponent(store, i);
 });
 
