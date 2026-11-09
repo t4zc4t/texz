@@ -7,7 +7,7 @@ import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { bar, card } from '../theme.js';
 import { picksOf, savePicks } from './profile.js';
-import { TYPES, addExtra, allSpecies, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeMark, typesOf } from '../features/pokedex.js';
+import { TYPES, addExtra, allSpecies, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
 import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize, recognise, remember, type Sparse } from '../features/pokeid.js';
 import { classify, keepSpawn, seedMemory } from '../features/pokemodel.js';
 
@@ -112,7 +112,7 @@ function claimText(name: string, roles: string[], guess?: { p: number; others: s
   const why = [rare && rareMark[rare], ...types].filter(Boolean).join(' · ');
   return [
     roles.length ? `${roles.map((r) => `<@&${r}>`).join(' ')} ${why} spawn, be quick` : null,
-    `## ${rare ? '🌟 ' : ''}${name}  ${types.map((t) => typeMark[t] ?? '').join('')}`,
+    `## ${rare ? '🌟 ' : ''}${name}  ${types.map((t) => typeIcon(t)).join('')}`,
     `${rare ? `**${rareMark[rare]}** · ` : ''}${types.join(' · ')}${fresh ? ' · 🆕 **not caught here yet!**' : ''}`,
     `📋 Tap to copy: \`${catchLine(catchFor(name))}\``,
     guess && guess.p < 0.85 ? `-# ${Math.round(guess.p * 100)}% sure${guess.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}` : null,
@@ -351,7 +351,7 @@ function answer(pattern: string, fits: { id: number; name: string }[]) {
   if (fits.length === 1) {
     const f = fits[0];
     const types = typesOf(f.name);
-    return { content: `## ${f.name}  ${types.map((t) => typeMark[t] ?? '').join('')}\n#${f.id} · ${types.join(' · ')}${rarityOf(f.name) ? ` · ${rareMark[rarityOf(f.name)!]}` : ''}\n📋 Tap to copy: \`${catchLine(f.name)}\``, embeds: [pcCopy(f.name)] };
+    return { content: `## ${f.name}  ${types.map((t) => typeIcon(t)).join('')}\n#${f.id} · ${types.join(' · ')}${rarityOf(f.name) ? ` · ${rareMark[rarityOf(f.name)!]}` : ''}\n📋 Tap to copy: \`${catchLine(f.name)}\``, embeds: [pcCopy(f.name)] };
   }
   return { content: `🔎 Could be ${fits.map((f) => `**${f.name}**`).join(', ')}\n${fits.slice(0, 4).map((f) => `📋 \`${catchLine(f.name)}\``).join('\n')}` };
 }
@@ -383,7 +383,7 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
     kind: 'help', title: 'Spawn pings', emoji: '🎯', gif: 'off',
     body: [
       `${p2 ? '🟢' : '⚫'} 🌟 **Pokétwo rare spawns** · legendary, mythical and ultra beasts only`,
-      `${myTypes.length ? '🟢' : '⚫'} 🧬 **Pokétwo types** · ${myTypes.length ? myTypes.map((t) => `${typeMark[t]} ${t}`).join(' ') : 'none picked, handy when a quest wants a type'}`,
+      `${myTypes.length ? '🟢' : '⚫'} 🧬 **Pokétwo types** · ${myTypes.length ? myTypes.map((t) => `${typeIcon(t)} ${t}`).join(' ') : 'none picked, handy when a quest wants a type'}`,
       `🔎 **Claim help** · I read every spawn picture, and remember **${memorySize(store)}** confirmed spawns so variants come out right, plus I solve hints`,
       `${mine.length ? '🟢' : '⚫'} 🃏 **Shoob** · ${mine.length ? mine.map((t) => `${tierMark[t]} T${t}`).join(' ') : 'no tiers picked'}`,
       '',
@@ -399,7 +399,7 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
     components: [
       row(new ButtonBuilder().setCustomId('spw|p2').setLabel(p2 ? 'Stop rare spawn pings' : 'Ping me for rare spawns').setEmoji('🌟').setStyle(p2 ? ButtonStyle.Success : ButtonStyle.Secondary)),
       row(new StringSelectMenuBuilder().setCustomId('spw|types').setPlaceholder('🧬 Which Pokétwo types ping you').setMinValues(0).setMaxValues(TYPES.length)
-        .addOptions(TYPES.map((t) => ({ label: t, value: t, emoji: typeMark[t], default: myTypes.includes(t) })))),
+        .addOptions(TYPES.map((t) => ({ label: t, value: t, emoji: typeEmoji(t), default: myTypes.includes(t) })))),
       row(new StringSelectMenuBuilder().setCustomId('spw|tiers').setPlaceholder('🃏 Which Shoob tiers ping you').setMinValues(0).setMaxValues(TIERS.length)
         .addOptions(TIERS.map((t) => ({ label: `Tier ${t}`, value: t, emoji: tierMark[t], default: mine.includes(t as never) })))),
     ],
@@ -541,7 +541,7 @@ async function pingsPanel(store: Store, guild: Guild, userId: string) {
     const on = has(store.getKv(`spawnrole:${guild.id}:p2rare`));
     lines.push(`${mark(on)} 🌟 **Rare Pokétwo spawns** · legendary, mythical, ultra beasts`);
     const types = TYPES.filter((t) => has(store.getKv(`spawnrole:${guild.id}:p2type:${t}`)));
-    lines.push(`${mark(types.length > 0)} 🧬 **Pokétwo types** · ${types.length ? types.map((t) => typeMark[t]).join(' ') : 'none, pick them on the spawn page'}`);
+    lines.push(`${mark(types.length > 0)} 🧬 **Pokétwo types** · ${types.length ? types.map((t) => typeIcon(t)).join(' ') : 'none, pick them on the spawn page'}`);
     buttons.push(new ButtonBuilder().setCustomId('pg|p2').setLabel('Rare pokémon').setEmoji('🌟').setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary));
     const tiers = TIERS.filter((t) => has(store.getKv(`spawnrole:${guild.id}:t${t}`)));
     lines.push(`${mark(tiers.length > 0)} 🃏 **Shoob** · ${tiers.length ? tiers.map((t) => `${tierMark[t]} T${t}`).join(' ') : 'no tiers picked'}`);

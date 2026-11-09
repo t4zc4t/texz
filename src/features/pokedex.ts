@@ -18,6 +18,10 @@ export const typeMark: Record<string, string> = {
   Normal: '⚪', Fire: '🔥', Water: '💧', Grass: '🌿', Electric: '⚡', Ice: '❄️', Fighting: '🥊', Poison: '☠️', Ground: '⛰️',
   Flying: '🪶', Psychic: '🔮', Bug: '🐛', Rock: '🪨', Ghost: '👻', Dragon: '🐉', Dark: '🌑', Steel: '⚙️', Fairy: '🧚',
 };
+// the Pokémon HOME type badges, uploaded as app emoji at startup, the plain ones stand in until then
+export const typeIcons: Record<string, { id: string; name: string }> = {};
+export const typeIcon = (t: string) => (typeIcons[t] ? `<:${typeIcons[t].name}:${typeIcons[t].id}>` : typeMark[t] ?? '');
+export const typeEmoji = (t: string) => typeIcons[t] ?? typeMark[t];
 export const idOf = (name: string) => row(name)?.[0] ?? null;
 // the plain species name for a dex number, the first entry is never a regional form
 export const nameById = (id: number) => all().find(([i]) => i === id)?.[1] ?? null;

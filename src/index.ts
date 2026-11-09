@@ -18,6 +18,7 @@ import { sweepQuiz } from './modules/f1quiz.js';
 import { watchSpawns } from './modules/spawns.js';
 import { fixRankOrder } from './modules/levels.js';
 import { warmModel } from './features/pokemodel.js';
+import { loadTypeIcons } from './features/typeicons.js';
 import { startBulletins } from './modules/bulletins.js';
 import { onQuote, QUOTE_MENU, startQuoteOfWeek } from './modules/quote.js';
 
@@ -61,6 +62,7 @@ client.once(Events.ClientReady, (c) => {
   startDailyCharacter(client, store);
   watchSpawns(client, store);
   warmModel();
+  void loadTypeIcons(client).catch((e) => report('type icons', e));
   startQuoteOfWeek(client, store);
   startHealth(client, store);
   sweepQuiz(async (id, payload) => {
