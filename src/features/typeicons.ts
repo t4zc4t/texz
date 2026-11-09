@@ -10,7 +10,7 @@ const FILES: Record<string, string> = {
 const nameOf = (t: string) => `t_${t.toLowerCase()}`;
 
 // app emoji work in every server, so they are made once and reused
-export async function loadTypeIcons(client: Client) {
+export async function loadTypeIcons(client: Client, tries = 3): Promise<void> {
   const app = client.application;
   if (!app) return;
   const have = await app.emojis.fetch().catch(() => null);
@@ -27,4 +27,6 @@ export async function loadTypeIcons(client: Client) {
     }
     typeIcons[type] = { id: e.id, name };
   }
+  // one that failed to download gets another go a minute later
+  if (Object.keys(typeIcons).length < Object.keys(FILES).length && tries > 1) setTimeout(() => void loadTypeIcons(client, tries - 1).catch(() => {}), 60_000);
 }
