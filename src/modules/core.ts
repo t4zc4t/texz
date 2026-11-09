@@ -1,3 +1,4 @@
+import { servers } from './servers.js';
 import { ActionRowBuilder, ChannelType, PermissionFlagsBits, SlashCommandBuilder, StringSelectMenuBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
 import { defaultRules, type Store } from '../db.js';
 import { slashPath, type Command, type Module } from '../core/module.js';
@@ -273,6 +274,6 @@ export const core: Module = {
   label: 'Core',
   about: 'Help, server settings and the basics',
   locked: true,
-  commands: [help, setup, ping, config],
+  commands: [help, setup, ping, config, servers],
 };
 

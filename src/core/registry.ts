@@ -10,6 +10,7 @@ import { owo } from '../modules/owo.js';
 import { anime, onAnimeComponent, onGuess } from '../modules/anime.js';
 import { onF1Quiz } from '../modules/f1quiz.js';
 import { onPredict } from '../modules/predict.js';
+import { onOwnerButton, onOwnerConfirm } from '../modules/servers.js';
 import { economy } from '../modules/economy.js';
 import { bulletins, onBulletinButton } from '../modules/bulletins.js';
 import { onWatchlist } from '../modules/watchlist.js';
@@ -293,6 +294,8 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onPingsButton(store, i)) return;
     if (await onCatchCopy(i)) return;
     if (await onPredict(store, i)) return;
+    if (await onOwnerButton(i)) return;
+    if (await onOwnerConfirm(i)) return;
     if (await onProfileEdit(store, i)) return;
     if (await onShip(i)) return;
     if (await onBulletinButton(i, store)) return;
