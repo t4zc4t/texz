@@ -66,16 +66,54 @@ export function boostsFor(l: LevelRules, member: GuildMember | null, channelId: 
   return { parts, total };
 }
 
-// gives earned reward roles and takes away ones above the level, or below the top one when they don't stack
+// which reward roles someone at this level should hold: only the highest one, or all of them when the server stacks them
+export function rolesToKeep(rewards: Record<string, string>, level: number, stack: boolean): Set<string> {
+  const earned = Object.entries(rewards).map(([lvl, id]) => ({ lvl: Number(lvl), id })).filter((r) => r.lvl <= level);
+  if (stack) return new Set(earned.map((r) => r.id));
+  const top = earned.sort((a, b) => b.lvl - a.lvl)[0];
+  return new Set(top ? [top.id] : []);
+}
+
+// gives the earned reward role and takes the lower ones away, the new one is added first so nobody is left rankless
 export async function syncRewards(member: GuildMember, l: LevelRules, level: number) {
-  const earned = Object.entries(l.rewards).map(([lvl, id]) => ({ lvl: Number(lvl), id })).filter((r) => member.guild.roles.cache.has(r.id));
-  const top = Math.max(-1, ...earned.filter((r) => r.lvl <= level).map((r) => r.lvl));
-  for (const r of earned) {
-    const keep = r.lvl <= level && (l.stack || r.lvl === top);
-    const has = member.roles.cache.has(r.id);
-    if (keep && !has) await member.roles.add(r.id, `level ${r.lvl} reward`).catch(() => {});
-    if (!keep && has) await member.roles.remove(r.id, 'level reward no longer earned').catch(() => {});
+  const keep = rolesToKeep(l.rewards, level, l.stack);
+  const all = Object.values(l.rewards).filter((id) => member.guild.roles.cache.has(id));
+  for (const id of all) if (keep.has(id) && !member.roles.cache.has(id)) await member.roles.add(id, `level ${level} reward`).catch(() => {});
+  for (const id of all) if (!keep.has(id) && member.roles.cache.has(id)) await member.roles.remove(id, 'only the highest rank is kept').catch(() => {});
+}
+
+// with one rank role each, a higher rank has to carry every permission the ranks under it gave
+export function carriedPerms(chain: bigint[]): bigint[] {
+  let sum = 0n;
+  return chain.map((p) => (sum |= p));
+}
+export async function carryRankPerms(guild: Guild, rewards: Record<string, string>) {
+  const me = await guild.members.fetchMe().catch(() => null);
+  if (!me) return;
+  const ranked = Object.entries(rewards).map(([lvl, id]) => ({ lvl: Number(lvl), role: guild.roles.cache.get(id) }))
+    .filter((x): x is { lvl: number; role: NonNullable<typeof x.role> } => !!x.role && x.role.position < me.roles.highest.position && !x.role.managed)
+    .sort((a, b) => a.lvl - b.lvl);
+  // a bot can only hand out permissions it has itself
+  const want = carriedPerms(ranked.map((x) => x.role.permissions.bitfield & me.permissions.bitfield));
+  for (const [n, x] of ranked.entries()) {
+    const next = x.role.permissions.bitfield | want[n];
+    if (next !== x.role.permissions.bitfield) await x.role.setPermissions(next, 'carries the lower rank perms').catch(() => {});
   }
+}
+
+// people holding more than the one rank role they should, from before only the highest was kept
+export async function tidyRanks(store: Store, guild: Guild) {
+  const l = store.guild(guild.id).levels;
+  if (l.stack || Object.keys(l.rewards).length < 2) return 0;
+  await guild.members.fetch().catch(() => null);
+  const ids = new Set(Object.values(l.rewards));
+  let fixed = 0;
+  for (const member of guild.members.cache.values()) {
+    if (member.user.bot || member.roles.cache.filter((r) => ids.has(r.id)).size < 2) continue;
+    await syncRewards(member, l, levelOf(store.xpOf(guild.id, member.id).xp).level);
+    fixed++;
+  }
+  return fixed;
 }
 
 export async function announce(store: Store, member: GuildMember, was: number, now: number, fallback: Message['channel'] | null) {

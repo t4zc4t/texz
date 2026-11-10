@@ -28,3 +28,17 @@ test('rank roles end up in level order right under the bot', async () => {
   assert.equal(p('legend'), p('bot') - 1);
   assert.ok(p('member') < p('stray') && p('vip') < p('stray'));
 });
+
+test('only the highest earned rank role is kept unless the server stacks them', async () => {
+  const { rolesToKeep } = await import('../src/modules/levels.ts');
+  const rewards = { 3: 'visitor', 10: 'junior', 20: 'senior' };
+  assert.deepEqual([...rolesToKeep(rewards, 15, false)], ['junior']);
+  assert.deepEqual([...rolesToKeep(rewards, 2, false)], []);
+  assert.deepEqual([...rolesToKeep(rewards, 25, false)], ['senior']);
+  assert.deepEqual([...rolesToKeep(rewards, 15, true)].sort(), ['junior', 'visitor']);
+});
+
+test('a higher rank carries every permission of the ranks below it', async () => {
+  const { carriedPerms } = await import('../src/modules/levels.ts');
+  assert.deepEqual(carriedPerms([1n, 4n, 0n, 16n]), [1n, 5n, 5n, 21n]);
+});

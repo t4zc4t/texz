@@ -16,7 +16,7 @@ import { startServerTimers } from './modules/server.js';
 import { startDailyCharacter } from './modules/anime.js';
 import { sweepQuiz } from './modules/f1quiz.js';
 import { watchSpawns } from './modules/spawns.js';
-import { fixRankOrder } from './modules/levels.js';
+import { carryRankPerms, fixRankOrder, tidyRanks } from './modules/levels.js';
 import { warmModel } from './features/pokemodel.js';
 import { loadTypeIcons } from './features/typeicons.js';
 import { startBulletins } from './modules/bulletins.js';
@@ -45,7 +45,19 @@ client.once(Events.ClientReady, (c) => {
   console.log(`texz online as ${c.user.tag}`);
   look.avatar = c.user.displayAvatarURL();
   // rank roles drift when people add or move roles, so they're put back in order on every start and once a day
-  const reorder = () => { for (const guild of c.guilds.cache.values()) { const g = store.guild(guild.id); if (store.rules(guild.id, 'levels').enabled && Object.keys(g.levels.rewards).length > 1) void fixRankOrder(guild, g.levels.rewards).catch(() => {}); } };
+  const reorder = () => {
+    for (const guild of c.guilds.cache.values()) {
+      const g = store.guild(guild.id);
+      if (!store.rules(guild.id, 'levels').enabled || Object.keys(g.levels.rewards).length < 2) continue;
+      // servers from before keep only the highest rank now
+      if (!store.getKv(`ranks:single:${guild.id}`)) { store.setKv(`ranks:single:${guild.id}`, '1'); g.levels.stack = false; store.saveGuild(guild.id, g); }
+      void (async () => {
+        await fixRankOrder(guild, g.levels.rewards);
+        if (!g.levels.stack) await carryRankPerms(guild, g.levels.rewards);
+        await tidyRanks(store, guild);
+      })().catch((e) => report('rank roles', e));
+    }
+  };
   setTimeout(reorder, 30_000).unref?.();
   setInterval(reorder, 24 * 3600_000).unref?.();
   // look up every gif link once so cards can show them straight away

@@ -110,7 +110,7 @@ export interface LevelRules {
 }
 
 export const defaultLevels = (): LevelRules => ({
-  channel: null, announce: true, rewards: {}, min: 15, max: 25, cooldown: 60, stack: true, message: null,
+  channel: null, announce: true, rewards: {}, min: 15, max: 25, cooldown: 60, stack: false, message: null,
   boost: null, weekend: 1, roleBoosts: {}, channelBoosts: {}, noXpChannels: [], noXpRoles: [],
 });
 
