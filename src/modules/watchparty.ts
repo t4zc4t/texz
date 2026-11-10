@@ -3,6 +3,7 @@ import type { Command } from '../core/module.js';
 import { searchMedia } from '../anime/anilist.js';
 import { card } from '../theme.js';
 import { parseWhen } from './server.js';
+import { track } from './missions.js';
 
 // a watch party: a server event, a ping for everyone who has the show on their list, and a spoiler thread for after
 export const watchparty: Command = {
@@ -39,7 +40,9 @@ export const watchparty: Command = {
     const e = card({ kind: 'anDay', title: `🍿 ${title} watch party`, emoji: '', gif: 'off', line: '',
       body: `<t:${Math.floor(at / 1000)}:F> · <t:${Math.floor(at / 1000)}:R>\nHosted by <@${ctx.userId}>${event ? `\n[Join the event](${event.url})` : ''}\n-# talk spoilers in the thread under this message, not in the channel` }).setURL(media.siteUrl);
     if (media.coverImage?.large) e.setThumbnail(media.coverImage.large);
-    await ctx.reply({ content: fans.length ? `${fans.map((u) => `<@${u}>`).join(' ')} it's on your list, come watch` : undefined, embeds: [e], ping: fans, public: true });
+    const extra = track(store, ctx.guildId, ctx.userId, 'watchparty');
+    const lines = [fans.length ? `${fans.map((u) => `<@${u}>`).join(' ')} it's on your list, come watch` : null, ...extra].filter(Boolean).join('\n');
+    await ctx.reply({ content: lines || undefined, embeds: [e], ping: fans, public: true });
     // the spoiler thread hangs off the announcement
     const ch = ctx.guild.channels.cache.get(ctx.channelId);
     if (ch?.isTextBased() && 'messages' in ch) {

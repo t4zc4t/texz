@@ -6,6 +6,7 @@ import {
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { bar, card } from '../theme.js';
+import { fixText } from '../core/fixes.js';
 import { picksOf, savePicks } from './profile.js';
 import { TYPES, addExtra, allSpecies, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
 import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize, recognise, remember, type Sparse } from '../features/pokeid.js';
@@ -230,6 +231,7 @@ async function onSpawn(store: Store, m: Message) {
           ...track(store, m.guild.id, catcher, 'catch'),
           ...typesOf(baseOf(name)).flatMap((t) => track(store, m.guild!.id, catcher, `catchType:${t}`)),
           ...(rarityOf(baseOf(name)) ? track(store, m.guild.id, catcher, 'catchRare') : []),
+          ...(/these colors seem unusual|shiny/i.test(m.content) ? track(store, m.guild.id, catcher, 'catchShiny') : []),
         ];
         if (extra.length && m.channel.isSendable()) await m.channel.send({ content: extra.join('\n'), allowedMentions: { users: [catcher] } }).catch(() => {});
       }
@@ -524,7 +526,12 @@ export async function onSpawnButton(store: Store, i: Interaction) {
       ok = await (want ? member.roles.add(role) : member.roles.remove(role)).then(() => ok).catch(() => false);
     }
   }
-  if (!ok) { await i.reply({ content: 'I couldn\'t change that role. I need Manage Roles and my role above the spawn roles.', flags: MessageFlags.Ephemeral }); return true; }
+  if (!ok) {
+    const spawnRoles = store.kvByPrefix(`spawnrole:${i.guild.id}:`).map((x) => x.value);
+    const fix = fixText(i.guild, { perms: ['ManageRoles'], roles: spawnRoles, doing: 'hand out spawn roles' }) ?? 'I couldn\'t change that role, Discord said no. Try again in a moment.';
+    await i.reply({ content: fix, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+    return true;
+  }
   const page = await spawnsPage(store, i.guild, i.user.id);
   const theirs = i.message.interactionMetadata?.user.id === i.user.id || i.message.mentions.repliedUser?.id === i.user.id || i.message.flags.has(MessageFlags.Ephemeral);
   if (theirs) await i.update(page);
@@ -563,6 +570,12 @@ async function pingsPanel(store: Store, guild: Guild, userId: string) {
   if (store.rules(guild.id, 'owo').enabled) {
     lines.push(`${mark(buddy)} 🤝 **OwO quest buddies** · someone needs a cookie, pray, curse or battle`);
     buttons.push(new ButtonBuilder().setCustomId('pg|buddy').setLabel('Quest buddies').setEmoji('🤝').setStyle(buddy ? ButtonStyle.Success : ButtonStyle.Secondary));
+  }
+  // your own episode alerts live here too, so every ping is in one place
+  if (store.rules(guild.id, 'anime').enabled) {
+    const follows = store.follows(userId).length;
+    lines.push(`${mark(follows > 0)} 🔔 **Episode alerts** · ${follows ? `${follows} show${follows === 1 ? '' : 's'}, a ping when a new episode is out` : 'none, look an anime up and press 🔔'}`);
+    buttons.push(new ButtonBuilder().setCustomId(`nav|alerts|owner=${userId},back=pings`).setLabel('Episode alerts').setEmoji('🔔').setStyle(follows ? ButtonStyle.Success : ButtonStyle.Secondary));
   }
   const p = picksOf(store, userId);
   const mine = [p.club && `⚽ ${p.club}`, p.team && `🏎️ ${p.team}`, p.anime && `📺 ${p.anime}`].filter(Boolean).join(' · ');
@@ -604,7 +617,7 @@ export async function onPingsButton(store: Store, i: Interaction) {
     else {
       const has = member.roles.cache.has(role.id);
       const ok = await (has ? member.roles.remove(role) : member.roles.add(role)).then(() => true).catch(() => false);
-      if (!ok) problem = 'My role sits too low to give that, move Texz up a bit.';
+      if (!ok) problem = fixText(i.guild, { perms: ['ManageRoles'], roles: [role], doing: `give you ${role.name}` }) ?? 'Discord wouldn\'t let me change that role, try again in a moment.';
     }
   }
   if (problem) { await i.reply({ content: problem, flags: MessageFlags.Ephemeral }); return true; }

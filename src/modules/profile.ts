@@ -1,4 +1,5 @@
-import { BADGES, badgesOf } from './missions.js';
+import { BADGES, badgesOf, shownOf } from './missions.js';
+import { tierOf } from '../features/medals.js';
 import {
   ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, MessageFlags, ModalBuilder, SlashCommandBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle,
   type Interaction, type MessageActionRowComponentBuilder,
@@ -86,7 +87,8 @@ export async function drawProfile(store: Store, id: string, guildId: string | nu
   if (show.has('done') && done) chips.push({ label: 'Anime done', value: String(done) });
   return profileCard({
     name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: store.profile(id).bio, chips, accent: p.color,
-    medals: guildId ? BADGES.map((x) => ({ id: x.id, earned: have.includes(x.id) })) : undefined,
+    medals: guildId ? shownOf(store, guildId, id, tierOf).map((x) => ({ id: x, earned: true, name: BADGES.find((b) => b.id === x)?.name ?? x })) : undefined,
+    medalCount: guildId ? { won: have.length, total: BADGES.length } : undefined,
     avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null,
   });
 }

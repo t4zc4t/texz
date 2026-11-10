@@ -118,7 +118,8 @@ export const crestQuiz: Command = {
   name: 'crestquiz',
   group: 'fun',
   data: new SlashCommandBuilder().setName('crestquiz').setDescription('Guess the club from its crest, first right answer wins yen').toJSON(),
-  text: { aliases: ['crest', 'cq', 'badge'] },
+  call: 'quiz crest',
+  text: { aliases: ['quiz crest', 'crest', 'cq', 'badge'] },
   run: async (ctx, store) => {
     const r = await quizRound(ctx.channelId, !!ctx.guildId && store.rules(ctx.guildId, 'economy').enabled, undefined, 'crest').catch(() => null);
     if (!r) return ctx.reply('The crests didn\'t load, try again in a moment.');

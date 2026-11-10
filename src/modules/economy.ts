@@ -1,8 +1,9 @@
 import { track } from './missions.js';
-import { PermissionFlagsBits, SlashCommandBuilder, type Message } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, SlashCommandBuilder, type Message, type MessageActionRowComponentBuilder } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { card, say } from '../theme.js';
+import { fixText, setupButton } from '../core/fixes.js';
 import { levelOf, perksFor } from './levels.js';
 
 export const YEN = '¥';
@@ -35,6 +36,8 @@ export function chatPay(store: Store, m: Message) {
   const w = store.wallet(m.guildId, m.author.id);
   if (Date.now() - w.chat_at < 60_000) return;
   store.pay(m.guildId, m.author.id, CHAT_PAY, { chat_at: Date.now() });
+  const extra = track(store, m.guildId, m.author.id, 'yen', w.yen + CHAT_PAY);
+  if (extra.length && m.channel.isSendable()) void m.channel.send({ content: extra.join('\n'), allowedMentions: { users: [m.author.id] } }).catch(() => {});
 }
 
 const fmt = (n: number) => `${YEN}${n.toLocaleString()}`;
@@ -42,6 +45,7 @@ const fmt = (n: number) => `${YEN}${n.toLocaleString()}`;
 const daily: Command = {
   name: 'daily',
   group: 'eco',
+  hidden: true,
   data: new SlashCommandBuilder().setName('daily').setDescription('Collect your daily yen, more for each day in a row').toJSON(),
   text: { aliases: ['yen'] },
   run: (ctx, store) => {
@@ -49,22 +53,41 @@ const daily: Command = {
     const r = claimDaily(store, ctx.guildId, ctx.userId);
     if (!r.ok) return ctx.reply({ content: `⏳ Already collected today. Next one <t:${Math.floor(r.next / 1000)}:R>.`, temp: true });
     const w = store.wallet(ctx.guildId, ctx.userId);
-    const extra = track(store, ctx.guildId, ctx.userId, 'daily');
+    const extra = [
+      ...track(store, ctx.guildId, ctx.userId, 'daily'),
+      ...track(store, ctx.guildId, ctx.userId, 'dailyStreak', r.streak),
+      ...track(store, ctx.guildId, ctx.userId, 'yen', w.yen),
+    ];
     return ctx.reply({ content: [`💴 **+${fmt(r.got)}** · day ${r.streak} in a row · you have **${fmt(w.yen)}**`, ...extra, `-# ${say('ecoDaily')}`].join('\n'), temp: !extra.length });
   },
 };
 
+// balance, daily and the richest list on one page
 const balance: Command = {
-  name: 'balance',
+  name: 'wallet',
   group: 'eco',
-  data: new SlashCommandBuilder().setName('balance').setDescription('How much yen someone has')
+  data: new SlashCommandBuilder().setName('wallet').setDescription('Your yen, your daily and the richest people here')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
-  text: { aliases: ['bal', 'wallet'], args: ['user'] },
+  text: { aliases: ['bal', 'balance'], args: ['user'] },
   run: (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
     const id = ctx.user('user') ?? ctx.userId;
     const w = store.wallet(ctx.guildId, id);
-    return ctx.reply({ content: `💴 <@${id}> has **${fmt(w.yen)}**${w.streak ? ` · daily streak ${w.streak}` : ''}`, temp: true });
+    const mine = id === ctx.userId;
+    const ready = w.daily_day !== today();
+    const next = Math.floor((Date.parse(`${today()}T00:00:00Z`) + 86_400_000) / 1000);
+    const lines = [
+      `💴 ${mine ? 'You have' : `<@${id}> has`} **${fmt(w.yen)}**`,
+      w.streak ? `🔥 ${w.streak} day${w.streak === 1 ? '' : 's'} of daily in a row` : null,
+      mine ? (ready ? '🎁 Your daily is **ready**' : `⏳ Next daily <t:${next}:R>`) : null,
+    ].filter(Boolean).join('\n');
+    const btn = (cmd: string, emoji: string, label: string, on = false) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId}`).setEmoji(emoji).setLabel(label).setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary);
+    const rows = [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      ...(mine ? [btn('daily', '🎁', ready ? 'Claim daily' : 'Daily', ready)] : []),
+      btn('rich', '🏆', 'Richest'),
+      btn('roleshop.view', '🛍️', 'Role shop'),
+    )];
+    return ctx.reply({ embeds: [card({ kind: 'help', title: 'Wallet', emoji: '👛', gif: 'off', body: lines })], components: rows });
   },
 };
 
@@ -83,13 +106,15 @@ const give: Command = {
     if (to === ctx.userId) return ctx.reply('Paying yourself? That\'s just moving money between pockets.');
     if (!store.pay(ctx.guildId, ctx.userId, -n)) return ctx.reply(`You don't have ${fmt(n)}.`);
     store.pay(ctx.guildId, to, n);
-    return ctx.reply({ content: `💸 <@${ctx.userId}> gave <@${to}> **${fmt(n)}**.`, ping: [to], public: true, temp: true });
+    const extra = [...track(store, ctx.guildId, ctx.userId, 'gave', n), ...track(store, ctx.guildId, to, 'yen', store.wallet(ctx.guildId, to).yen)];
+    return ctx.reply({ content: [`💸 <@${ctx.userId}> gave <@${to}> **${fmt(n)}**.`, ...extra].join('\n'), ping: [to], public: true, temp: !extra.length });
   },
 };
 
 const rich: Command = {
   name: 'rich',
   group: 'eco',
+  hidden: true,
   as: 'top',
   data: new SlashCommandBuilder().setName('rich').setDescription('The richest people in the server').toJSON(),
   text: { aliases: ['baltop', 'richest'] },
@@ -129,7 +154,8 @@ const shop: Command = {
       if (!roleId || !price) return ctx.reply('Like this: `tz market add @role 5000`');
       const role = await ctx.guild.roles.fetch(roleId).catch(() => null);
       const me = await ctx.guild.members.fetchMe();
-      if (!role || role.managed || role.id === ctx.guild.id || role.position >= me.roles.highest.position) return ctx.reply('I can\'t hand out that role. Move my role above it first.');
+      if (!role || role.managed || role.id === ctx.guild.id) return ctx.reply('That role can\'t be handed out by a bot.');
+      if (role.position >= me.roles.highest.position) return ctx.reply({ content: fixText(ctx.guild, { roles: [role], doing: `sell ${role.name}` }) ?? '', components: [setupButton(ctx.userId)] });
       const id = store.addShopItem(ctx.guild.id, roleId, price);
       return ctx.reply(`🛍️ Item #${id}: <@&${roleId}> for **${fmt(price)}**.`);
     }

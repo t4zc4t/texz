@@ -11,7 +11,7 @@ import { f1Quiz, f1Today, f1Trivia } from './bulletins.js';
 import { guess } from './anime.js';
 import { crestQuiz } from './f1quiz.js';
 import { quote } from './quote.js';
-import { mission } from './missions.js';
+import { achievements, mission } from './missions.js';
 
 const unix = (ms: number) => Math.floor(ms / 1000);
 
@@ -48,6 +48,7 @@ export async function mugshot(guild: Guild | null, client: Client, targetId: str
 const avatar: Command = {
   name: 'avatar',
   group: 'info',
+  hidden: true,
   data: new SlashCommandBuilder().setName('avatar').setDescription('Someone\'s picture, server or main, animated ones included')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
   text: { aliases: ['av', 'pfp', 'mugshot'], args: ['user'] },
@@ -147,7 +148,8 @@ const user: Command = {
     }).setThumbnail(m.displayAvatarURL({ size: 256, forceStatic: false }));
     const banner = u.bannerURL({ size: 1024, forceStatic: false });
     if (banner) e.setImage(banner);
-    return ctx.reply({ embeds: [e], private: false });
+    const av = new ButtonBuilder().setCustomId(`nav|avatar|owner=${ctx.userId},user=${m.id}`).setEmoji('🖼️').setLabel('Avatar').setStyle(ButtonStyle.Secondary);
+    return ctx.reply({ embeds: [e], components: [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(av)], private: false });
   },
 };
 
@@ -339,5 +341,5 @@ export const utility: Module = {
   name: 'utility',
   label: 'Utility and fun',
   about: 'Avatars, user and server info, polls, choose, dice, coin, 8ball and AFK',
-  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk, guess, f1Quiz, f1Trivia, f1Today, crestQuiz, quote, mission],
+  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk, guess, f1Quiz, f1Trivia, f1Today, crestQuiz, quote, mission, achievements],
 };

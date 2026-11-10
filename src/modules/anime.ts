@@ -164,6 +164,7 @@ export function characterCard(c: Character, title?: string) {
 const season: Command = {
   name: 'season',
   group: 'anime',
+  hidden: true,
   data: new SlashCommandBuilder().setName('season').setDescription('Most popular anime of a season')
     .addStringOption((o) => o.setName('season').setDescription('Season, this one if empty')
       .addChoices({ name: 'Winter', value: 'WINTER' }, { name: 'Spring', value: 'SPRING' }, { name: 'Summer', value: 'SUMMER' }, { name: 'Fall', value: 'FALL' }))
@@ -184,6 +185,7 @@ const season: Command = {
 const trend: Command = {
   name: 'trending',
   group: 'anime',
+  hidden: true,
   data: new SlashCommandBuilder().setName('trending').setDescription('What everyone is watching or reading right now')
     .addStringOption((o) => o.setName('type').setDescription('Anime or manga').addChoices({ name: 'Anime', value: 'ANIME' }, { name: 'Manga', value: 'MANGA' })).toJSON(),
   text: { aliases: ['trend', 'hot'], args: ['type'] },
@@ -257,18 +259,17 @@ const home: Command = {
     ];
     const nav = (cmd: string, emoji: string, label: string) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId},back=animehome`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary);
     const rows = [
-      row(nav('airing', '📡', 'Full schedule'), nav('watchlist', '📋', 'My list'), nav('trending', '🔥', 'Trending'), nav('guess', '🔎', 'Guess game')),
+      row(nav('airing', '📡', 'Full schedule'), nav('trending', '🔥', 'Trending'), nav('season', '🌸', 'This season'), nav('recap', '🗓️', 'Week recap'), nav('watchlist', '📋', 'My list')),
       row(new StringSelectMenuBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=animehome`).setPlaceholder('📂 Open anything else').addOptions(
-        { label: 'This season', value: 'season', emoji: '🌸' }, { label: 'Random pick', value: 'recommend', emoji: '🎲' },
+        { label: 'Guess game', value: 'guess', emoji: '🔎' }, { label: 'Random pick', value: 'recommend', emoji: '🎲' },
         { label: 'Character of the day', value: 'today', emoji: '🎭' }, { label: 'My episode alerts', value: 'alerts', emoji: '🔔' },
-        { label: 'Server\'s tracked shows', value: 'track', emoji: '📺' },
         { label: 'Search an anime', value: 'anime', emoji: '🔍' }, { label: 'Search a manga', value: 'manga', emoji: '📚' },
         { label: 'Find a character', value: 'character', emoji: '🎭' }, { label: 'Add to my list', value: 'watchlist.add', emoji: '➕' },
         { label: 'Airing on another day', value: 'airing', emoji: '📅' }, { label: 'My pings', value: 'pings', emoji: '🔔' },
         { label: 'Plan a watch party', value: 'watchparty', emoji: '🍿' },
       )),
     ];
-    return ctx.reply({ embeds: [card({ kind: 'season', title: 'Anime dashboard', emoji: '📺', gif: 'off', fields,
+    return ctx.reply({ embeds: [card({ kind: 'season', title: 'What\'s on', emoji: '📺', gif: 'off', fields,
       body: 'Search with `tz anime <title>` or `/anime input:<title>`. Everything else is a click away.' })], components: rows });
   },
 };
@@ -276,6 +277,7 @@ const home: Command = {
 const airing: Command = {
   name: 'airing',
   group: 'anime',
+  hidden: true,
   data: new SlashCommandBuilder().setName('airing').setDescription('Episodes airing today, or tomorrow')
     .addStringOption((o) => o.setName('day').setDescription('Today if empty').addChoices({ name: 'today', value: 'today' }, { name: 'tomorrow', value: 'tomorrow' })).toJSON(),
   text: { aliases: ['airs', 'aired'], args: ['day'] },
@@ -359,7 +361,9 @@ export async function onGuess(store: Store, i: import('discord.js').Interaction)
     if (b.custom_id === `gs|${id}|${r.answer}`) b.style = ButtonStyle.Success;
   }
   await i.update({ components: rows as never });
-  const extra = track(store, i.guildId, i.user.id, 'guesswin');
+  // rounds run 30 seconds, an answer inside the first 5 is a quick draw
+  const fast = Date.now() - (r.ends - 30_000) < 5_000;
+  const extra = [...track(store, i.guildId, i.user.id, 'guesswin'), ...(fast ? track(store, i.guildId, i.user.id, 'fastGuess') : [])];
   await i.followUp({ content: [`🎉 <@${i.user.id}> got it: **${r.titles[r.answer]}**${paid ? ` · +¥${GUESS_PAY}` : ''}. ${say('guessWin')}`, ...extra].join('\n'), allowedMentions: { users: [i.user.id] } });
   return true;
 }

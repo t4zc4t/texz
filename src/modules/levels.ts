@@ -1,7 +1,8 @@
-import { AttachmentBuilder, SlashCommandBuilder, type Guild, type GuildMember, type Message } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, type Guild, type GuildMember, type Message, type MessageActionRowComponentBuilder } from 'discord.js';
 import { fetchAvatar, rankCard } from '../features/rankcard.js';
 import type { LevelRules, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
+import { track } from './missions.js';
 import { card } from '../theme.js';
 
 // xp needed to go from a level to the next one, the usual curve so early levels come quick
@@ -150,6 +151,15 @@ export async function giveXp(store: Store, m: Message) {
   store.addXp(m.guild.id, m.author.id, gain);
   const was = levelOf(before.xp).level;
   const now = levelOf(before.xp + gain).level;
+  // achievements that come from just being around: messages, the hour, the level
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: store.settings(m.author.id).timezone, hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+  const extra = [
+    ...track(store, m.guild.id, m.author.id, 'messages', store.activity(m.guild.id, m.author.id)?.messages ?? 0),
+    ...(hour === 3 ? track(store, m.guild.id, m.author.id, 'nightOwl') : []),
+    ...(hour === 5 ? track(store, m.guild.id, m.author.id, 'earlyBird') : []),
+    ...(now > was ? track(store, m.guild.id, m.author.id, 'level', now) : []),
+  ];
+  if (extra.length && m.channel.isSendable()) await m.channel.send({ content: extra.join('\n'), allowedMentions: { users: [m.author.id] } }).catch(() => {});
   if (now <= was) return;
   await syncRewards(m.member, l, now);
   await announce(store, m.member, was, now, m.channel);
@@ -177,13 +187,16 @@ const rank: Command = {
       position: store.xpPosition(ctx.guild.id, xp), totalXp: xp, into: l.into, need: l.need,
       nextRank: next ? `${next.name} at ${next.at}` : null, boost: boost.total,
     });
-    return ctx.reply({ files: [new AttachmentBuilder(png, { name: 'rank.png' })], private: false });
+    // perks and the leaderboard used to be their own commands, now they hang off the rank card
+    const nav = (cmd: string, emoji: string, label: string) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId}`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary);
+    return ctx.reply({ files: [new AttachmentBuilder(png, { name: 'rank.png' })], components: [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(nav('perks', '🎁', 'Perks'), nav('levels', '🏆', 'Leaderboard'))], private: false });
   },
 };
 
 const levels: Command = {
   name: 'levels',
   group: 'levels',
+  hidden: true,
   as: 'top',
   data: new SlashCommandBuilder().setName('levels').setDescription('The server\'s top 10 by level').toJSON(),
   text: { aliases: ['ranks', 'xplb'] },
@@ -204,6 +217,7 @@ const levels: Command = {
 const perksCmd: Command = {
   name: 'perks',
   group: 'levels',
+  hidden: true,
   data: new SlashCommandBuilder().setName('perks').setDescription('What every Agency rank earns, and where you are').toJSON(),
   text: { aliases: ['rankperks'] },
   run: (ctx, store) => {

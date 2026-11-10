@@ -1,4 +1,4 @@
-import type { SKRSContext2D } from '@napi-rs/canvas';
+import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
 
 // medals for the profile card: a striped ribbon, a struck metal disc and an engraved mark in the middle
 export type Tier = 'bronze' | 'silver' | 'gold' | 'relic';
@@ -17,16 +17,35 @@ export const medalOf: Record<string, { tier: Tier; mark: Mark }> = {
   catch100: { tier: 'silver', mark: 'ball' },
   catch1000: { tier: 'gold', mark: 'ball' },
   legend: { tier: 'relic', mark: 'star' },
+  shiny: { tier: 'relic', mark: 'sparkle' },
+  types18: { tier: 'gold', mark: 'prism' },
   quiz10: { tier: 'silver', mark: 'question' },
   quiz100: { tier: 'gold', mark: 'cap' },
   guess25: { tier: 'silver', mark: 'lens' },
+  fastguess: { tier: 'silver', mark: 'bolt' },
   quote1: { tier: 'bronze', mark: 'quote' },
+  quote10: { tier: 'silver', mark: 'scroll' },
   qotw: { tier: 'gold', mark: 'cup' },
+  qotw3: { tier: 'relic', mark: 'laurel' },
   podium: { tier: 'relic', mark: 'podium' },
+  predict5: { tier: 'silver', mark: 'crystal' },
   daily30: { tier: 'bronze', mark: 'calendar' },
+  streak7: { tier: 'bronze', mark: 'flame' },
+  streak30: { tier: 'gold', mark: 'flame' },
+  rich: { tier: 'gold', mark: 'coins' },
+  giver: { tier: 'silver', mark: 'gift' },
+  chat500: { tier: 'bronze', mark: 'speech' },
+  senior: { tier: 'gold', mark: 'shield' },
+  host: { tier: 'bronze', mark: 'popcorn' },
+  nightowl: { tier: 'silver', mark: 'moon' },
+  earlybird: { tier: 'bronze', mark: 'sun' },
   mission7: { tier: 'gold', mark: 'hat' },
+  mission30: { tier: 'gold', mark: 'folder' },
 };
-type Mark = 'ball' | 'star' | 'question' | 'cap' | 'lens' | 'quote' | 'cup' | 'podium' | 'calendar' | 'hat';
+export const tierOf = (id: string): Tier => medalOf[id]?.tier ?? 'bronze';
+export const tierName: Record<Tier, string> = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold', relic: 'Relic' };
+type Mark = 'ball' | 'star' | 'question' | 'cap' | 'lens' | 'quote' | 'cup' | 'podium' | 'calendar' | 'hat'
+  | 'sparkle' | 'prism' | 'bolt' | 'scroll' | 'laurel' | 'crystal' | 'flame' | 'coins' | 'gift' | 'speech' | 'shield' | 'popcorn' | 'moon' | 'sun' | 'folder';
 
 function ribbon(ctx: SKRSContext2D, x: number, top: number, bottom: number, w: number, colors: [string, string], dim: boolean) {
   ctx.save();
@@ -101,10 +120,14 @@ function disc(ctx: SKRSContext2D, x: number, y: number, r: number, m: typeof met
 }
 
 // the engraved mark: drawn dark with a light offset underneath, like it's been stamped in
-function mark(ctx: SKRSContext2D, kind: Mark, x: number, y: number, s: number, ink: string) {
+function mark(target: SKRSContext2D, kind: Mark, x: number, y: number, s: number, ink: string) {
+  // drawn on its own little canvas first, so cut-outs in the mark don't punch through the medal
+  const size = Math.ceil(s * 3);
   const draw = (dx: number, dy: number, color: string) => {
+    const layer = createCanvas(size, size);
+    const ctx = layer.getContext('2d');
     ctx.save();
-    ctx.translate(x + dx, y + dy);
+    ctx.translate(size / 2, size / 2);
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
     ctx.lineWidth = s * 0.13;
@@ -166,6 +189,123 @@ function mark(ctx: SKRSContext2D, kind: Mark, x: number, y: number, s: number, i
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText('30', 0, k * 0.2);
         break;
+      case 'sparkle': {
+        // a four point glint with a small one beside it
+        const glint = (cx: number, cy: number, r: number) => {
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - r); ctx.quadraticCurveTo(cx, cy, cx + r, cy); ctx.quadraticCurveTo(cx, cy, cx, cy + r);
+          ctx.quadraticCurveTo(cx, cy, cx - r, cy); ctx.quadraticCurveTo(cx, cy, cx, cy - r); ctx.fill();
+        };
+        glint(-k * 0.08, k * 0.06, k * 0.55); glint(k * 0.42, -k * 0.4, k * 0.22);
+        break;
+      }
+      case 'prism':
+        ctx.beginPath(); ctx.moveTo(0, -k * 0.58); ctx.lineTo(k * 0.55, k * 0.42); ctx.lineTo(-k * 0.55, k * 0.42); ctx.closePath(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-k * 0.75, -k * 0.05); ctx.lineTo(-k * 0.2, -k * 0.02); ctx.stroke();
+        ctx.lineWidth = k * 0.08;
+        for (const dy of [-0.06, 0.06, 0.18]) { ctx.beginPath(); ctx.moveTo(k * 0.18, k * dy); ctx.lineTo(k * 0.75, k * (dy * 2.4 + 0.05)); ctx.stroke(); }
+        break;
+      case 'bolt':
+        ctx.beginPath(); ctx.moveTo(k * 0.12, -k * 0.62); ctx.lineTo(-k * 0.38, k * 0.08); ctx.lineTo(-k * 0.02, k * 0.08); ctx.lineTo(-k * 0.14, k * 0.62); ctx.lineTo(k * 0.4, -k * 0.1); ctx.lineTo(k * 0.04, -k * 0.1); ctx.closePath(); ctx.fill();
+        break;
+      case 'scroll':
+        ctx.lineWidth = k * 0.1;
+        ctx.strokeRect(-k * 0.38, -k * 0.42, k * 0.76, k * 0.84);
+        ctx.beginPath(); ctx.arc(-k * 0.38, -k * 0.42, k * 0.1, 0, Math.PI * 2); ctx.arc(k * 0.38, k * 0.42, k * 0.1, 0, Math.PI * 2); ctx.fill();
+        ctx.lineWidth = k * 0.07;
+        for (const y of [-0.18, 0, 0.18]) { ctx.beginPath(); ctx.moveTo(-k * 0.22, k * y); ctx.lineTo(k * 0.22, k * y); ctx.stroke(); }
+        break;
+      case 'laurel':
+        ctx.lineWidth = k * 0.08;
+        for (const side of [-1, 1]) {
+          ctx.beginPath(); ctx.arc(0, -k * 0.02, k * 0.5, side < 0 ? Math.PI * 0.55 : Math.PI * 0.45, side < 0 ? Math.PI * 1.25 : -Math.PI * 0.25, side > 0); ctx.stroke();
+          for (let n = 0; n < 4; n++) {
+            const a = (side < 0 ? Math.PI * 0.62 : Math.PI * 0.38) + side * -n * 0.42;
+            const x = Math.cos(a) * k * 0.5, y = Math.sin(a) * k * 0.5 - k * 0.02;
+            ctx.beginPath(); ctx.ellipse(x, y, k * 0.15, k * 0.07, a + Math.PI / 2 * side, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        ctx.font = `700 ${k * 0.5}px "Texz Serif", serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('3', 0, k * 0.02);
+        break;
+      case 'crystal':
+        ctx.beginPath(); ctx.arc(0, -k * 0.1, k * 0.4, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-k * 0.42, k * 0.52); ctx.lineTo(-k * 0.28, k * 0.28); ctx.lineTo(k * 0.28, k * 0.28); ctx.lineTo(k * 0.42, k * 0.52); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.arc(-k * 0.12, -k * 0.22, k * 0.08, 0, Math.PI * 2); ctx.fill();
+        break;
+      case 'flame':
+        ctx.beginPath(); ctx.moveTo(0, -k * 0.62);
+        ctx.bezierCurveTo(k * 0.18, -k * 0.3, k * 0.5, -k * 0.1, k * 0.42, k * 0.22);
+        ctx.bezierCurveTo(k * 0.36, k * 0.52, k * 0.12, k * 0.6, 0, k * 0.6);
+        ctx.bezierCurveTo(-k * 0.3, k * 0.6, -k * 0.48, k * 0.38, -k * 0.42, k * 0.12);
+        ctx.bezierCurveTo(-k * 0.38, -k * 0.08, -k * 0.2, -k * 0.16, -k * 0.16, -k * 0.34);
+        ctx.bezierCurveTo(-k * 0.04, -k * 0.2, 0, -k * 0.38, 0, -k * 0.62); ctx.fill();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath(); ctx.ellipse(0, k * 0.32, k * 0.13, k * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        break;
+      case 'coins':
+        for (const [x, y] of [[-k * 0.2, k * 0.28], [-k * 0.2, k * 0.08], [-k * 0.2, -k * 0.12]] as const) { ctx.beginPath(); ctx.ellipse(x, y, k * 0.3, k * 0.11, 0, 0, Math.PI * 2); ctx.fill(); }
+        ctx.beginPath(); ctx.arc(k * 0.26, -k * 0.12, k * 0.3, 0, Math.PI * 2); ctx.stroke();
+        ctx.font = `700 ${k * 0.42}px "Texz Sans Bold", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('¥', k * 0.26, -k * 0.1);
+        break;
+      case 'gift':
+        ctx.fillRect(-k * 0.45, -k * 0.12, k * 0.9, k * 0.62);
+        ctx.fillRect(-k * 0.52, -k * 0.3, k * 1.04, k * 0.16);
+        ctx.lineWidth = k * 0.1;
+        ctx.beginPath(); ctx.ellipse(-k * 0.16, -k * 0.42, k * 0.16, k * 0.1, 0.4, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(k * 0.16, -k * 0.42, k * 0.16, k * 0.1, -0.4, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillRect(-k * 0.06, -k * 0.3, k * 0.12, k * 0.8);
+        ctx.globalCompositeOperation = 'source-over';
+        break;
+      case 'speech':
+        ctx.beginPath(); ctx.ellipse(0, -k * 0.08, k * 0.6, k * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-k * 0.3, k * 0.2); ctx.lineTo(-k * 0.42, k * 0.58); ctx.lineTo(-k * 0.02, k * 0.28); ctx.fill();
+        ctx.globalCompositeOperation = 'destination-out';
+        for (const x of [-0.25, 0, 0.25]) { ctx.beginPath(); ctx.arc(k * x, -k * 0.08, k * 0.07, 0, Math.PI * 2); ctx.fill(); }
+        ctx.globalCompositeOperation = 'source-over';
+        break;
+      case 'shield':
+        ctx.beginPath(); ctx.moveTo(0, -k * 0.6); ctx.lineTo(k * 0.5, -k * 0.4); ctx.lineTo(k * 0.44, k * 0.12);
+        ctx.quadraticCurveTo(k * 0.3, k * 0.48, 0, k * 0.62); ctx.quadraticCurveTo(-k * 0.3, k * 0.48, -k * 0.44, k * 0.12); ctx.lineTo(-k * 0.5, -k * 0.4); ctx.closePath(); ctx.fill();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.font = `700 ${k * 0.55}px "Texz Serif", serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('XX', 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+        break;
+      case 'popcorn':
+        ctx.beginPath(); ctx.moveTo(-k * 0.42, -k * 0.1); ctx.lineTo(k * 0.42, -k * 0.1); ctx.lineTo(k * 0.3, k * 0.6); ctx.lineTo(-k * 0.3, k * 0.6); ctx.closePath(); ctx.fill();
+        for (const [x, y, r] of [[-0.28, -0.24, 0.17], [0, -0.36, 0.19], [0.28, -0.24, 0.17], [-0.14, -0.5, 0.13], [0.16, -0.52, 0.13]] as const) { ctx.beginPath(); ctx.arc(k * x, k * y, k * r, 0, Math.PI * 2); ctx.fill(); }
+        ctx.globalCompositeOperation = 'destination-out';
+        for (const x of [-0.14, 0.14]) ctx.fillRect(k * (x - 0.04), 0, k * 0.08, k * 0.58);
+        ctx.globalCompositeOperation = 'source-over';
+        break;
+      case 'moon':
+        ctx.beginPath(); ctx.arc(-k * 0.05, 0, k * 0.52, 0, Math.PI * 2); ctx.fill();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath(); ctx.arc(k * 0.22, -k * 0.16, k * 0.44, 0, Math.PI * 2); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.beginPath(); ctx.arc(k * 0.42, k * 0.3, k * 0.06, 0, Math.PI * 2); ctx.arc(k * 0.28, k * 0.5, k * 0.04, 0, Math.PI * 2); ctx.fill();
+        break;
+      case 'sun':
+        ctx.beginPath(); ctx.arc(0, k * 0.22, k * 0.32, Math.PI, 0); ctx.closePath(); ctx.fill();
+        ctx.lineWidth = k * 0.09;
+        for (let n = 0; n < 7; n++) {
+          const a = Math.PI + (n * Math.PI) / 6;
+          ctx.beginPath(); ctx.moveTo(Math.cos(a) * k * 0.44, k * 0.22 + Math.sin(a) * k * 0.44); ctx.lineTo(Math.cos(a) * k * 0.62, k * 0.22 + Math.sin(a) * k * 0.62); ctx.stroke();
+        }
+        ctx.fillRect(-k * 0.65, k * 0.3, k * 1.3, k * 0.09);
+        ctx.fillRect(-k * 0.4, k * 0.46, k * 0.8, k * 0.08);
+        break;
+      case 'folder':
+        ctx.beginPath(); ctx.moveTo(-k * 0.55, -k * 0.38); ctx.lineTo(-k * 0.15, -k * 0.38); ctx.lineTo(-k * 0.04, -k * 0.26); ctx.lineTo(k * 0.55, -k * 0.26);
+        ctx.lineTo(k * 0.55, k * 0.45); ctx.lineTo(-k * 0.55, k * 0.45); ctx.closePath(); ctx.fill();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineWidth = k * 0.1; ctx.beginPath(); ctx.moveTo(-k * 0.2, k * 0.1); ctx.lineTo(-k * 0.02, k * 0.26); ctx.lineTo(k * 0.26, -k * 0.06); ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+        break;
       case 'hat':
         ctx.beginPath(); ctx.ellipse(0, k * 0.22, k * 0.68, k * 0.17, 0, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.moveTo(-k * 0.38, k * 0.18); ctx.lineTo(-k * 0.32, -k * 0.32); ctx.quadraticCurveTo(0, -k * 0.5, k * 0.32, -k * 0.32); ctx.lineTo(k * 0.38, k * 0.18); ctx.closePath(); ctx.fill();
@@ -175,6 +315,7 @@ function mark(ctx: SKRSContext2D, kind: Mark, x: number, y: number, s: number, i
         break;
     }
     ctx.restore();
+    target.drawImage(layer, x + dx - size / 2, y + dy - size / 2);
   };
   draw(0.8, 1, 'rgba(255,255,255,0.35)');
   draw(0, 0, ink);
@@ -218,4 +359,57 @@ export function drawMedal(ctx: SKRSContext2D, id: string, earned: boolean, x: nu
   ctx.ellipse(x - r * 0.15, y - r * 0.45, r * 0.75, r * 0.4, -0.35, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+}
+
+export interface SheetItem { id: string; name: string; earned: boolean; progress: string }
+
+// every medal on one picture: earned ones struck in metal, the rest as empty sockets with how far along you are
+export function medalSheet(title: string, items: SheetItem[]): Buffer {
+  const cols = 7;
+  const cell = 132;
+  const rows = Math.ceil(items.length / cols);
+  const W = 60 + cols * cell;
+  const H = 96 + rows * 150 + 24;
+  const c = createCanvas(W, H);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0B0909';
+  ctx.fillRect(0, 0, W, H);
+  // paper grain, thin diagonal lines a shade lighter than the ink
+  ctx.save();
+  ctx.strokeStyle = 'rgba(237,230,218,0.025)';
+  ctx.lineWidth = 1;
+  for (let x = -H; x < W; x += 7) { ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(x + H * 0.7, 0); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle = '#C8283C';
+  ctx.fillRect(0, 0, W, 6);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#EDE6DA';
+  ctx.font = '700 26px "Texz Serif", serif';
+  ctx.fillText(title, 30, 52);
+  const won = items.filter((x) => x.earned).length;
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#B9AD98';
+  ctx.font = '400 16px "Texz Sans", sans-serif';
+  ctx.fillText(`${won} of ${items.length} earned`, W - 30, 52);
+  const rule = ctx.createLinearGradient(30, 0, W - 30, 0);
+  rule.addColorStop(0, '#C8283C');
+  rule.addColorStop(1, 'rgba(200,40,60,0)');
+  ctx.fillStyle = rule;
+  ctx.fillRect(30, 66, W - 60, 2);
+  items.forEach((it, n) => {
+    const cx = 30 + (n % cols) * cell + cell / 2;
+    const top = 92 + Math.floor(n / cols) * 150;
+    drawMedal(ctx, it.id, it.earned, cx, top, 26);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = it.earned ? '#EDE6DA' : '#8F8574';
+    ctx.font = `${it.earned ? 700 : 400} 13px "${it.earned ? 'Texz Sans Bold' : 'Texz Sans'}", sans-serif`;
+    let name = it.name;
+    while (ctx.measureText(name).width > cell - 10 && name.length > 4) name = `${name.slice(0, -2)}…`;
+    ctx.fillText(name, cx, top + 112);
+    ctx.fillStyle = it.earned ? '#C8A97E' : '#8F8574';
+    ctx.font = '400 12px "Texz Sans", sans-serif';
+    ctx.fillText(it.progress, cx, top + 129);
+  });
+  return c.toBuffer('image/png');
 }

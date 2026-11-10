@@ -85,7 +85,7 @@ const status: Command = {
     if (shopSnap && (!shopSnap.data.until || shopSnap.data.until > Date.now())) glance.push('🛒 today\'s weapon shop is on file, `tz shop`');
     if (glance.length) fields.push({ name: '🧭 At a glance', value: glance.join('\n'), inline: false });
     const nav = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      ...[['huntbot', '🤖', 'Huntbot'], ['armoury', '⚔️', 'Armoury'], ['zoo', '🦁', 'Zoo'], ['quests', '📜', 'Quests'], ['settings', '🎛️', 'Reminders']]
+      ...[['huntbot', '🤖', 'Huntbot'], ['armoury', '⚔️', 'Armoury'], ['zoo', '🦁', 'Zoo'], ['quests', '📜', 'Quests'], ['reminders', '🎛️', 'Reminders']]
         .map(([cmd, emoji, label]) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId},back=status`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary)),
     );
     const more = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
@@ -359,11 +359,10 @@ const remind: Command = {
 };
 
 const settings: Command = {
-  name: 'settings',
-  // opened from the Settings button on /owo remind, the text form still works
-  hidden: true,
-  data: new SlashCommandBuilder().setName('settings').setDescription('Your reminder control room: what, where and when').toJSON(),
-  text: { aliases: ['set', 'reminders'] },
+  name: 'reminders',
+  group: 'owo',
+  data: new SlashCommandBuilder().setName('reminders').setDescription('Your reminder control room: what, where and when').toJSON(),
+  text: { aliases: ['settings', 'set'] },
   run: (ctx, store) => ctx.reply(panel(store, ctx.userId, 'settings')),
 };
 

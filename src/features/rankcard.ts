@@ -187,8 +187,9 @@ export interface ProfileData {
   // short facts shown as chips, like "Level 12" or "¥4,200"
   chips: { label: string; value: string; color?: string }[];
   accent?: string;
-  // every badge in order, earned or not, drawn as a row of medals
-  medals?: Medal[];
+  // the medals picked for show, with names, and how many of all of them are earned
+  medals?: (Medal & { name: string })[];
+  medalCount?: { won: number; total: number };
 }
 
 function wrap(ctx: SKRSContext2D, text: string, max: number, lines: number) {
@@ -210,7 +211,7 @@ function wrap(ctx: SKRSContext2D, text: string, max: number, lines: number) {
 export async function profileCard(d: ProfileData): Promise<Buffer> {
   const SAND = d.accent ?? SAND_DEFAULT;
   const PW = 1000;
-  const PH = d.medals?.length ? 590 : 420;
+  const PH = d.medalCount ? 610 : 420;
   const c = createCanvas(PW, PH);
   const ctx = c.getContext('2d');
   rounded(ctx, 0, 0, PW, PH, 28);
@@ -288,9 +289,8 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
     x += w + 14;
   }
 
-  // commendations: the medal rack under a thin rule
-  if (d.medals?.length) {
-    const won = d.medals.filter((m) => m.earned).length;
+  // commendations: the medals someone picked to show, under a thin rule
+  if (d.medalCount) {
     ctx.strokeStyle = 'rgba(194,164,110,0.18)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(50, 420); ctx.lineTo(PW - 50, 420); ctx.stroke();
@@ -301,11 +301,27 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
     ctx.textAlign = 'right';
     ctx.fillStyle = '#8b8f9a';
     ctx.font = '400 14px "Texz Sans", sans-serif';
-    ctx.fillText(`${won} of ${d.medals.length}`, PW - 50, 446);
-    // earned ones first so a short rack still looks full on the left
-    const order = [...d.medals.filter((m) => m.earned), ...d.medals.filter((m) => !m.earned)];
-    const step = (PW - 100) / order.length;
-    order.forEach((m, n) => drawMedal(ctx, m.id, m.earned, 50 + step * (n + 0.5), 462, 28));
+    ctx.fillText(`${d.medalCount.won} of ${d.medalCount.total} earned`, PW - 50, 446);
+    const shown = d.medals ?? [];
+    if (!shown.length) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#6f7380';
+      ctx.font = '400 17px "Texz Sans", sans-serif';
+      ctx.fillText('No medals yet. tz achievements shows how to earn them.', PW / 2, 530);
+    }
+    // up to six, spaced evenly and centred so a short rack still looks deliberate
+    const step = 150;
+    const start = PW / 2 - ((shown.length - 1) * step) / 2;
+    shown.forEach((m, n) => {
+      const x = start + n * step;
+      drawMedal(ctx, m.id, true, x, 460, 30);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#e8e2d6';
+      ctx.font = '700 14px "Texz Sans Bold", sans-serif';
+      let name = m.name;
+      while (ctx.measureText(name).width > step - 12 && name.length > 4) name = `${name.slice(0, -2)}…`;
+      ctx.fillText(name, x, 590);
+    });
   }
   return c.toBuffer('image/png');
 }

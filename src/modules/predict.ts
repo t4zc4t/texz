@@ -84,7 +84,8 @@ export const predictTop: Command = {
   name: 'predtop',
   group: 'sports',
   data: new SlashCommandBuilder().setName('predtop').setDescription('The season\'s best predictors').toJSON(),
-  text: { aliases: ['predboard', 'oracles'] },
+  call: 'predict top',
+  text: { aliases: ['predict top', 'predboard', 'oracles'] },
   run: (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Predictions live in servers.');
     const rows = store.kvByPrefix(`predpts:${ctx.guildId}:`).map(({ key, value }) => ({ user: key.split(':')[2], n: Number(value) })).sort((a, b) => b.n - a.n).slice(0, 10);
@@ -133,6 +134,7 @@ export function scoreRace(store: Store, guild: string, round: number, podium: st
     });
     store.setKv(`${key}:paid`, '1');
     if (hits === 3) track(store, guild, user, 'perfectPodium');
+    if (hits) track(store, guild, user, 'predictWin');
     if (won) {
       if (store.rules(guild, 'economy').enabled) store.pay(guild, user, won);
       addPoints(store, guild, user, won);
@@ -153,6 +155,7 @@ export function scoreMatch(store: Store, guild: string, m: Match): string[] {
     const user = key.split(':').at(-1)!;
     if (store.rules(guild, 'economy').enabled) store.pay(guild, user, MATCH_PAY);
     addPoints(store, guild, user, MATCH_PAY);
+    track(store, guild, user, 'predictWin');
     right.push(user);
   }
   return right.length ? [`🔮 Called it: ${right.slice(0, 10).map((u) => `<@${u}>`).join(' ')} +¥${MATCH_PAY}`] : [];
