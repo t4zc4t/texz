@@ -11,8 +11,8 @@ import { setupPanel } from '../features/setup.js';
 // filled in by the registry so help and config can list every module
 // a few words on what each dashboard holds, for the help page
 const blurb: Record<string, string> = {
-  owo: 'timers, huntbot, gems, weapons', anime: 'search, airing, your list', fun: 'quizzes, quotes, ship, spawns',
-  eco: 'daily, balance, role shop', levels: 'rank card, perks, top', info: 'profile, pings, birthdays',
+  owo: 'timers, huntbot, gems, weapons', anime: 'what\'s on, search, your list', fun: 'quizzes, quotes, ship, spawns',
+  eco: 'wallet, daily, role shop', levels: 'rank card, perks, top', info: 'profile, medals, pings, birthdays',
   sports: 'F1 and football', mod: 'actions and cases', tools: 'giveaways, posts, stats',
 };
 
