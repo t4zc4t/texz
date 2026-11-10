@@ -82,9 +82,11 @@ export async function drawProfile(store: Store, id: string, guildId: string | nu
   if (show.has('anime') && p.anime) chips.push({ label: 'Anime', value: p.anime });
   if (show.has('manga') && p.manga) chips.push({ label: 'Manga', value: p.manga });
   const done = store.watchlist(id, 'completed').length;
+  const have = guildId ? badgesOf(store, guildId, id) : [];
   if (show.has('done') && done) chips.push({ label: 'Anime done', value: String(done) });
   return profileCard({
     name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: store.profile(id).bio, chips, accent: p.color,
+    medals: guildId ? BADGES.map((x) => ({ id: x.id, earned: have.includes(x.id) })) : undefined,
     avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null,
   });
 }
@@ -163,9 +165,6 @@ export const profile: Command = {
     const id = who ?? ctx.userId;
     const m = ctx.guild ? await ctx.guild.members.fetch(id).catch(() => null) : null;
     const png = await drawProfile(store, id, ctx.guildId, m);
-    // badges as a line above the card, emoji draw better in Discord than on the canvas
-    const have = ctx.guildId ? badgesOf(store, ctx.guildId, id) : [];
-    const line = BADGES.filter((b) => have.includes(b.id)).map((b) => b.emoji).join(' ');
-    return ctx.reply({ content: line ? `🏅 ${line}` : undefined, files: [new AttachmentBuilder(png, { name: 'profile.png' })] });
+    return ctx.reply({ files: [new AttachmentBuilder(png, { name: 'profile.png' })] });
   },
 };

@@ -1,5 +1,6 @@
 import { GlobalFonts, createCanvas, loadImage, type SKRSContext2D } from '@napi-rs/canvas';
 import { fileURLToPath } from 'node:url';
+import { drawMedal, type Medal } from './medals.js';
 
 // fonts ship with the bot so the card looks the same on Windows and on a bare Linux box
 const fontDir = fileURLToPath(new URL('../../assets/fonts/', import.meta.url));
@@ -186,6 +187,8 @@ export interface ProfileData {
   // short facts shown as chips, like "Level 12" or "¥4,200"
   chips: { label: string; value: string; color?: string }[];
   accent?: string;
+  // every badge in order, earned or not, drawn as a row of medals
+  medals?: Medal[];
 }
 
 function wrap(ctx: SKRSContext2D, text: string, max: number, lines: number) {
@@ -207,7 +210,7 @@ function wrap(ctx: SKRSContext2D, text: string, max: number, lines: number) {
 export async function profileCard(d: ProfileData): Promise<Buffer> {
   const SAND = d.accent ?? SAND_DEFAULT;
   const PW = 1000;
-  const PH = 420;
+  const PH = d.medals?.length ? 590 : 420;
   const c = createCanvas(PW, PH);
   const ctx = c.getContext('2d');
   rounded(ctx, 0, 0, PW, PH, 28);
@@ -283,6 +286,26 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
     ctx.font = '700 22px "Texz Sans Bold", sans-serif';
     ctx.fillText(chip.value, x + 18, y + 52);
     x += w + 14;
+  }
+
+  // commendations: the medal rack under a thin rule
+  if (d.medals?.length) {
+    const won = d.medals.filter((m) => m.earned).length;
+    ctx.strokeStyle = 'rgba(194,164,110,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(50, 420); ctx.lineTo(PW - 50, 420); ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(194,164,110,0.55)';
+    ctx.font = '700 13px "Texz Serif", serif';
+    ctx.fillText('COMMENDATIONS', 50, 446);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#8b8f9a';
+    ctx.font = '400 14px "Texz Sans", sans-serif';
+    ctx.fillText(`${won} of ${d.medals.length}`, PW - 50, 446);
+    // earned ones first so a short rack still looks full on the left
+    const order = [...d.medals.filter((m) => m.earned), ...d.medals.filter((m) => !m.earned)];
+    const step = (PW - 100) / order.length;
+    order.forEach((m, n) => drawMedal(ctx, m.id, m.earned, 50 + step * (n + 0.5), 462, 28));
   }
   return c.toBuffer('image/png');
 }
