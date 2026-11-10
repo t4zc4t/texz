@@ -236,3 +236,27 @@ test('every group opens a dashboard and every pick can be asked for', async () =
   await tick();
   assert.match(said(b.replies[0]), /Fill it in|needs a bit more/);
 });
+
+test('help search, two word names and did you mean', async () => {
+  const store = new Store(':memory:');
+  const a = fake('tz help money');
+  onText(store, a.m);
+  await tick();
+  assert.match(said(a.replies[0]), /tz wallet/);
+  const b = fake('tz help ping me');
+  onText(store, b.m);
+  await tick();
+  assert.match(said(b.replies[0]), /tz pings/);
+  const c = fake('tz rnak');
+  assert.equal(onText(store, c.m), true);
+  await tick();
+  assert.match(said(c.replies[0]), /Did you mean \*\*`tz rank`/);
+  const d = fake('tz help xp');
+  onText(store, d.m);
+  await tick();
+  assert.doesNotMatch(said(d.replies[0]), /Give xp/);
+  const e = fake('tz help quiz crest');
+  onText(store, e.m);
+  await tick();
+  assert.match(said(e.replies[0]), /tz quiz crest/);
+});
