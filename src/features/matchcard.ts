@@ -1,3 +1,4 @@
+import { BODY, BOLD, LIGHT, MONO, MONO2, SERIF, backdrop, dot, fitText, isOut, metaLine, panel, paletteOf, titleBlock, wordmark } from './f1theme.js';
 import { createCanvas, loadImage, type Image, type SKRSContext2D } from '@napi-rs/canvas';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -168,66 +169,91 @@ export const f1Color = (team: string) => f1Colors.find(([k]) => team.toLowerCase
 
 export interface F1CardData { title: string; subtitle: string; rows: { pos: string; driver: string; team: string; extra?: string }[] }
 
-// a podium for the top three in team colours, then the next few as a list
-export async function f1Card(d: F1CardData): Promise<Buffer> {
-  const W = 1000;
+// a name split for the cards: the first name small and light, the surname big
+const splitName = (n: string) => {
+  const parts = n.trim().split(/\s+/);
+  return parts.length > 1 ? { first: parts.slice(0, -1).join(' '), last: parts.at(-1)! } : { first: '', last: n };
+};
+
+// results in the Parc Fermé look: the top three as stat panels, the rest as rows
+export async function f1Card(d: F1CardData, theme?: string | null): Promise<Buffer> {
+  const t = paletteOf(theme);
+  const W = 1200;
   const rest = d.rows.slice(3, 10);
-  const H = 470 + (rest.length ? rest.length * 34 + 20 : 0);
+  const H = 540 + (rest.length ? rest.length * 50 + 20 : 0);
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = INK;
-  ctx.fillRect(0, 0, W, H);
-  // a red streak along the top, like the timing screens
-  ctx.fillStyle = '#e10600';
-  ctx.fillRect(0, 0, W, 8);
+  backdrop(ctx, W, H, t);
+  wordmark(ctx, t);
+  metaLine(ctx, t, d.subtitle, 60, 128, W - 400);
+  titleBlock(ctx, t, d.title, 60, 204, W - 380);
 
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '40px "Texz Serif"';
-  ctx.fillText(fit(ctx, d.title, W - 80), 40, 66);
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.font = '22px "Texz Sans"';
-  ctx.fillText(fit(ctx, d.subtitle, W - 80), 40, 100);
-
-  // podium order: second, first, third
-  const steps: [number, number, number][] = [[1, 190, 140], [0, 500, 190], [2, 810, 110]];
-  const base = 440;
-  for (const [i, x, height] of steps) {
-    const r = d.rows[i];
-    if (!r) continue;
-    const color = f1Color(r.team);
-    ctx.fillStyle = color;
-    ctx.fillRect(x - 130, base - height, 260, height);
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.fillRect(x - 130, base - height, 260, 6);
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.font = '64px "Texz Serif"';
-    ctx.fillText(r.pos, x, base - height + 72);
-    ctx.font = '30px "Texz Sans Bold"';
-    ctx.fillText(fit(ctx, r.driver, 300), x, base - height - 44);
-    ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.font = '20px "Texz Sans"';
-    ctx.fillText(fit(ctx, `${r.team}${r.extra ? ` · ${r.extra}` : ''}`, 300), x, base - height - 16);
-  }
-
-  // P4 onwards
-  ctx.textAlign = 'left';
-  rest.forEach((r, n) => {
-    const y = base + 50 + n * 34;
-    ctx.fillStyle = f1Color(r.team);
-    ctx.fillRect(40, y - 22, 6, 26);
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.font = '22px "Texz Sans Bold"';
-    ctx.fillText(r.pos.padStart(2, ' '), 60, y);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(fit(ctx, r.driver, 360), 110, y);
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.font = '22px "Texz Sans"';
-    ctx.fillText(fit(ctx, r.team, 300), 500, y);
+  const gap = 24;
+  const pw = (W - 120 - gap * 2) / 3;
+  const top = 262;
+  const ph = 238;
+  d.rows.slice(0, 3).forEach((r, i) => {
+    const x = 60 + i * (pw + gap);
+    panel(ctx, t, x, top, pw, ph);
+    // the finishing number, huge and faint behind the name
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, top, pw, ph); ctx.clip();
+    ctx.fillStyle = t.ghost;
+    ctx.font = `230px ${SERIF}`;
     ctx.textAlign = 'right';
-    if (r.extra) ctx.fillText(r.extra, W - 40, y);
+    ctx.fillText(String(i + 1), x + pw + 10, top + ph + 34);
+    ctx.restore();
     ctx.textAlign = 'left';
+    ctx.fillStyle = i === 0 ? t.redText : t.text;
+    ctx.font = `56px ${SERIF}`;
+    ctx.fillText(`P${i + 1}`, x + 30, top + 72);
+    if (r.extra) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = isOut(r.extra) ? t.out : t.soft;
+      ctx.font = `17px ${MONO}`;
+      ctx.fillText(fitText(ctx, r.extra, pw - 140), x + pw - 24, top + 64);
+      ctx.textAlign = 'left';
+    }
+    const n = splitName(r.driver);
+    ctx.fillStyle = t.soft;
+    ctx.font = `24px ${LIGHT}`;
+    ctx.fillText(fitText(ctx, n.first, pw - 60), x + 30, top + 128);
+    ctx.fillStyle = t.text;
+    ctx.font = `44px ${SERIF}`;
+    let size = 44;
+    while (ctx.measureText(n.last).width > pw - 60 && size > 28) { size -= 2; ctx.font = `${size}px ${SERIF}`; }
+    ctx.fillText(n.last, x + 30, top + 178);
+    dot(ctx, x + 36, top + 208, f1Color(r.team));
+    ctx.fillStyle = t.soft;
+    ctx.font = `16px ${MONO}`;
+    ctx.letterSpacing = '1px';
+    ctx.fillText(fitText(ctx, r.team.toUpperCase(), pw - 90), x + 52, top + 214);
+    ctx.letterSpacing = '0px';
+  });
+
+  rest.forEach((r, n) => {
+    const y = top + ph + 30 + n * 50;
+    panel(ctx, t, 60, y, W - 120, 42, { fill: n % 2 ? t.panel : t.panel2 });
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = t.dim;
+    ctx.font = `18px ${MONO2}`;
+    ctx.fillText(`P${r.pos}`, 122, y + 22);
+    ctx.textAlign = 'left';
+    dot(ctx, 142, y + 21, f1Color(r.team), 5);
+    ctx.fillStyle = t.text;
+    ctx.font = `21px ${BOLD}`;
+    ctx.fillText(fitText(ctx, r.driver, 380), 160, y + 22);
+    ctx.fillStyle = t.soft;
+    ctx.font = `18px ${BODY}`;
+    ctx.fillText(fitText(ctx, r.team, 300), 580, y + 22);
+    if (r.extra) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = isOut(r.extra) ? t.out : t.soft;
+      ctx.font = `18px ${MONO}`;
+      ctx.fillText(fitText(ctx, r.extra, 240), W - 84, y + 22);
+    }
+    ctx.textBaseline = 'alphabetic';
   });
   return canvas.toBuffer('image/png');
 }
@@ -252,69 +278,78 @@ export interface StandingsData {
   teams: { pos: string; team: string; points: number }[];
 }
 
-// drivers as a timing-screen list with a points bar each, teams as bars on the right
-export async function standingsCard(d: StandingsData): Promise<Buffer> {
-  const W = 1100;
+// drivers down the left, constructors on the right, points in the serif
+export async function standingsCard(d: StandingsData, theme?: string | null): Promise<Buffer> {
+  const t = paletteOf(theme);
+  const W = 1200;
   const drivers = d.drivers.slice(0, 12);
-  const H = 140 + drivers.length * 44 + 30;
+  const teams = d.teams.slice(0, 11);
+  const rowsTop = 300;
+  const H = rowsTop + Math.max(drivers.length, teams.length) * 50 + 40;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
-  header(ctx, W, d.title, d.subtitle);
-  const top = drivers[0]?.points || 1;
+  backdrop(ctx, W, H, t);
+  wordmark(ctx, t);
+  metaLine(ctx, t, d.subtitle, 60, 128, W - 400);
+  titleBlock(ctx, t, d.title, 60, 204, W - 380);
+  const label = (text: string, x: number) => {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = t.dim;
+    ctx.font = `15px ${MONO2}`;
+    ctx.letterSpacing = '3px';
+    ctx.fillText(text, x, rowsTop - 18);
+    ctx.letterSpacing = '0px';
+  };
+  label('DRIVERS', 60);
+  label('CONSTRUCTORS', 760);
   drivers.forEach((r, n) => {
-    const y = 150 + n * 44;
-    const color = f1Color(r.team);
-    // a faint row band every other line
-    if (n % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(30, y - 30, 640, 42); }
-    ctx.fillStyle = n < 3 ? SAND : 'rgba(255,255,255,0.5)';
-    ctx.font = '22px "Texz Sans Bold"';
+    const y = rowsTop + n * 50;
+    panel(ctx, t, 60, y, 670, 42, { fill: n % 2 ? t.panel : t.panel2, stripe: n < 3 ? t.red : t.line });
+    ctx.textBaseline = 'middle';
     ctx.textAlign = 'right';
-    ctx.fillText(r.pos, 72, y);
-    ctx.fillStyle = color;
-    ctx.fillRect(86, y - 24, 6, 30);
+    ctx.fillStyle = n === 0 ? t.redText : t.dim;
+    ctx.font = `18px ${MONO2}`;
+    ctx.fillText(r.pos, 112, y + 22);
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '23px "Texz Sans Bold"';
-    ctx.fillText(fit(ctx, r.driver, 250), 104, y);
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '18px "Texz Sans"';
-    ctx.fillText(fit(ctx, r.team, 110), 365, y);
-    // points bar
-    const w = Math.max(4, (r.points / top) * 100);
-    ctx.fillStyle = `${color}88`;
-    ctx.fillRect(485, y - 20, w, 22);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '20px "Texz Sans Bold"';
-    ctx.fillText(String(r.points), 485 + w + 8, y - 2);
+    dot(ctx, 132, y + 21, f1Color(r.team), 5);
+    ctx.fillStyle = t.text;
+    ctx.font = `21px ${BOLD}`;
+    ctx.fillText(fitText(ctx, r.driver, 270), 150, y + 22);
+    ctx.fillStyle = t.soft;
+    ctx.font = `16px ${BODY}`;
+    ctx.fillText(fitText(ctx, r.team, 150), 430, y + 22);
     if (r.wins) {
-      ctx.fillStyle = 'rgba(255,255,255,0.45)';
-      ctx.font = '16px "Texz Sans"';
-      ctx.textAlign = 'right';
-      ctx.fillText(`${r.wins}W`, 668, y - 2);
-      ctx.textAlign = 'left';
+      ctx.fillStyle = t.dim;
+      ctx.font = `15px ${MONO}`;
+      ctx.fillText(`${r.wins}W`, 594, y + 22);
     }
-  });
-  // constructors
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.font = '20px "Texz Sans Bold"';
-  ctx.fillText('CONSTRUCTORS', 720, 128);
-  const teams = d.teams.slice(0, 10);
-  const best = teams[0]?.points || 1;
-  teams.forEach((t, n) => {
-    const y = 160 + n * 44;
-    const color = f1Color(t.team);
-    ctx.fillStyle = color;
-    ctx.fillRect(720, y - 20, Math.max(6, (t.points / best) * 250), 26);
-    // dark letters on the bright team colours
-    const v = parseInt(color.slice(1), 16);
-    const light = ((v >> 16) * 0.299 + ((v >> 8) & 255) * 0.587 + (v & 255) * 0.114) > 150;
-    ctx.fillStyle = light ? INK : '#ffffff';
-    ctx.font = '18px "Texz Sans Bold"';
-    ctx.fillText(fit(ctx, `${t.pos}  ${t.team}`, 230), 728, y);
-    ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'right';
-    ctx.fillText(String(t.points), W - 30, y);
+    ctx.fillStyle = n === 0 ? t.redText : t.text;
+    ctx.font = `26px ${SERIF}`;
+    ctx.fillText(String(r.points), 712, y + 24);
+    ctx.textBaseline = 'alphabetic';
+  });
+  const best = teams[0]?.points || 1;
+  teams.forEach((r, n) => {
+    const y = rowsTop + n * 50;
+    panel(ctx, t, 760, y, 380, 42, { fill: n % 2 ? t.panel : t.panel2, stripe: n < 3 ? t.red : t.line });
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = n === 0 ? t.redText : t.dim;
+    ctx.font = `18px ${MONO2}`;
+    ctx.fillText(r.pos, 806, y + 20);
     ctx.textAlign = 'left';
+    ctx.fillStyle = t.text;
+    ctx.font = `19px ${BOLD}`;
+    ctx.fillText(fitText(ctx, r.team, 200), 822, y + 19);
+    // a thin bar in the team's colour under the name, for the gap at a glance
+    ctx.fillStyle = f1Color(r.team);
+    ctx.fillRect(822, y + 33, Math.max(6, (r.points / best) * 210), 3);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = n === 0 ? t.redText : t.text;
+    ctx.font = `24px ${SERIF}`;
+    ctx.fillText(String(r.points), 1122, y + 22);
+    ctx.textBaseline = 'alphabetic';
   });
   return canvas.toBuffer('image/png');
 }
@@ -322,43 +357,48 @@ export async function standingsCard(d: StandingsData): Promise<Buffer> {
 export interface WeekData { title: string; subtitle: string; tz: string; sessions: { label: string; start: number; big: boolean }[]; next?: number }
 
 // the weekend's sessions as a schedule board, in the reader's own time zone
-export async function weekCard(d: WeekData): Promise<Buffer> {
-  const W = 1000;
-  const H = 150 + d.sessions.length * 62 + 20;
+export async function weekCard(d: WeekData, theme?: string | null): Promise<Buffer> {
+  const t = paletteOf(theme);
+  const W = 1200;
+  const top = 262;
+  const H = top + d.sessions.length * 70 + 30;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
-  header(ctx, W, d.title, d.subtitle);
+  backdrop(ctx, W, H, t);
+  wordmark(ctx, t);
+  metaLine(ctx, t, d.subtitle, 60, 128, W - 400);
+  titleBlock(ctx, t, d.title, 60, 204, W - 380);
   const day = new Intl.DateTimeFormat('en-GB', { timeZone: d.tz, weekday: 'short', day: 'numeric', month: 'short' });
   const time = new Intl.DateTimeFormat('en-GB', { timeZone: d.tz, hour: '2-digit', minute: '2-digit' });
   d.sessions.forEach((s, n) => {
-    const y = 160 + n * 62;
+    const y = top + n * 70;
     const done = s.start < Date.now() - 2 * 3600_000;
     const next = d.next === s.start;
-    ctx.fillStyle = next ? 'rgba(225,6,0,0.18)' : s.big ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)';
-    ctx.fillRect(30, y - 38, W - 60, 54);
-    ctx.fillStyle = s.big ? '#e10600' : 'rgba(255,255,255,0.25)';
-    ctx.fillRect(30, y - 38, 6, 54);
-    ctx.globalAlpha = done ? 0.4 : 1;
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `${s.big ? '26px "Texz Sans Bold"' : '24px "Texz Sans"'}`;
+    ctx.globalAlpha = done ? 0.45 : 1;
+    panel(ctx, t, 60, y, W - 120, 58, { fill: next ? t.panel2 : t.panel, stripe: s.big || next ? t.red : t.line });
+    ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    ctx.fillText(s.label, 56, y);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.font = '22px "Texz Sans"';
-    ctx.fillText(day.format(s.start), W - 190, y);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '26px "Texz Sans Bold"';
-    ctx.fillText(time.format(s.start), W - 56, y);
-    ctx.globalAlpha = 1;
+    ctx.fillStyle = t.text;
+    ctx.font = s.big ? `27px ${SERIF}` : `23px ${BODY}`;
+    ctx.fillText(s.label, 92, y + 30);
+    const labelW = ctx.measureText(s.label).width;
     if (next) {
-      ctx.fillStyle = '#e10600';
-      ctx.font = '16px "Texz Sans Bold"';
-      ctx.textAlign = 'right';
-      ctx.fillText('NEXT UP', W - 330, y - 2);
+      ctx.fillStyle = t.redText;
+      ctx.font = `15px ${MONO2}`;
+      ctx.letterSpacing = '3px';
+      ctx.fillText('NEXT UP', 92 + labelW + 24, y + 30);
+      ctx.letterSpacing = '0px';
     }
+    ctx.textAlign = 'right';
+    ctx.fillStyle = t.soft;
+    ctx.font = `19px ${MONO}`;
+    ctx.fillText(day.format(s.start).toUpperCase(), W - 230, y + 30);
+    ctx.fillStyle = s.big ? t.text : t.soft;
+    ctx.font = `30px ${SERIF}`;
+    ctx.fillText(time.format(s.start), W - 90, y + 32);
+    ctx.textBaseline = 'alphabetic';
+    ctx.globalAlpha = 1;
   });
-  ctx.textAlign = 'left';
   return canvas.toBuffer('image/png');
 }
 

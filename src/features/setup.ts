@@ -294,6 +294,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { name: '🏎️ Grand Prix', value: `${line(b.f1)}\nfacts: ${b.f1.facts ? 'daily' : 'off'}`, inline: true },
       { name: '⚽ Football', value: `${line(b.football)}\nclubs: ${b.football.favs.join(', ') || '*none*'}\nbig matches: ${b.football.big ? 'on' : 'off'}`, inline: true },
       { name: '📺 Anime', value: `${line(b.anime)}\nshows: ${b.anime.shows.length}\npopular: ${b.anime.popular ? 'on' : 'off'}`, inline: true },
+      { name: '🎨 F1 card style', value: store.getKv(`f1theme:${guild.id}`) === 'agency' ? '📜 Detective Agency, the light one' : '🌑 Port Mafia, the dark one', inline: true },
       ...(b.anime.shows.length ? [{ name: '📺 Shows that get a ping every episode', value: b.anime.shows.map((x) => x.title).join(', ').slice(0, 1024), inline: false }] : []),
     );
     comps.push(
@@ -304,6 +305,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
         toggle(owner, 'bulon', 'anime', 'Anime', b.anime.on, '📺'),
         back(owner),
       ),
+      row(new ButtonBuilder().setCustomId(id(owner, 'f1look')).setLabel(`F1 cards: ${store.getKv(`f1theme:${guild.id}`) === 'agency' ? 'Detective Agency' : 'Port Mafia'}`).setEmoji('🎨').setStyle(ButtonStyle.Secondary)),
       row(
         toggle(owner, 'bulopt', 'facts', 'F1 facts', b.f1.facts, '🗞️'),
         toggle(owner, 'bulopt', 'big', 'Big matches', b.football.big, '🏟️'),
@@ -412,7 +414,7 @@ const pageOf: Record<string, string> = {
   arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
   clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
-  qch: 'quotes', bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', bultrack: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
+  qch: 'quotes', bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', bultrack: 'bulletins', f1look: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
   noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
@@ -565,6 +567,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       return true;
     }
 
+    if (action === 'f1look') store.setKv(`f1theme:${i.guild.id}`, store.getKv(`f1theme:${i.guild.id}`) === 'agency' ? 'mafia' : 'agency');
     if (action === 'p2help') setP2Helper(store, i.guild.id, !p2HelperOn(store, i.guild.id));
     if (action === 'mod') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], enabled: !store.rules(i.guild.id, arg).enabled };
     if (action === 'modch') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], channels: values };

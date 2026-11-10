@@ -11,7 +11,7 @@ import { crestQuestions } from '../feeds/football.js';
 type QuizQ = F1Q & { image?: string };
 type Kind = 'f1' | 'crest';
 
-const RED = 0xe10600;
+const RED = 0xc8283c;
 const PAY: Record<string, number> = { easy: 20, medium: 35, hard: 60 };
 const payFor = (q: QuizQ) => PAY[q.difficulty] ?? 30;
 const row = (...b: ButtonBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...b);

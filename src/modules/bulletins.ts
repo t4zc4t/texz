@@ -24,7 +24,7 @@ const HOUR = 3_600_000;
 
 // names in the Agency's voice
 export const names: Record<Kind, { channel: string; role: string; emoji: string; topic: string; color: number }> = {
-  f1: { channel: '🏎️┃paddock-gossip', role: 'Paddock Informant', emoji: '🏎️', topic: 'Grand Prix results, race day pings and paddock trivia, filed by Texz', color: 0xe10600 },
+  f1: { channel: '🏎️┃paddock-gossip', role: 'Paddock Informant', emoji: '🏎️', topic: 'Grand Prix results, race day pings and paddock trivia, filed by Texz', color: 0xc8283c },
   football: { channel: '⚽┃pitch-side-reports', role: 'Pitch Informant', emoji: '⚽', topic: 'Big matches, your clubs, kick-off pings and full-time scores, filed by Texz', color: 0x2e9b4f },
   anime: { channel: '📺┃yokohama-screenings', role: 'Screening Informant', emoji: '📺', topic: 'New episodes as they air and the day\'s schedule, filed by Texz', color: 0x8e6cd8 },
 };
@@ -153,11 +153,13 @@ const withImage = (e: EmbedBuilder, image: Buffer | null, rows: ActionRowBuilder
   files: image ? [new AttachmentBuilder(image, { name: 'card.png' })] : [],
   components: rows,
 });
-const weekImage = (r: Round, tz: string) => drawOnce(`f1week:${r.round}:${tz}:${Math.floor(Date.now() / 3600_000)}`, () => weekCard({
+// which look a server picked for its F1 cards in /setup, Port Mafia unless it asked for the light one
+export const f1Look = (store: Store, gid: string | null) => (gid ? store.getKv(`f1theme:${gid}`) : null) ?? 'mafia';
+const weekImage = (r: Round, tz: string, look = 'mafia') => drawOnce(`f1week:${r.round}:${tz}:${look}:${Math.floor(Date.now() / 3600_000)}`, () => weekCard({
   title: r.name, subtitle: `Round ${r.round} · ${r.circuit.name} · times in ${tz === 'Asia/Kolkata' ? 'IST' : tz}`, tz,
   next: Date.parse(r.sessions.find((x) => Date.parse(x.start) > Date.now())?.start ?? '') || undefined,
   sessions: r.sessions.map((x) => ({ label: x.label, start: Date.parse(x.start), big: bigSession(x.type) })),
-}));
+}, look));
 
 const link = (url: string, label: string) => new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(url).setLabel(label);
 const sessionWord: Record<string, string> = { Q: 'Qualifying', SQ: 'Sprint qualifying', S: 'Sprint', R: 'Grand Prix' };
@@ -185,7 +187,7 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
       for (const [gid, b] of live) {
         if (!store.firstTime(gid, `f1:week:${r.round}`)) continue;
         await post(client, b.f1, {
-          react: [flag, '🏎️'], image: await weekImage(r, 'Asia/Kolkata'),
+          react: [flag, '🏎️'], image: await weekImage(r, 'Asia/Kolkata', f1Look(store, gid)),
           embed: card({ kind: 'f1Week', title: `${flag} ${r.name} · it's race week`, emoji: '', color: names.f1.color, gif: 'off', body: `Round ${r.round} · ${r.circuit.name}, ${r.circuit.locality}${r.sprint ? ' · ⚡ sprint weekend' : ''}\n${weekLines(r).filter((_, i, a) => i >= a.length - 2).join('\n')}` }),
           buttons: [link(`${SITE}/schedule`, 'Full schedule')],
         });
@@ -242,7 +244,8 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
             }
           }
           const win = s.type === 'Q' || s.type === 'SQ' ? `${s.top3[0].driver} takes pole` : `${s.top3[0].driver} wins`;
-          const image = await drawOnce(`f1:${r.round}:${s.type}:${rows.length}`, () => f1Card({ title: r.name, subtitle: `${sessionWord[s.type] ?? s.label} · round ${r.round} · ${r.circuit.name}`, rows }));
+          const look = f1Look(store, gid);
+          const image = await drawOnce(`f1:${r.round}:${s.type}:${rows.length}:${look}`, () => f1Card({ title: r.name, subtitle: `${sessionWord[s.type] ?? s.label} · round ${r.round} · ${r.circuit.name}`, rows }, look));
           await post(client, b.f1, {
             ping: s.type === 'R', text: s.type === 'R' ? `${win}!` : undefined, react: [flag, s.type === 'R' ? '🏆' : '⏱️'], image,
             embed: card({ kind: s.type === 'R' ? 'f1Win' : 'f1Result', title: `${flag} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: image ? 'off' : gifIn(store, gid, s.type === 'R' ? 'f1win' : s.type === 'Q' || s.type === 'SQ' ? 'f1quali' : 'f1result'), body }),
@@ -607,7 +610,8 @@ const f1: Command = {
       if (view.startsWith('stand')) {
         const h = await home();
         const [a, b] = h.standings;
-        const image = await drawOnce(`f1stand:${h.season}:${h.afterRound}`, () => standingsCard({ title: `${h.season} Championship`, subtitle: `After round ${h.afterRound}`, drivers: h.standings, teams: h.teams }));
+        const look = f1Look(store, ctx.guildId);
+        const image = await drawOnce(`f1stand:${h.season}:${h.afterRound}:${look}`, () => standingsCard({ title: `${h.season} Championship`, subtitle: `After round ${h.afterRound}`, drivers: h.standings, teams: h.teams }, look));
         const e = card({ kind: 'f1Result', title: `${h.season} standings`, emoji: '🏆', color: names.f1.color, gif: 'off', line: '',
           body: a && b ? `**${a.driver}** leads by **${a.points - b.points}** after round ${h.afterRound}` : `After round ${h.afterRound}` });
         return ctx.reply(withImage(e, image, [site]));
@@ -615,7 +619,8 @@ const f1: Command = {
       if (view.startsWith('last')) {
         const h = await home();
         const rows = h.lastRace.results.slice(0, 10).map((d) => ({ pos: d.pos, driver: d.driver, team: d.team, extra: d.pos === '1' ? undefined : d.gap }));
-        const image = await drawOnce(`f1last:${h.lastRace.round}`, () => f1Card({ title: h.lastRace.name, subtitle: `Race result · ${h.lastRace.dateLabel}`, rows }));
+        const look = f1Look(store, ctx.guildId);
+        const image = await drawOnce(`f1last:${h.lastRace.round}:${look}`, () => f1Card({ title: h.lastRace.name, subtitle: `Race result · ${h.lastRace.dateLabel}`, rows }, look));
         const e = card({ kind: 'f1Win', title: `${h.lastRace.name}`, emoji: '🏁', color: names.f1.color, gif: 'off', line: '', body: `**${rows[0]?.driver}** won for ${rows[0]?.team} · ${h.lastRace.dateLabel}` });
         return ctx.reply(withImage(e, image, [site]));
       }
@@ -623,7 +628,7 @@ const f1: Command = {
       const r: Round | null = nextRound(rounds);
       if (!r) return ctx.reply('The season is over. The paddock sleeps, and so do I.');
       const tz = store.settings(ctx.userId).timezone || 'Asia/Kolkata';
-      const image = await weekImage(r, tz);
+      const image = await weekImage(r, tz, f1Look(store, ctx.guildId));
       const next = r.sessions.find((x) => Date.parse(x.start) > Date.now());
       const e = card({ kind: 'f1Week', title: `${flagOf[r.circuit.country] ?? '🏁'} ${r.name}`, emoji: '', color: names.f1.color, gif: image ? 'off' : undefined, line: '',
         body: `Round ${r.round} · ${r.circuit.name}${r.sprint ? ' · ⚡ sprint weekend' : ''}${next ? `\n${sessionMark(next.type)} **${next.label}** <t:${unix(Date.parse(next.start))}:R>` : ''}` });
