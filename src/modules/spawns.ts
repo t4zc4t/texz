@@ -1,6 +1,6 @@
 import { track } from './missions.js';
 import {
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, StringSelectMenuBuilder,
   type Client, type Guild, type Interaction, type Message, type MessageActionRowComponentBuilder,
 } from 'discord.js';
 import type { Store } from '../db.js';
@@ -12,6 +12,9 @@ import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize,
 import { classify, keepSpawn, seedMemory } from '../features/pokemodel.js';
 
 export const POKETWO_ID = '716390085896962058';
+// claim help for Pokétwo can be switched off per server, catches still count for the dex and the race
+export const p2HelperOn = (store: Store, guildId: string) => store.getKv(`p2:off:${guildId}`) !== '1';
+export const setP2Helper = (store: Store, guildId: string, on: boolean) => store.setKv(`p2:off:${guildId}`, on ? '0' : '1');
 export const SHOOB_ID = '673362753489993749';
 
 // the roles people can opt into: one for Pokétwo, one per Shoob tier
@@ -202,6 +205,7 @@ async function onSpawn(store: Store, m: Message) {
     }
     // a hint: answer it, and if only one name fits, that's the spawn
     const hint = hintOf(m.content);
+    if (hint && !p2HelperOn(store, m.guild.id)) return;
     if (hint) {
       const fits = solve(hint).slice(0, 6);
       if (fits.length === 1 && w) await confirm(store, m, w, fits[0].name, 'hint');
@@ -231,7 +235,7 @@ async function onSpawn(store: Store, m: Message) {
       }
       if (w && name && Date.now() - w.at < 30 * 60_000) await confirm(store, m, w, name, 'catch');
       waiting.delete(m.channelId);
-      if (/these colors seem unusual|shiny/i.test(m.content) && name && m.channel.isSendable() && store.rules(m.guild.id, 'spawns').enabled) {
+      if (/these colors seem unusual|shiny/i.test(m.content) && name && m.channel.isSendable() && store.rules(m.guild.id, 'spawns').enabled && p2HelperOn(store, m.guild.id)) {
         const who = /<@!?(\d+)>/.exec(m.content)?.[1];
         await m.channel.send({ content: `✨ A **shiny ${name}**${who ? ` for <@${who}>` : ''}! Frame that one.`, allowedMentions: { parse: [] } });
       }
@@ -248,6 +252,7 @@ async function onSpawn(store: Store, m: Message) {
   store.setKv(count, String(Number(store.getKv(count) ?? 0) + 1));
   store.setKv(`spawnseen:${m.guild.id}:${which}`, String(Date.now()));
   if (s.kind === 'p2') {
+    if (!p2HelperOn(store, m.guild.id)) { waiting.delete(m.channelId); return; }
     // an unclaimed spawn that never got a name still goes in the log, so misses show up
     if (w && !w.confirmed) logSpawn({ at: w.at, guess: w.guess, confirmed: null, how: 'fled' });
     const nw: Waiting = { id: m.id, channelId: m.channelId, hash: null, image: null, vec: null, at: Date.now(), guess: null, confirmed: null, sent: null, shown: null, pinged: false, others: [], wrong: [], unsure: false };
@@ -384,7 +389,7 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
     body: [
       `${p2 ? '🟢' : '⚫'} 🌟 **Pokétwo rare spawns** · legendary, mythical and ultra beasts only`,
       `${myTypes.length ? '🟢' : '⚫'} 🧬 **Pokétwo types** · ${myTypes.length ? myTypes.map((t) => `${typeIcon(t)} ${t}`).join(' ') : 'none picked, handy when a quest wants a type'}`,
-      `🔎 **Claim help** · I read every spawn picture, and remember **${memorySize(store)}** confirmed spawns so variants come out right, plus I solve hints`,
+      p2HelperOn(store, guild.id) ? `🟢 🔎 **Claim help** · I read every spawn picture, and remember **${memorySize(store)}** confirmed spawns so variants come out right, plus I solve hints` : '⚫ 🔎 **Claim help** · switched off here, an admin can turn it back on below',
       `${mine.length ? '🟢' : '⚫'} 🃏 **Shoob** · ${mine.length ? mine.map((t) => `${tierMark[t]} T${t}`).join(' ') : 'no tiers picked'}`,
       '',
       '-# Shoob only pings the tiers you pick. Most people want 4 and up.',
@@ -397,7 +402,10 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
   return {
     embeds: [e],
     components: [
-      row(new ButtonBuilder().setCustomId('spw|p2').setLabel(p2 ? 'Stop rare spawn pings' : 'Ping me for rare spawns').setEmoji('🌟').setStyle(p2 ? ButtonStyle.Success : ButtonStyle.Secondary)),
+      row(
+        new ButtonBuilder().setCustomId('spw|p2').setLabel(p2 ? 'Stop rare spawn pings' : 'Ping me for rare spawns').setEmoji('🌟').setStyle(p2 ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('spw|helper').setLabel(`Pokétwo helper: ${p2HelperOn(store, guild.id) ? 'on' : 'off'}`).setEmoji('🔎').setStyle(p2HelperOn(store, guild.id) ? ButtonStyle.Success : ButtonStyle.Secondary),
+      ),
       row(new StringSelectMenuBuilder().setCustomId('spw|types').setPlaceholder('🧬 Which Pokétwo types ping you').setMinValues(0).setMaxValues(TYPES.length)
         .addOptions(TYPES.map((t) => ({ label: t, value: t, emoji: typeEmoji(t), default: myTypes.includes(t) })))),
       row(new StringSelectMenuBuilder().setCustomId('spw|tiers').setPlaceholder('🃏 Which Shoob tiers ping you').setMinValues(0).setMaxValues(TIERS.length)
@@ -492,7 +500,11 @@ export async function onSpawnButton(store: Store, i: Interaction) {
   const member = await i.guild.members.fetch(i.user.id).catch(() => null);
   if (!member) return true;
   let ok = true;
-  if (i.customId === 'spw|p2') {
+  if (i.customId === 'spw|helper') {
+    // a server switch, so only people who manage the server can flip it
+    if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) { await i.reply({ content: 'Only people with Manage Server can switch the Pokétwo helper.', flags: MessageFlags.Ephemeral }); return true; }
+    setP2Helper(store, i.guild.id, !p2HelperOn(store, i.guild.id));
+  } else if (i.customId === 'spw|p2') {
     const role = await rareRole(i.guild, store, true);
     ok = !!role && await (member.roles.cache.has(role.id) ? member.roles.remove(role) : member.roles.add(role)).then(() => true).catch(() => false);
   } else if (i.isStringSelectMenu() && i.customId === 'spw|types') {

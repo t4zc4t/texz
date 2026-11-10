@@ -12,6 +12,7 @@ import { ticketPanel } from '../modules/server.js';
 import { buildBoard } from '../modules/bulletins.js';
 import { carryRankPerms, fixRankOrder, perks, rankFor, ranks, tidyRanks } from '../modules/levels.js';
 import { parseLength } from '../modules/moderation.js';
+import { p2HelperOn, setP2Helper } from '../modules/spawns.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
@@ -92,7 +93,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       title = mod.label;
       body = `${mod.about}\n\nLeave the menus empty to allow it everywhere and for everyone. Admins can always use everything.`;
       comps.push(
-        row(toggle(owner, 'mod', mod.name, 'Feature', r.enabled, icon[mod.name] ?? '📁'), back(owner, 'features')),
+        row(toggle(owner, 'mod', mod.name, 'Feature', r.enabled, icon[mod.name] ?? '📁'), ...(mod.name === 'spawns' ? [toggle(owner, 'p2help', mod.name, 'Pokétwo helper', p2HelperOn(store, guild.id), '🔎')] : []), back(owner, 'features')),
         row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'modch', mod.name)).setPlaceholder('📍 Only in these channels (empty = everywhere)')
           .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(25).setDefaultChannels(r.channels.slice(0, 25))),
         row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'modrole', mod.name)).setPlaceholder('🎭 Only for these roles (empty = everyone)')
@@ -404,7 +405,7 @@ async function canGive(guild: Guild, roleId: string) {
 }
 
 const pageOf: Record<string, string> = {
-  mod: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome',
+  mod: 'f', p2help: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome',
   arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
   clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
@@ -555,6 +556,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       return true;
     }
 
+    if (action === 'p2help') setP2Helper(store, i.guild.id, !p2HelperOn(store, i.guild.id));
     if (action === 'mod') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], enabled: !store.rules(i.guild.id, arg).enabled };
     if (action === 'modch') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], channels: values };
     if (action === 'modrole') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], roles: values };
