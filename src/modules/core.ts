@@ -1,7 +1,9 @@
 import { servers } from './servers.js';
-import { ActionRowBuilder, ChannelType, PermissionFlagsBits, SlashCommandBuilder, StringSelectMenuBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits, SlashCommandBuilder, StringSelectMenuBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
+import type { Ctx } from '../core/ctx.js';
+import { closest, search } from '../core/fuzzy.js';
 import { defaultRules, type Store } from '../db.js';
-import { slashPath, type Command, type Module } from '../core/module.js';
+import type { Command, Module } from '../core/module.js';
 import { card, say } from '../theme.js';
 import { isGifLink, resolve } from '../gifs.js';
 import { setupPanel } from '../features/setup.js';
@@ -39,106 +41,133 @@ function rulesText(store: Store, guildId: string) {
 
 const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '🎖️', utility: '🧰', anime: '📺', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴', bulletins: '🗞️', spawns: '🎯' };
 
-// both ways to run a command, written the same way everywhere in help
-function forms(c: Command, prefix: string) {
+// believable things to type after a command, so every help page shows a real example
+const sample: Record<string, string> = {
+  user: '@someone', other: '@friend', amount: '100', minutes: '30', note: 'drink water', title: 'Frieren', name: 'Gojo', day: 'tomorrow',
+  season: 'fall', year: '2026', when: '9pm', show: 'Frieren', type: 'manga', question: 'will it rain tomorrow?', options: 'pizza, burger, ramen',
+  dice: '2d6', reason: 'spamming links', length: '10m', id: '123456789012345678', hint: 'p_k_ch_', filter: 'best', topic: 'f1', feature: 'birthday',
+  what: 'cookie', days: '7', on: 'on', all: 'Best opening? | Unravel | Gurenge', level: '10', date: '14 march', role: '@Gamers', channel: '#general',
+  view: 'standings', club: 'Inter Miami', link: '(reply to a message)',
+};
+const subSample: Record<string, string> = { 'remind': '2h drink water', 'giveaway start': '1d 1 Nitro', 'birthday set': '14 march', 'football fav': 'Inter Miami', 'wish add': 'Gojo', 'xp give': '@someone 500', 'xp level': '@someone 10', 'roleshop buy': '@Gamers', 'announce add': '#news 9pm Movie night tonight' };
+
+// a typed example and the matching slash one, no <x> or [x] to decode
+function examples(c: Command, prefix: string): { label: string; typed: string; slash: string; about?: string }[] {
   const t = c.text ?? {};
-  const opts = (c.data.options ?? []) as { name: string; required?: boolean; type: number }[];
-  const slashArgs = opts.filter((o) => o.type !== 1 && o.type !== 2).map((o) => (o.required ? `<${o.name}>` : `[${o.name}]`)).join(' ');
-  const textArgs = (t.args ?? []).map((a) => (opts.find((o) => o.name === a)?.required ? `<${a}>` : `[${a}]`)).join(' ');
-  const short = c.group || t.aliases?.length ? ` · short: ${[...(c.group ? [c.name] : []), ...(t.aliases ?? [])].slice(0, 3).map((a) => `\`${prefix} ${a}\``).join(' ')}` : '';
-  return {
-    slash: c.group ? `\`/${slashPath(c)}${textArgs ? ` input:${textArgs}` : ''}\`` : `\`/${slashPath(c)}${slashArgs ? ` ${slashArgs}` : ''}\``,
-    // typed mirrors slash, "tz owo huntbot" for "/owo view:huntbot", the short names still work
-    text: `\`${prefix} ${c.group ? `${c.group} ${c.as ?? c.name}` : c.name}${textArgs ? ` ${textArgs}` : ''}\`${short}`,
+  const call = c.call ?? c.name;
+  const opts = (c.data.options ?? []) as { name: string; description: string; type: number; options?: { name: string; type: number }[] }[];
+  const subs = opts.filter((o) => o.type === 1);
+  const fill = (args: string[]) => args.map((a) => sample[a] ?? a).join(' ');
+  const slashOf = (sub: string | null, args: string[]) => {
+    const base = c.group ? `/${c.group} view:${c.as ?? c.name}` : `/${c.name}${sub ? ` ${sub}` : ''}`;
+    if (!args.length) return c.group && sub ? `${base} input:${sub}` : base;
+    if (c.group) return `${base} input:${sub ? `${sub} ` : ''}${fill(args)}`;
+    return `${base} ${args.map((a) => `${a}:${sample[a] ?? a}`).join(' ')}`;
   };
+  if (subs.length) {
+    return subs.slice(0, 5).map((sc) => {
+      const args = t.subArgs?.[sc.name] ?? [];
+      const ex = subSample[`${call} ${sc.name}`] ?? fill(args);
+      return { label: sc.name, about: sc.description, typed: `${prefix} ${call} ${sc.name}${ex ? ` ${ex}` : ''}`, slash: slashOf(sc.name, args) };
+    });
+  }
+  const args = t.args ?? [];
+  // the required bits, or the first optional one so the example shows what it takes
+  const needed = args.filter((a) => (opts.find((o) => o.name === a) as { required?: boolean } | undefined)?.required);
+  const ex = c.example ?? subSample[call] ?? fill(needed.length ? needed : args.slice(0, 1));
+  const shown = needed.length ? needed : args.slice(0, 1);
+  return [{ label: call, typed: `${prefix} ${call}${ex ? ` ${ex}` : ''}`, slash: c.group && ex ? `/${c.group} view:${c.as ?? c.name} input:${ex}` : slashOf(null, shown) }];
+}
+
+// who may see a command in help: admin ones only for admins, mod ones for people who can moderate
+function allowed(ctx: Ctx, c: Command) {
+  if (c.admin || c.group === 'tools') return ctx.isAdmin;
+  if (c.group === 'mod') return ctx.isAdmin || !!ctx.member?.permissions.has(PermissionFlagsBits.ModerateMembers);
+  return true;
+}
+
+// everything help can point at: commands people can run, not the dashboard homes
+function catalogue(ctx: Ctx, store: Store) {
+  const out: { m: Module; c: Command }[] = [];
+  for (const m of allModules) {
+    if (!m.locked && !store.rules(ctx.guildId, m.name).enabled) continue;
+    for (const c of m.commands) {
+      if (c.name.endsWith('home') || c.name === 'servers' || c.name === 'config' || c.name === 'untimeout') continue;
+      if (c.hidden && !c.text) continue;
+      if (allowed(ctx, c)) out.push({ m, c });
+    }
+  }
+  return out;
 }
 
 const help: Command = {
   name: 'help',
   cooldown: 1,
-  data: new SlashCommandBuilder().setName('help').setDescription('Everything Texz can do, by feature')
-    .addStringOption((o) => o.setName('feature').setDescription('A feature or command to open')).toJSON(),
+  data: new SlashCommandBuilder().setName('help').setDescription('Everything Texz can do, or search it in plain words')
+    .addStringOption((o) => o.setName('feature').setDescription('What you\'re after, like money, birthday or ping me')).toJSON(),
   text: { aliases: ['h', 'commands'], args: ['feature'] },
+  example: 'birthday',
   run: (ctx, store) => {
     const prefix = ctx.guildId ? store.guild(ctx.guildId).prefix : 'tz';
     const gif = ctx.guildId ? store.guild(ctx.guildId).gifs.help ?? null : null;
-    const raw = ctx.str('feature')?.toLowerCase();
-    const want = raw === 'home' ? undefined : raw;
-    const mods = allModules.filter((m) => m.locked || store.rules(ctx.guildId, m.name).enabled);
-    const pickMod = want ? mods.find((m) => m.name === want || m.label.toLowerCase().includes(want)) : undefined;
-    // a command name or alias wins over a feature name, "tz help status" means the status command
-    const pickCmd = want ? (() => {
-      for (const m of mods) for (const c of m.commands) {
-        if (!c.hidden && (c.name === want || c.text?.aliases?.includes(want))) return { m, c };
-      }
-      return null;
-    })() : null;
-
-    // every page carries the same menus, picking from them flips this very message
-    const id = `nav|help|as=feature,owner=${ctx.userId}`;
-    const featureMenu = new StringSelectMenuBuilder().setCustomId(`${id},m=1`).setPlaceholder('📂 Open a feature')
-      .addOptions([
-        { label: 'Front page', value: 'home', emoji: '🕵️', description: 'Back to the start' },
-        ...mods.map((m) => ({ label: m.label, value: m.name, emoji: icons[m.name] ?? '📁', description: m.about.slice(0, 100), default: (pickCmd?.m ?? pickMod)?.name === m.name })),
-      ]);
-    const rows = [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(featureMenu)];
-    const inMod = pickCmd?.m ?? pickMod;
-    if (inMod) {
-      const cmds = inMod.commands.filter((c) => !c.hidden).slice(0, 25);
-      rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-        new StringSelectMenuBuilder().setCustomId(`${id},m=2`).setPlaceholder('🔎 How does a command work?')
-          .addOptions(cmds.map((c) => ({ label: `${prefix} ${c.name}`, value: c.name, description: c.data.description.slice(0, 100), default: pickCmd?.c.name === c.name }))),
-      ));
-    }
-    const page = (e: ReturnType<typeof card>) => ctx.reply({ embeds: [e], components: rows });
-
-    if (pickCmd) {
-      const { m, c } = pickCmd;
-      const t = c.text ?? {};
-      const opts = (c.data.options ?? []) as { name: string; description: string; type: number }[];
-      const subs = opts.filter((o) => o.type === 1);
-      const usage = subs.length
-        ? subs.map((sc) => {
-            const args = (t.subArgs?.[sc.name] ?? []).map((a) => `<${a}>`).join(' ');
-            return `\`/${slashPath(c)} ${sc.name}\` · \`${prefix} ${c.name} ${sc.name}${args ? ` ${args}` : ''}\`\n-# ${sc.description}`;
-          }).join('\n')
-        : `${forms(c, prefix).slash}\n${forms(c, prefix).text}`;
-      return page(card({
-        kind: 'help', title: `${prefix} ${c.name}`, emoji: icons[m.name] ?? '📁', gif,
-        body: c.data.description,
-        fields: [
-          { name: '⌨️ How to use it', value: usage, inline: false },
-          ...(subs.length ? [] : opts.length ? [{ name: '🧩 Options', value: opts.map((o) => `\`${o.name}\` ${o.description}`).join('\n'), inline: false }] : []),
-          { name: '📁 Part of', value: m.label, inline: true },
-          ...(c.admin ? [{ name: '🔐 Who', value: 'Admins with Manage Server', inline: false }] : []),
-        ],
-      }));
-    }
-    if (want && !pickMod) {
-      return page(card({ kind: 'missing', title: `No "${want}" in my files`, emoji: '🔍', gif: 'off', body: `Try \`${prefix} help\` for the whole list.` }));
-    }
-    if (pickMod) {
-      return page(card({
-        kind: 'help', title: pickMod.label, emoji: icons[pickMod.name] ?? '📁', gif,
-        body: `${pickMod.about}\n-# Every command works both ways: slash, or typed with \`${prefix}\`. \`<x>\` is needed, \`[x]\` is optional.`,
-        fields: pickMod.commands.filter((c) => !c.hidden).map((c) => {
-          const f = forms(c, prefix);
-          return { name: c.data.description.slice(0, 256), value: `${f.slash}\n${f.text}`, inline: false };
-        }),
-      }));
-    }
-    // the front page is the dashboards, each one opens with a click
+    const raw = ctx.str('feature')?.toLowerCase().trim();
+    const want = raw === 'home' ? undefined : raw || undefined;
+    const all = catalogue(ctx, store);
     const staff = (d: { name: string }) => (d.name === 'tools' ? ctx.isAdmin : d.name === 'mod' ? ctx.isAdmin || !!ctx.member?.permissions.has(PermissionFlagsBits.ModerateMembers) : true);
     const dashes = dashList.filter((d) => (ctx.guildId || d.anywhere) && staff(d));
-    rows.unshift(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+    const dashMenu = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
       new StringSelectMenuBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=help`).setPlaceholder('🚪 Open a dashboard')
         .addOptions(dashes.map((d) => ({ label: d.label, value: d.home, emoji: d.emoji, description: `/${d.name} · ${prefix} ${d.name}` }))),
+    );
+
+    // a dashboard name opens that dashboard's own page
+    const dash = want ? dashes.find((d) => d.name === want || d.label.toLowerCase() === want) : undefined;
+    if (dash) return ctx.reply({ content: `Opening **${dash.label}**, or type \`${prefix} ${dash.name}\` next time.`, components: [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(new ButtonBuilder().setCustomId(`nav|${dash.home}|owner=${ctx.userId}`).setLabel(`Open ${dash.label}`).setEmoji(dash.emoji).setStyle(ButtonStyle.Primary))], temp: true });
+
+    if (want) {
+      // an admin command asked for by name gets a straight answer instead of a near miss
+      const locked = allModules.flatMap((m) => m.commands).find((c) => (c.name === want || c.call === want || c.text?.aliases?.includes(want)) && !allowed(ctx, c));
+      if (locked) return ctx.reply({ embeds: [card({ kind: 'help', title: `${prefix} ${locked.call ?? locked.name}`, emoji: '🔐', gif: 'off', body: `${locked.data.description}.\nThat one is for ${locked.group === 'mod' ? 'moderators' : 'admins'}, so it stays out of your menus.` })], components: [dashMenu] });
+      const exact = all.find(({ c }) => c.name === want || c.call === want || c.text?.aliases?.includes(want));
+      const found = search(want, all.map(({ m, c }) => ({ id: c.name, names: [c.name, c.call ?? '', ...(c.text?.aliases ?? []), c.as ?? ''].filter(Boolean), text: `${c.data.description} ${m.label} ${m.about} ${c.group ?? ''}` })));
+      const pick = exact ?? all.find(({ c }) => c.name === found[0]?.id);
+      if (!pick) {
+        const near = closest(want.split(/\s+/)[0], all.flatMap(({ c }) => [c.name, ...(c.text?.aliases ?? [])]));
+        return ctx.reply({ embeds: [card({ kind: 'missing', title: `Nothing on "${want}"`, emoji: '🔍', gif: 'off', body: `${near ? `Did you mean \`${prefix} help ${near}\`?\n` : ''}Try other words, like \`${prefix} help money\` or \`${prefix} help ping me\`, or open a dashboard below.` })], components: [dashMenu] });
+      }
+      const { m, c } = pick;
+      const ex = examples(c, prefix);
+      const others = found.filter((x) => x.id !== c.name).map((x) => all.find(({ c: o }) => o.name === x.id)!).filter(Boolean).slice(0, 5);
+      const rows = [];
+      if (others.length) rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+        new StringSelectMenuBuilder().setCustomId(`nav|help|as=feature,owner=${ctx.userId}`).setPlaceholder('🔎 Not it? Other matches')
+          .addOptions(others.map(({ c: o }) => ({ label: `${prefix} ${o.call ?? o.name}`, value: o.name, description: o.data.description.slice(0, 100) }))),
+      ));
+      rows.push(dashMenu);
+      const group = dashList.find((d) => d.name === c.group);
+      return ctx.reply({ embeds: [card({
+        kind: 'help', title: `${prefix} ${c.call ?? c.name}`, emoji: group?.emoji ?? icons[m.name] ?? '📁', gif,
+        body: `${c.data.description}.`,
+        fields: [
+          ...ex.map((e) => ({ name: ex.length > 1 ? `▸ ${e.label}${e.about ? ` · ${e.about}`.slice(0, 200) : ''}` : '⌨️ Try it', value: `\`${e.typed}\`\n\`${e.slash}\``, inline: false })),
+          ...(c.text?.aliases?.length ? [{ name: '✂️ Shorter', value: c.text.aliases.filter((a) => !a.includes(' ')).slice(0, 4).map((a) => `\`${prefix} ${a}\``).join(' · ') || '—', inline: true }] : []),
+          ...(group ? [{ name: '🚪 Lives in', value: `${group.emoji} ${group.label} · \`${prefix} ${group.name}\``, inline: true }] : []),
+          ...(c.admin ? [{ name: '🔐 Who', value: 'Admins with Manage Server', inline: true }] : []),
+          ...(!exact && found.length ? [{ name: '​', value: `-# Closest match for "${want}". Leave anything you're not sure about out and I'll ask.`, inline: false }] : [{ name: '​', value: '-# Leave anything out and I\'ll ask. Slash replies only show to you, typed ones to everyone.', inline: false }]),
+        ],
+      })], components: rows });
+    }
+
+    // the front page is the dashboards, the same map as /owo, /fun and the rest
+    const rows = [dashMenu];
+    if (ctx.isAdmin && ctx.guildId) rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`nav|setup|owner=${ctx.userId}`).setLabel('Admin desk').setEmoji('🛠️').setStyle(ButtonStyle.Secondary),
     ));
-    return page(card({
+    return ctx.reply({ embeds: [card({
       kind: 'help', title: 'At your service', emoji: '🕵️', gif,
-      body: `Everything lives in a few dashboards. Run one, then click, no commands to remember. Slash ones only show to you, typed ones to everyone.\n\n🖼️ Right click a message → Apps → **Make it a Quote**${ctx.isAdmin ? ' · 🛠️ `/setup` for the admin desk' : ''}\n-# The second menu lists every command a feature has, typed and slash.`,
-      fields: dashes.map((d) => ({ name: `${d.emoji} ${d.label}`, value: `${blurb[d.name] ?? ''}\n\`/${d.name}\` · \`${prefix} ${d.name}\``, inline: true })),
-    }));
+      body: `Everything lives in a few dashboards, open one and click, nothing to remember.\n🔎 Looking for something? Ask in plain words: \`${prefix} help money\`, \`${prefix} help ping me\`, \`${prefix} help birthday\`.\n🖼️ Right click a message → Apps → **Make it a Quote**${ctx.isAdmin ? '\n🛠️ Admin things live in `/setup`' : ''}`,
+      fields: dashes.map((d) => ({ name: `${d.emoji} ${d.label}`, value: `${blurb[d.name] ?? ''}\n\`${prefix} ${d.name}\``, inline: true })),
+    })], components: rows });
   },
 };
 
@@ -150,7 +179,8 @@ const setup: Command = {
   text: { aliases: ['panel', 'frontdesk'] },
   run: (ctx, store) => {
     if (!ctx.guild) return ctx.reply('Setup lives inside a server.');
-    return ctx.reply({ ...setupPanel(store, ctx.guild, ctx.userId, 'home'), private: true });
+    // buttons on error messages open the page that fixes the problem
+    return ctx.reply({ ...setupPanel(store, ctx.guild, ctx.userId, ctx.str('page') ?? 'home'), private: true });
   },
 };
 
@@ -190,6 +220,8 @@ const config: Command = {
   run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Server settings only make sense inside a server.');
     const g = store.guild(ctx.guildId);
+    // plain "tz config" opens /setup, the typed subcommands stay for people who like them
+    if (!ctx.sub() && ctx.guild) return ctx.reply({ ...setupPanel(store, ctx.guild, ctx.userId, 'features'), private: true });
     const sub = ctx.sub() ?? 'view';
     const name = ctx.str('name')?.toLowerCase();
     const mod = name ? switchable().find((m) => m.name === name) : undefined;

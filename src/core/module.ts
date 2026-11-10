@@ -16,6 +16,10 @@ export interface Command {
   as?: string;
   // reachable from buttons and text, but no slash command of its own
   hidden?: boolean;
+  // how people type it when that's not just the name, like "quiz crest"
+  call?: string;
+  // what to type after the command in the help example, like "2h drink water"
+  example?: string;
   run(ctx: Ctx, store: Store): Promise<unknown>;
 }
 

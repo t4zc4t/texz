@@ -10,6 +10,7 @@ import { card } from '../theme.js';
 import { welcomeCard } from '../modules/welcome.js';
 import { ticketPanel } from '../modules/server.js';
 import { buildBoard } from '../modules/bulletins.js';
+import { searchMedia, titleOf } from '../anime/anilist.js';
 import { carryRankPerms, fixRankOrder, perks, rankFor, ranks, tidyRanks } from '../modules/levels.js';
 import { parseLength } from '../modules/moderation.js';
 import { p2HelperOn, setP2Helper } from '../modules/spawns.js';
@@ -293,6 +294,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { name: '🏎️ Grand Prix', value: `${line(b.f1)}\nfacts: ${b.f1.facts ? 'daily' : 'off'}`, inline: true },
       { name: '⚽ Football', value: `${line(b.football)}\nclubs: ${b.football.favs.join(', ') || '*none*'}\nbig matches: ${b.football.big ? 'on' : 'off'}`, inline: true },
       { name: '📺 Anime', value: `${line(b.anime)}\nshows: ${b.anime.shows.length}\npopular: ${b.anime.popular ? 'on' : 'off'}`, inline: true },
+      ...(b.anime.shows.length ? [{ name: '📺 Shows that get a ping every episode', value: b.anime.shows.map((x) => x.title).join(', ').slice(0, 1024), inline: false }] : []),
     );
     comps.push(
       row(
@@ -307,6 +309,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
         toggle(owner, 'bulopt', 'big', 'Big matches', b.football.big, '🏟️'),
         toggle(owner, 'bulopt', 'popular', 'Popular anime', b.anime.popular, '🔥'),
         new ButtonBuilder().setCustomId(id(owner, 'bulfav')).setLabel('Add or remove a club').setEmoji('⭐').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(id(owner, 'bultrack')).setLabel('Add or remove a show').setEmoji('📺').setStyle(ButtonStyle.Secondary),
       ),
     );
   }
@@ -409,7 +412,7 @@ const pageOf: Record<string, string> = {
   arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
   clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
-  qch: 'quotes', bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
+  qch: 'quotes', bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', bultrack: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
   noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
@@ -517,6 +520,12 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       const msg = await buildBoard(store, i.guild).catch((e) => `Something went wrong: ${e instanceof Error ? e.message : e}`);
       await i.editReply(setupPanel(store, i.guild, owner, 'bulletins'));
       await i.followUp({ content: msg, flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    if (action === 'bultrack') {
+      await i.showModal(formModal(owner, 'bultrack', '', 'Anime show', [
+        { id: 'v', label: 'Show title (again to remove it)', value: '', required: true, max: 100, hint: 'Frieren' },
+      ]));
       return true;
     }
     if (action === 'bulfav') {
@@ -666,6 +675,14 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       }
     }
     if (action === 'lvmsg') g.levels.message = i.fields.getTextInputValue('v').trim() || null;
+    if (action === 'bultrack') {
+      const want = i.fields.getTextInputValue('v').trim();
+      const [m] = await searchMedia(want, 'ANIME').catch(() => []);
+      if (!m) return fail(`Nothing called "${want}" on AniList.`);
+      const shows = g.bulletins.anime.shows;
+      const at = shows.findIndex((x) => x.id === m.id);
+      if (at >= 0) shows.splice(at, 1); else shows.push({ id: m.id, title: titleOf(m) });
+    }
     if (action === 'bulfav') {
       const club = i.fields.getTextInputValue('v').trim();
       const favs = g.bulletins.football.favs;

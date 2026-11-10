@@ -9,6 +9,7 @@ import { parseLength, human } from './moderation.js';
 import { COLOR, bar, card, say } from '../theme.js';
 import { zonedTime } from '../time.js';
 import { report } from '../ops.js';
+import { fixText } from '../core/fixes.js';
 
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
 const unix = (ms: number) => Math.floor(ms / 1000);
@@ -65,7 +66,7 @@ async function openTicket(store: Store, guild: Guild, userId: string, username: 
   if (already && guild.channels.cache.has(already.channel_id)) return `You already have one open: <#${already.channel_id}>`;
   if (already) store.closeTicket(already.channel_id);
   const me = await guild.members.fetchMe();
-  if (!me.permissions.has(PermissionFlagsBits.ManageChannels)) return 'I need the Manage Channels permission to open tickets.';
+  if (!me.permissions.has(PermissionFlagsBits.ManageChannels)) return fixText(guild, { perms: ['ManageChannels'], doing: 'open tickets' }) ?? 'I need the Manage Channels permission to open tickets.';
   const see = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles];
   const ch = await guild.channels.create({
     name: `ticket-${username}`.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 90) || 'ticket',

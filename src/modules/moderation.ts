@@ -48,7 +48,7 @@ async function target(ctx: Ctx, perm: PermissionResolvable, need = true): Promis
   if (them.id === ctx.userId) return 'Doing that to yourself? I admire the drama, but no.';
   if (them.id === ctx.guild.ownerId) return 'That\'s the owner. Even I don\'t have the nerve.';
   if (ctx.member.id !== ctx.guild.ownerId && them.roles.highest.position >= ctx.member.roles.highest.position) return 'They\'re ranked the same as you or higher. Office politics, I\'m afraid.';
-  if (them.roles.highest.position >= me.roles.highest.position) return 'Their role sits above mine. Move my role higher and I\'ll handle it.';
+  if (them.roles.highest.position >= me.roles.highest.position) return `🔧 Their top role **${them.roles.highest.name}** sits at or above mine (**${me.roles.highest.name}**). Drag my role above theirs in Server Settings → Roles and I'll handle it.`;
   return { me, them };
 }
 

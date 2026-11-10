@@ -98,7 +98,7 @@ export async function onRoleButton(store: Store, i: Interaction) {
     const me = await i.guild.members.fetchMe();
     const roles = [...i.roles.values()].map((r) => i.guild!.roles.cache.get(r.id)).filter((r): r is Role => !!r);
     const bad = roles.filter((r) => r.position >= me.roles.highest.position || r.managed || r.id === i.guild!.id);
-    if (bad.length) { await i.reply({ content: `I can't hand out ${bad.map((r) => `<@&${r.id}>`).join(' ')}, move my role above them first.`, flags: 64, allowedMentions: { parse: [] } }); return true; }
+    if (bad.length) { await i.reply({ content: `I can't hand out ${bad.map((r) => `<@&${r.id}>`).join(' ')}, drag my role **${i.guild?.members.me?.roles.highest.name ?? 'Texz'}** above them in Server Settings → Roles first.`, flags: 64, allowedMentions: { parse: [] } }); return true; }
     const ch = i.channel;
     if (!ch?.isSendable()) { await i.reply({ content: 'I can\'t post here.', flags: 64 }); return true; }
     await ch.send({ ...pickerView(draft.title, draft.about, draft.style, roles), allowedMentions: { parse: [] } });

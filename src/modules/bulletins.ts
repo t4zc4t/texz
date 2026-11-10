@@ -15,6 +15,7 @@ import { SITE, bigSession, facts, flagOf, home, nextRound, onThisDay, questions,
 import { quizButton, quizRound } from './f1quiz.js';
 import { clubDot, interesting, leagues, matches, scoreLine, type Match } from '../feeds/football.js';
 import { airingOn, searchMedia, titleOf, type Media } from '../anime/anilist.js';
+import { fixText } from '../core/fixes.js';
 
 type Kind = 'f1' | 'football' | 'anime';
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
@@ -34,7 +35,7 @@ const pingRow = (kind: Kind) => row(new ButtonBuilder().setCustomId(`bul|${kind}
 // makes the category, three channels and three roles, reusing any that already exist
 export async function buildBoard(store: Store, guild: Guild): Promise<string> {
   const me = await guild.members.fetchMe();
-  if (!me.permissions.has([PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles])) return 'I need Manage Channels and Manage Roles to set the board up.';
+  if (!me.permissions.has([PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles])) return fixText(guild, { perms: ['ManageChannels', 'ManageRoles'], doing: 'set the board up' }) ?? 'I need Manage Channels and Manage Roles to set the board up.';
   const g = store.guild(guild.id);
   const b = g.bulletins;
   let cat = b.category ? await guild.channels.fetch(b.category).catch(() => null) : null;
@@ -484,6 +485,7 @@ export function animeRecap(store: Store, guild: Guild) {
 export const recap: Command = {
   name: 'recap',
   group: 'anime',
+  hidden: true,
   data: new SlashCommandBuilder().setName('recap').setDescription('What the server watched this week').toJSON(),
   text: { aliases: ['week'] },
   run: (ctx, store) => {
@@ -647,6 +649,8 @@ export const f1Today: Command = {
   group: 'fun',
   data: new SlashCommandBuilder().setName('onthisday').setDescription('F1, football and anime history for today')
     .addStringOption((o) => o.setName('topic').setDescription('Which one').addChoices({ name: 'F1', value: 'f1' }, { name: 'football', value: 'football' }, { name: 'anime', value: 'anime' })).toJSON(),
+  call: 'history',
+  example: 'f1',
   text: { aliases: ['otd', 'history'], args: ['topic'] },
   run: async (ctx, store) => {
     const topic = (ctx.str('topic') ?? '').toLowerCase();
@@ -713,9 +717,10 @@ const football: Command = {
   },
 };
 
+// moved into /setup → Bulletins, the typed form still works for admins
 const track: Command = {
   name: 'track',
-  group: 'anime',
+  hidden: true,
   data: new SlashCommandBuilder().setName('track').setDescription('Shows the server gets episode pings for (admins)')
     .addStringOption((o) => o.setName('title').setDescription('Add or remove this show, empty lists them').setMaxLength(100)).toJSON(),
   text: { aliases: ['tracked'], args: ['title'] },

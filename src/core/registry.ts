@@ -26,11 +26,14 @@ import { RED, card, type Kind } from '../theme.js';
 import { countUse, report } from '../ops.js';
 import { quoteCommand } from '../modules/quote.js';
 import { onProfileEdit } from '../modules/profile.js';
+import { onAchPick } from '../modules/missions.js';
 import { onShip } from '../modules/ship.js';
 import { onCatchCopy, onPingsButton, onSpawnButton, spawnsModule } from '../modules/spawns.js';
 import { fromComponent, fromSlash, fromText, withTokens, type Ctx } from './ctx.js';
 import { slashPath, type Command, type Module } from './module.js';
 import { glance, layout } from './glance.js';
+import { closest } from './fuzzy.js';
+import { fixText, setupButton, usualPerms } from './fixes.js';
 import { askModal, entriesOf, homePage, needsInput, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
 
 export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule];
@@ -43,9 +46,9 @@ const groups: Record<string, Group> = {
   owo: { label: 'OwO', emoji: '🐾', about: '', description: 'OwO dashboard: huntbot, gems, zoo, weapons, quests, shop and reminders', anywhere: true, dashboard: 'status' },
   anime: { label: 'Anime', emoji: '📺', about: '', description: 'Anime dashboard, or a title to search', anywhere: true, dashboard: 'animehome' },
   fun: { label: 'Games and trivia', emoji: '🎲', about: 'Games for the whole channel, trivia that pays yen, and the small stuff.', description: 'Games, trivia, ship, polls, dice and spawn pings', anywhere: true },
-  eco: { label: 'Yen', emoji: '💴', about: 'Claim, spend and give yen. The quiz and the guess game pay out too.', description: 'Yen: daily, balance, giving, the richest, the role shop and games that pay', extra: ['quiz', 'crestquiz', 'guess'] },
-  levels: { label: 'Levels', emoji: '🎖️', about: 'Ranks, perks and the roster.', description: 'Rank cards, perks, the leaderboard and xp tools' },
-  info: { label: 'You and the server', emoji: '🗂️', about: 'Your profile, your pings, birthdays and a look at people and the server.', description: 'Profile, pings, birthdays, avatars, away notes and the server', anywhere: true },
+  eco: { label: 'Yen', emoji: '💴', about: 'Claim, spend and give yen. The quiz and the guess game pay out too.', description: 'Yen: daily, balance, giving, the richest, the role shop and games that pay', extra: ['daily', 'rich', 'quiz', 'crestquiz', 'guess'] },
+  levels: { label: 'Levels', emoji: '🎖️', about: 'Ranks, perks and the roster.', description: 'Rank cards, perks, the leaderboard and xp tools', extra: ['perks', 'levels'] },
+  info: { label: 'You and the server', emoji: '🗂️', about: 'Your profile, your pings, birthdays and a look at people and the server.', description: 'Profile, pings, birthdays, avatars, away notes and the server', anywhere: true, extra: ['avatar'] },
   sports: { label: 'Sports', emoji: '🏁', about: 'Formula 1 from Parc Fermé and football from the big leagues.', description: 'F1 races, standings, quiz and football matches', anywhere: true },
   mod: { label: 'Moderation', emoji: '🛡️', about: 'Pick an action, then pick who. Everything lands in the case archive.', description: 'Moderation: warn, timeout, kick, ban, purge, lock, slowmode and cases', perms: PermissionFlagsBits.ModerateMembers },
   tools: { label: 'Server tools', emoji: '🧰', about: 'Giveaways, role pickers, planned announcements and activity numbers.', description: 'Giveaways, role pickers, announcements and server stats (admins)', perms: PermissionFlagsBits.ManageGuild },
@@ -178,6 +181,12 @@ async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command, cool = tru
   try {
     await cmd.run(ctx, store);
   } catch (e) {
+    // Discord said no because of a permission, say which one instead of a shrug
+    if ((e as { code?: number }).code === 50013 && ctx.guild) {
+      const fix = fixText(ctx.guild, { perms: usualPerms, channelId: ctx.channelId }) ?? '🔧 Discord says I\'m missing a permission for that. Check my role in Server Settings → Roles, and this channel\'s permissions.';
+      await ctx.reply({ content: fix, components: ctx.isAdmin ? [setupButton(ctx.userId)] : [], temp: true }).catch(() => {});
+      return;
+    }
     report(`${cmd.name} failed`, e);
     await ctx.reply({ embeds: [card({ kind: 'error', title: 'Well, that slipped', emoji: '🩹', color: RED })], temp: true }).catch(() => {});
   }
@@ -223,6 +232,9 @@ export function isEnabled(store: Store, guildId: string | null, module: string) 
   return store.rules(guildId, module).enabled;
 }
 
+// names a typo can be matched to: everything people can type, minus the dashboard homes
+const typoTargets = () => [...byText.entries()].filter(([, h]) => !dashNames.has(h.cmd.name) && !h.cmd.name.endsWith('home') && h.cmd.name !== 'servers').map(([k]) => k);
+
 // "tz status", "tz hb", "tzstatus" all work, case doesn't matter
 export function onText(store: Store, m: Message): boolean {
   const prefix = m.guildId ? store.guild(m.guildId).prefix : 'tz';
@@ -234,6 +246,9 @@ export function onText(store: Store, m: Message): boolean {
   // just the prefix on its own opens help
   if (!name && text.length === prefix.length) name = 'help';
   if (!name) return false;
+  // two word names like "tz quiz crest" or "tz predict top"
+  const two = tokens[0] ? `${name} ${tokens[0].toLowerCase()}` : '';
+  if (two && byText.has(two)) { tokens.shift(); name = two; }
   // "tz mod warn @x" works like "/mod warn", but "tz anime frieren" is still a search
   const next = tokens[0]?.toLowerCase();
   const member = groups[name] && next
@@ -242,7 +257,19 @@ export function onText(store: Store, m: Message): boolean {
   if (member) { tokens.shift(); name = member.cmd.name; }
   // "tz fun" on its own opens the dashboard, "tz owo" too
   const hit = member ?? (groups[name] && !tokens.length ? byName.get(groups[name].dashboard!) : undefined) ?? byText.get(name) ?? (groups[name] ? byName.get(groups[name].dashboard!) : undefined);
-  if (!hit) return false;
+  if (!hit) {
+    // a typo after the prefix gets a nudge to the nearest command, plain chat that happens to start with tz doesn't
+    if (!/^\s/.test(body)) return false;
+    const near = closest(name, typoTargets());
+    const target = near ? byText.get(near) : undefined;
+    if (!target) return false;
+    void m.reply({
+      content: `🤔 No \`${prefix} ${name}\` in my files. Did you mean **\`${prefix} ${target.cmd.call ?? near}\`**?`,
+      components: [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(new ButtonBuilder().setCustomId(`nav|${target.cmd.name}|owner=${m.author.id}`).setLabel(`Run ${prefix} ${target.cmd.call ?? near}`).setEmoji('▶️').setStyle(ButtonStyle.Primary))],
+      allowedMentions: { repliedUser: false },
+    }).then((sent) => store.deleteLater(sent.channelId, sent.id, Date.now() + 60_000)).catch(() => {});
+    return true;
+  }
   // "tzatziki" shouldn't trigger anything, only a space or a real command name after the prefix
   if (body && !/^\s/.test(body) && !byText.has(body.split(/\s+/)[0].toLowerCase())) return false;
   const t = hit.cmd.text ?? {};
@@ -297,6 +324,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onOwnerButton(i)) return;
     if (await onOwnerConfirm(i)) return;
     if (await onProfileEdit(store, i)) return;
+    if (await onAchPick(store, i)) return;
     if (await onShip(i)) return;
     if (await onBulletinButton(i, store)) return;
   } catch (e) {
