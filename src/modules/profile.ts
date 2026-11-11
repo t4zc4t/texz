@@ -10,7 +10,15 @@ import { card } from '../theme.js';
 import { fetchAvatar, profileCard, type Fav } from '../features/rankcard.js';
 import { levelOf, rankFor } from './levels.js';
 import { fmtDate } from './birthdays.js';
-import { searchMedia, titleOf } from '../anime/anilist.js';
+import { currentSeason, searchMedia, titleOf, topMedia, type Media } from '../anime/anilist.js';
+
+// the lists to pick a favourite anime or manga from
+const listName: Record<string, string> = { pop: 'the most popular ever', trend: 'what\'s trending', season: 'this season', top: 'the top rated' };
+async function mediaList(key: string): Promise<Media[]> {
+  const [type, which] = key.split(':') as ['ANIME' | 'MANGA', string];
+  const sort = which === 'trend' ? 'TRENDING_DESC' : which === 'top' ? 'SCORE_DESC' : 'POPULARITY_DESC';
+  return topMedia(type, sort, which === 'season' ? currentSeason() : undefined).catch(() => []);
+}
 import { asEmoji } from '../features/logos.js';
 import { teamDot } from '../feeds/f1.js';
 import { allClubs, clubLeagues, findClub, leagues } from '../feeds/football.js';
@@ -47,7 +55,7 @@ export function picksOf(store: Store, userId: string): Picks {
 }
 export const savePicks = (store: Store, userId: string, p: Picks) => store.setKv(`picks:${userId}`, JSON.stringify(p));
 
-async function editPanel(store: Store, userId: string, league?: string) {
+async function editPanel(store: Store, userId: string, league?: string, list?: string) {
   const p = picksOf(store, userId);
   const bio = store.profile(userId).bio;
   const val = (k: Part) => ({ club: p.club, team: p.team, anime: p.anime, manga: p.manga } as Record<string, string | undefined>)[k];
@@ -71,15 +79,22 @@ async function editPanel(store: Store, userId: string, league?: string) {
         ...clubLeagues.map((l) => ({ label: leagues[l]?.name ?? l, value: l, emoji: leagueFlag[l] ?? '⚽' })),
         { label: 'Type a club myself', value: '-type', emoji: '⌨️' }, { label: 'No club', value: '-' },
       )),
+      // anime and manga work like the club: pick a list, then the title with its cover
+      list ? row(new StringSelectMenuBuilder().setCustomId(id(`mediapick:${list}`)).setPlaceholder(`${list.startsWith('MANGA') ? '📖 My manga' : '📺 My anime'} from ${listName[list.split(':')[1]] ?? 'the list'}`).addOptions(
+        { label: 'Back to the lists', value: '-back', emoji: '⬅️' },
+        ...(await mediaList(list)).map((m) => ({ label: titleOf(m).slice(0, 100), value: String(m.id), description: [m.format, m.seasonYear ?? m.startDate?.year].filter(Boolean).join(' · ').slice(0, 100) || undefined, default: [p.anime, p.manga].includes(titleOf(m).slice(0, 40)) })),
+      )) : row(new StringSelectMenuBuilder().setCustomId(id('medialist')).setPlaceholder(`📺 ${p.anime ? `Anime: ${p.anime}` : 'Pick my anime'} · 📖 ${p.manga ? `Manga: ${p.manga}` : 'my manga'}`.slice(0, 150)).addOptions(
+        { label: 'Anime: the most popular ever', value: 'ANIME:pop', emoji: '📺' }, { label: 'Anime: trending now', value: 'ANIME:trend', emoji: '🔥' },
+        { label: 'Anime: this season', value: 'ANIME:season', emoji: '🌸' }, { label: 'Anime: type a title', value: 'type:anime', emoji: '⌨️' },
+        { label: 'Manga: the most popular ever', value: 'MANGA:pop', emoji: '📖' }, { label: 'Manga: trending now', value: 'MANGA:trend', emoji: '🔥' },
+        { label: 'Manga: top rated', value: 'MANGA:top', emoji: '⭐' }, { label: 'Manga: type a title', value: 'type:manga', emoji: '⌨️' },
+        { label: 'No favourite anime', value: 'none:anime', emoji: '✖️' }, { label: 'No favourite manga', value: 'none:manga', emoji: '✖️' },
+      )),
       row(
-        new ButtonBuilder().setCustomId(id('anime')).setLabel('Anime').setEmoji('📺').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(id('manga')).setLabel('Manga').setEmoji('📖').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(id('bio')).setLabel('Bio').setEmoji('🖋️').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(id('color')).setLabel('Accent').setEmoji('🎨').setStyle(ButtonStyle.Secondary),
-      ),
-      row(
         new ButtonBuilder().setCustomId(id('preview')).setLabel('Preview my card').setEmoji('🖼️').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(id('ping')).setLabel(`Pings for my club: ${p.ping === false ? 'off' : 'on'}`).setEmoji('🔔').setStyle(p.ping === false ? ButtonStyle.Secondary : ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(id('ping')).setLabel(`Club pings: ${p.ping === false ? 'off' : 'on'}`).setEmoji('🔔').setStyle(p.ping === false ? ButtonStyle.Secondary : ButtonStyle.Success),
       ),
     ],
   };
@@ -155,6 +170,30 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
       if (v === '-type') { await i.showModal(modal(owner, 'club', 'Football club (empty removes it)', p.club ?? '', 40, 'Real Madrid')); return true; }
       if (v === '-') { p.club = p.clubId = p.clubLogo = p.clubColor = undefined; savePicks(store, owner, p); await i.update(await editPanel(store, owner)); return true; }
       await i.update(await editPanel(store, owner, v));
+      return true;
+    }
+    if (i.isStringSelectMenu() && what === 'medialist') {
+      const [kind, arg] = i.values[0].split(':');
+      if (kind === 'type') { await i.showModal(modal(owner, arg, `${arg === 'anime' ? 'Anime' : 'Manga'} title, I'll look it up`, (arg === 'manga' ? p.manga : p.anime) ?? '', 100, arg === 'anime' ? 'Bungo Stray Dogs' : 'Chainsaw Man')); return true; }
+      if (kind === 'none') { const w = arg as 'anime' | 'manga'; p[w] = p[`${w}Cover`] = p[`${w}Color`] = undefined; savePicks(store, owner, p); await i.update(await editPanel(store, owner)); return true; }
+      await i.update(await editPanel(store, owner, undefined, i.values[0]));
+      return true;
+    }
+    if (i.isStringSelectMenu() && what?.startsWith('mediapick:')) {
+      const v = i.values[0];
+      const listKey = what.slice('mediapick:'.length);
+      if (v === '-back') { await i.update(await editPanel(store, owner)); return true; }
+      const m = (await mediaList(listKey)).find((x) => String(x.id) === v);
+      const w = listKey.startsWith('MANGA') ? 'manga' : 'anime';
+      if (m) {
+        p[w] = titleOf(m).slice(0, 40);
+        p[`${w}Cover`] = m.coverImage.large ?? undefined;
+        p[`${w}Color`] = m.coverImage.color ?? undefined;
+        p[`${w}Tried`] = true;
+        if (!p.show.includes(w)) p.show.push(w);
+        savePicks(store, owner, p);
+      }
+      await i.update(await editPanel(store, owner));
       return true;
     }
     if (i.isStringSelectMenu() && what === 'clubpick') {

@@ -96,6 +96,13 @@ export async function trending(type: 'ANIME' | 'MANGA'): Promise<Media[]> {
   return d.Page.media;
 }
 
+// a list to pick a favourite from: the most popular ever, trending now, or this season
+export async function topMedia(type: 'ANIME' | 'MANGA', sort: 'POPULARITY_DESC' | 'TRENDING_DESC' | 'SCORE_DESC', season?: { season: string; year: number }): Promise<Media[]> {
+  const q = `query ($type: MediaType, $sort: [MediaSort], $season: MediaSeason, $year: Int) { Page(perPage: 23) { media(type: $type, isAdult: false, sort: $sort, season: $season, seasonYear: $year) { ${MEDIA} } } }`;
+  const d = await ask<{ Page: { media: Media[] } }>(q, { type, sort: [sort], ...(season ?? {}) }, 6 * 3600_000);
+  return d.Page.media;
+}
+
 export interface Character {
   id: number;
   siteUrl: string;

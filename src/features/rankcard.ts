@@ -201,79 +201,85 @@ const pics = new Map<string, { at: number; img: Awaited<ReturnType<typeof loadIm
 async function picture(url?: string | null) {
   if (!url) return null;
   const hit = pics.get(url);
-  if (hit && Date.now() - hit.at < 6 * 3600_000) return hit.img;
-  const img = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { 'user-agent': 'Mozilla/5.0 texz' } })
-    .then(async (r) => (r.ok ? loadImage(Buffer.from(await r.arrayBuffer())) : null)).catch(() => null);
+  // a picture that failed is tried again after ten minutes, one that worked is kept for hours
+  if (hit && Date.now() - hit.at < (hit.img ? 6 * 3600_000 : 10 * 60_000)) return hit.img;
+  const img = await fetch(url, { signal: AbortSignal.timeout(10_000), headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36', accept: 'image/*' } })
+    .then(async (r) => {
+      if (!r.ok) { console.log(`picture ${r.status}: ${url}`); return null; }
+      return loadImage(Buffer.from(await r.arrayBuffer()));
+    }).catch((e) => { console.log(`picture failed: ${url} ${(e as Error).message}`); return null; });
   pics.set(url, { at: Date.now(), img });
   if (pics.size > 300) pics.delete(pics.keys().next().value!);
   return img;
 }
 
-function favTiles(ctx: SKRSContext2D, favs: Fav[], imgs: (Awaited<ReturnType<typeof loadImage>> | null)[], top: number, PW: number, SAND: string) {
+// favourites as a small grid of logos in the top right: the crest or cover glowing in its colour, the name under it
+function favTiles(ctx: SKRSContext2D, favs: Fav[], imgs: (Awaited<ReturnType<typeof loadImage>> | null)[], PW: number, SAND: string) {
+  const cols = 2;
+  const w = 142;
+  const h = 122;
+  const gap = 10;
+  const x0 = PW - 50 - cols * w - (cols - 1) * gap;
+  const y0 = 52;
   ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(194,164,110,0.55)';
+  ctx.fillStyle = 'rgba(194,164,110,0.45)';
   ctx.font = '700 13px "Texz Serif", serif';
-  ctx.fillText('FAVOURITES', 50, top + 26);
-  const gap = 16;
-  const n = favs.length;
-  const w = (PW - 100 - gap * (n - 1)) / n;
-  const h = 118;
-  const y = top + 42;
+  ctx.fillText('FAVOURITES', x0, 40);
   favs.forEach((f, i) => {
-    const x = 50 + i * (w + gap);
+    const x = x0 + (i % cols) * (w + gap);
+    const y = y0 + Math.floor(i / cols) * (h + gap);
     const color = f.color && /^#[0-9a-f]{6}$/i.test(f.color) ? f.color : SAND;
     ctx.save();
-    rounded(ctx, x, y, w, h, 18);
+    rounded(ctx, x, y, w, h, 16);
     ctx.clip();
-    ctx.fillStyle = '#181b22';
+    ctx.fillStyle = 'rgba(16,18,24,0.85)';
     ctx.fillRect(x, y, w, h);
-    // the team colour glowing from behind the logo
-    const glow = ctx.createRadialGradient(x + 62, y + h / 2, 4, x + 62, y + h / 2, w * 0.9);
-    glow.addColorStop(0, `${color}66`);
+    const glow = ctx.createRadialGradient(x + w / 2, y + 46, 2, x + w / 2, y + 46, w * 0.75);
+    glow.addColorStop(0, `${color}70`);
     glow.addColorStop(1, `${color}00`);
     ctx.fillStyle = glow;
     ctx.fillRect(x, y, w, h);
-    // a thin bar of the colour along the bottom
     ctx.fillStyle = color;
-    ctx.fillRect(x, y + h - 4, w, 4);
+    ctx.fillRect(x, y + h - 3, w, 3);
     ctx.restore();
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    rounded(ctx, x + 0.5, y + 0.5, w - 1, h - 1, 16);
+    ctx.stroke();
     const img = imgs[i];
-    const cx = x + 62;
-    const cy = y + h / 2 - 2;
+    const cx = x + w / 2;
+    const cy = y + 46;
     ctx.save();
-    ctx.shadowColor = `${color}cc`;
-    ctx.shadowBlur = 22;
+    ctx.shadowColor = `${color}dd`;
+    ctx.shadowBlur = 18;
     if (f.kind === 'badge') {
       ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, 30, 0, Math.PI * 2); ctx.fill();
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = color; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI * 2); ctx.stroke();
-      if (img) { const s = Math.min(54 / img.width, 54 / img.height); ctx.drawImage(img, cx - (img.width * s) / 2, cy - (img.height * s) / 2, img.width * s, img.height * s); }
+      ctx.strokeStyle = color; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(cx, cy, 30, 0, Math.PI * 2); ctx.stroke();
+      if (img) { const k = Math.min(42 / img.width, 42 / img.height); ctx.drawImage(img, cx - (img.width * k) / 2, cy - (img.height * k) / 2, img.width * k, img.height * k); }
     } else if (f.kind === 'crest') {
-      if (img) { const s = Math.min(84 / img.width, 84 / img.height); ctx.drawImage(img, cx - (img.width * s) / 2, cy - (img.height * s) / 2, img.width * s, img.height * s); }
-      else { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.fill(); }
+      if (img) { const k = Math.min(66 / img.width, 66 / img.height); ctx.drawImage(img, cx - (img.width * k) / 2, cy - (img.height * k) / 2, img.width * k, img.height * k); }
+      else { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx, cy, 28, 0, Math.PI * 2); ctx.fill(); }
     } else {
-      // a cover, tilted a touch like a card on a desk
-      ctx.translate(cx, cy);
-      ctx.rotate(-0.06);
-      const cw = 64, ch = 92;
-      rounded(ctx, -cw / 2, -ch / 2, cw, ch, 8);
+      // a cover, tilted a touch like a card dropped on the desk
+      ctx.translate(cx, cy + 2);
+      ctx.rotate(-0.07);
+      const cw = 50, ch = 72;
+      rounded(ctx, -cw / 2, -ch / 2, cw, ch, 6);
       ctx.fillStyle = color;
       ctx.fill();
-      if (img) { ctx.save(); rounded(ctx, -cw / 2, -ch / 2, cw, ch, 8); ctx.clip(); ctx.shadowBlur = 0; const s = Math.max(cw / img.width, ch / img.height); ctx.drawImage(img, -(img.width * s) / 2, -(img.height * s) / 2, img.width * s, img.height * s); ctx.restore(); }
+      if (img) { ctx.save(); rounded(ctx, -cw / 2, -ch / 2, cw, ch, 6); ctx.clip(); ctx.shadowBlur = 0; const k = Math.max(cw / img.width, ch / img.height); ctx.drawImage(img, -(img.width * k) / 2, -(img.height * k) / 2, img.width * k, img.height * k); ctx.restore(); }
     }
     ctx.restore();
-    const tx = x + 118;
-    const tw = w - 130;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#8b8f9a';
-    ctx.font = '400 13px "Texz Sans", sans-serif';
-    ctx.fillText(f.label.toUpperCase(), tx, y + 42);
+    ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
-    ctx.font = '700 19px "Texz Sans Bold", sans-serif';
-    const lines = wrap(ctx, f.name, tw, 2);
-    lines.forEach((l, k) => ctx.fillText(l, tx, y + 68 + k * 23));
+    ctx.font = '700 14px "Texz Sans Bold", sans-serif';
+    ctx.fillText(fit(ctx, f.name, w - 14), cx, y + 98);
+    ctx.fillStyle = '#8b8f9a';
+    ctx.font = '400 11px "Texz Sans", sans-serif';
+    ctx.fillText(f.label.toUpperCase(), cx, y + 113);
   });
 }
 
@@ -297,8 +303,8 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
   const SAND = d.accent ?? SAND_DEFAULT;
   const PW = 1000;
   const favs = (d.favs ?? []).slice(0, 4);
-  const FH = favs.length ? 175 : 0;
-  const PH = 420 + FH + (d.medalCount ? 190 : 0);
+  const FH = 0;
+  const PH = 420 + (d.medalCount ? 190 : 0);
   const favImgs = await Promise.all(favs.map((f) => picture(f.image)));
   const c = createCanvas(PW, PH);
   const ctx = c.getContext('2d');
@@ -333,7 +339,8 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
   ctx.stroke();
 
   const left = 250;
-  const right = PW - 50;
+  // with favourites in the corner the name and bio stop short of them
+  const right = favs.length ? PW - 50 - 2 * 142 - 10 - 24 : PW - 50;
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(194,164,110,0.45)';
   ctx.font = '700 13px "Texz Serif", serif';
@@ -377,12 +384,7 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
     x += w + 14;
   }
 
-  if (favs.length) {
-    ctx.strokeStyle = 'rgba(194,164,110,0.18)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(50, 420); ctx.lineTo(PW - 50, 420); ctx.stroke();
-    favTiles(ctx, favs, favImgs, 420, PW, SAND);
-  }
+  if (favs.length) favTiles(ctx, favs, favImgs, PW, SAND);
   // commendations: the medals someone picked to show, under a thin rule
   if (d.medalCount) {
     ctx.save();
