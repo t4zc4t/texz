@@ -11,6 +11,8 @@ import { fetchAvatar, profileCard } from '../features/rankcard.js';
 import { levelOf, rankFor } from './levels.js';
 import { fmtDate } from './birthdays.js';
 import { searchMedia, titleOf } from '../anime/anilist.js';
+import { asEmoji } from '../features/logos.js';
+import { teamDot } from '../feeds/f1.js';
 
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
 
@@ -49,7 +51,7 @@ function editPanel(store: Store, userId: string) {
       row(new StringSelectMenuBuilder().setCustomId(id('show')).setPlaceholder('👁️ What shows on my card').setMinValues(0).setMaxValues(8)
         .addOptions((Object.keys(parts) as Part[]).map((k) => ({ label: parts[k], value: k, default: p.show.includes(k) })))),
       row(new StringSelectMenuBuilder().setCustomId(id('team')).setPlaceholder('🏎️ My F1 team').addOptions(
-        { label: 'None', value: '-' }, ...Object.keys(f1Teams).map((t) => ({ label: t, value: t, default: p.team === t })))),
+        { label: 'None', value: '-' }, ...Object.keys(f1Teams).map((t) => ({ label: t, value: t, default: p.team === t, emoji: asEmoji(teamDot(t)) })))),
       row(
         new ButtonBuilder().setCustomId(id('club')).setLabel('Club').setEmoji('⚽').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(id('anime')).setLabel('Anime').setEmoji('📺').setStyle(ButtonStyle.Secondary),

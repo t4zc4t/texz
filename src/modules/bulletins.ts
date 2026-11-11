@@ -226,7 +226,7 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
             const h = await home().catch(() => null);
             if (h && h.lastRace.round === r.round) {
               rows = h.lastRace.results.slice(0, 10).map((d) => ({ pos: d.pos, driver: d.driver, team: d.team, extra: d.pos === '1' ? undefined : d.gap }));
-              const champ = h.standings.slice(0, 3).map((d) => `${d.pos}. ${d.driver} **${d.points}**`).join(' · ');
+              const champ = h.standings.slice(0, 3).map((d) => `${d.pos}. ${teamDot(d.team)} ${d.driver} **${d.points}**`).join(' · ');
               body += `\n\n**Championship** · ${champ}`;
             }
           }
@@ -613,7 +613,7 @@ const f1: Command = {
         const look = f1Look(store, ctx.guildId);
         const image = await drawOnce(`f1stand:${h.season}:${h.afterRound}:${look}`, () => standingsCard({ title: `${h.season} Championship`, subtitle: `After round ${h.afterRound}`, drivers: h.standings, teams: h.teams }, look));
         const e = card({ kind: 'f1Result', title: `${h.season} standings`, emoji: '🏆', color: names.f1.color, gif: 'off', line: '',
-          body: a && b ? `**${a.driver}** leads by **${a.points - b.points}** after round ${h.afterRound}` : `After round ${h.afterRound}` });
+          body: a && b ? `${teamDot(a.team)} **${a.driver}** leads by **${a.points - b.points}** after round ${h.afterRound}` : `After round ${h.afterRound}` });
         return ctx.reply(withImage(e, image, [site]));
       }
       if (view.startsWith('last')) {
@@ -621,7 +621,7 @@ const f1: Command = {
         const rows = h.lastRace.results.slice(0, 10).map((d) => ({ pos: d.pos, driver: d.driver, team: d.team, extra: d.pos === '1' ? undefined : d.gap }));
         const look = f1Look(store, ctx.guildId);
         const image = await drawOnce(`f1last:${h.lastRace.round}:${look}`, () => f1Card({ title: h.lastRace.name, subtitle: `Race result · ${h.lastRace.dateLabel}`, rows }, look));
-        const e = card({ kind: 'f1Win', title: `${h.lastRace.name}`, emoji: '🏁', color: names.f1.color, gif: 'off', line: '', body: `**${rows[0]?.driver}** won for ${rows[0]?.team} · ${h.lastRace.dateLabel}` });
+        const e = card({ kind: 'f1Win', title: `${h.lastRace.name}`, emoji: '🏁', color: names.f1.color, gif: 'off', line: '', body: `${rows[0] ? `${teamDot(rows[0].team)} ` : ''}**${rows[0]?.driver}** won for ${rows[0]?.team} · ${h.lastRace.dateLabel}` });
         return ctx.reply(withImage(e, image, [site]));
       }
       const { rounds } = await schedule();

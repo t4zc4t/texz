@@ -1,4 +1,5 @@
 // football scores from ESPN's public scoreboard, no key needed, polled gently
+import { clubEmoji } from '../features/logos.js';
 export const leagues: Record<string, { name: string; all: boolean }> = {
   'eng.1': { name: 'Premier League', all: false },
   'esp.1': { name: 'LaLiga', all: false },
@@ -94,6 +95,9 @@ export const scoreLine = (m: Match) => `${clubDot(m.home)} **${m.home.name}** ${
 const circles: [string, number[]][] = [['🔴', [200, 30, 40]], ['🟠', [240, 130, 30]], ['🟡', [240, 210, 40]], ['🟢', [40, 150, 60]], ['🔵', [30, 80, 200]],
   ['🟣', [120, 50, 160]], ['🟤', [120, 70, 40]], ['⚫', [20, 20, 20]], ['⚪', [235, 235, 235]]];
 export function clubDot(t: Team) {
+  // the real crest when there is one, it gets made the first time a club shows up
+  const crest = clubEmoji(t);
+  if (crest) return crest;
   if (!t.color || !/^[0-9a-f]{6}$/i.test(t.color)) return '⚽';
   const c = [0, 2, 4].map((i) => Number.parseInt(t.color!.slice(i, i + 2), 16));
   return circles.reduce((best, cur) => (dist(cur[1], c) < dist(best[1], c) ? cur : best))[0];

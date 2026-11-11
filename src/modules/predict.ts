@@ -6,10 +6,11 @@ import {
 import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
 import { card } from '../theme.js';
-import { home, nextRound as pickNext, flagOf, schedule } from '../feeds/f1.js';
+import { home, nextRound as pickNext, flagOf, schedule, teamDot } from '../feeds/f1.js';
 
 const nextRound = async () => pickNext((await schedule()).rounds);
-import { leagues, matches, interesting, type Match } from '../feeds/football.js';
+import { clubDot, leagues, matches, interesting, type Match } from '../feeds/football.js';
+import { asEmoji } from '../features/logos.js';
 
 // guess the podium before a race and the winner of the day's big matches, yen for every right call
 
@@ -37,15 +38,16 @@ async function page(store: Store, guild: string, user: string) {
   const r = await nextRound().catch(() => null);
   const h = await home().catch(() => null);
   const drivers = (h?.standings ?? []).slice(0, 25).map((d) => d.driver);
+  const teamOf = new Map((h?.standings ?? []).map((d) => [d.driver, d.team]));
   const raceStart = r ? Date.parse(r.sessions.find((s) => s.type === 'R')?.start ?? '') : NaN;
   const open = r && raceStart > Date.now();
   const mine = r ? (JSON.parse(store.getKv(f1Key(r.round, guild, user)) ?? '[]') as string[]) : [];
   const big = await todaysBig(store, guild);
   const lines: string[] = [];
-  if (r) lines.push(`🏎️ **${flagOf[r.circuit.country] ?? ''} ${r.name}** · ${open ? `picks close <t:${unix(raceStart)}:R>` : 'picks are closed'}\n${mine.length ? mine.map((d, n) => `${['🥇', '🥈', '🥉'][n]} ${d}`).join(' · ') : '*no podium picked yet*'}`);
+  if (r) lines.push(`🏎️ **${flagOf[r.circuit.country] ?? ''} ${r.name}** · ${open ? `picks close <t:${unix(raceStart)}:R>` : 'picks are closed'}\n${mine.length ? mine.map((d, n) => `${['🥇', '🥈', '🥉'][n]} ${teamOf.has(d) ? `${teamDot(teamOf.get(d)!)} ` : ''}${d}`).join(' · ') : '*no podium picked yet*'}`);
   for (const m of big) {
     const pick = store.getKv(fbKey(m.id, guild, user));
-    lines.push(`⚽ **${m.home.name}** vs **${m.away.name}** · <t:${unix(m.date)}:t>${pick ? ` · you said **${pick === 'draw' ? 'draw' : pick === 'home' ? m.home.name : m.away.name}**` : ''}`);
+    lines.push(`${clubDot(m.home)} **${m.home.name}** vs **${m.away.name}** ${clubDot(m.away)} · <t:${unix(m.date)}:t>${pick ? ` · you said **${pick === 'draw' ? 'draw' : pick === 'home' ? m.home.name : m.away.name}**` : ''}`);
   }
   if (!lines.length) lines.push('Nothing to call right now. Come back on race week or a big matchday.');
   const e = card({
@@ -56,14 +58,14 @@ async function page(store: Store, guild: string, user: string) {
   if (open && drivers.length) {
     for (let n = 0; n < 3; n++) {
       rows.push(row(new StringSelectMenuBuilder().setCustomId(`prd|f1|${r!.round}|${n}`).setPlaceholder(`${['🥇 Winner', '🥈 Second', '🥉 Third'][n]}${mine[n] ? `: ${mine[n]}` : ''}`)
-        .addOptions(drivers.map((d) => ({ label: d, value: d, default: mine[n] === d })))));
+        .addOptions(drivers.map((d) => ({ label: d, value: d, default: mine[n] === d, emoji: asEmoji(teamOf.has(d) ? teamDot(teamOf.get(d)!) : null) })))));
     }
   }
   for (const m of big.slice(0, 5 - rows.length)) {
     rows.push(row(
-      new ButtonBuilder().setCustomId(`prd|fb|${m.id}|home`).setLabel(m.home.name.slice(0, 40)).setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`prd|fb|${m.id}|home`).setLabel(m.home.name.slice(0, 40)).setEmoji(asEmoji(clubDot(m.home))!).setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(`prd|fb|${m.id}|draw`).setLabel('Draw').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`prd|fb|${m.id}|away`).setLabel(m.away.name.slice(0, 40)).setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`prd|fb|${m.id}|away`).setLabel(m.away.name.slice(0, 40)).setEmoji(asEmoji(clubDot(m.away))!).setStyle(ButtonStyle.Secondary),
     ));
   }
   return { embeds: [e], components: rows.slice(0, 5) };

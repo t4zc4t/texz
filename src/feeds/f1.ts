@@ -1,4 +1,5 @@
 // Grand Prix data from Parc Fermé, which keeps its own copy of the season and rebuilds it after every session
+import { teamEmoji } from '../features/logos.js';
 const BASE = 'https://parc-ferme.pages.dev/data';
 
 export interface Driver { code: string; driver: string; id: string; team: string }
@@ -48,7 +49,8 @@ const teamDots: [RegExp, string][] = [
   [/red bull/i, '🟦'], [/ferrari/i, '🟥'], [/mercedes/i, '🩵'], [/mclaren/i, '🟧'], [/aston/i, '🟩'], [/alpine/i, '🩷'],
   [/williams/i, '🔷'], [/haas/i, '⬜'], [/audi|sauber/i, '⬛'], [/\brb\b|racing bulls|visa/i, '🔹'], [/cadillac/i, '🟨'],
 ];
-export const teamDot = (team: string) => teamDots.find(([re]) => re.test(team))?.[1] ?? '▫️';
+// the team's own logo once it's been made into an emoji, a coloured square until then
+export const teamDot = (team: string) => teamEmoji(team) ?? teamDots.find(([re]) => re.test(team))?.[1] ?? '▫️';
 
 export interface Fact { id: string; category: string; text: string; link?: string }
 export interface QuizQ { id: string; q: string; options: string[]; answer: number; explain: string; difficulty: string; category: string; link?: string }
