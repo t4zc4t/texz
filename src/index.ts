@@ -15,10 +15,11 @@ import { report, startHealth, startOps, syncCommands } from './ops.js';
 import { startServerTimers } from './modules/server.js';
 import { startDailyCharacter } from './modules/anime.js';
 import { sweepQuiz } from './modules/f1quiz.js';
-import { watchSpawns } from './modules/spawns.js';
+import { mergeShoobRoles, watchSpawns } from './modules/spawns.js';
 import { carryRankPerms, fixRankOrder, tidyRanks } from './modules/levels.js';
 import { warmModel } from './features/pokemodel.js';
 import { loadTypeIcons } from './features/typeicons.js';
+import { loadLogos } from './features/logos.js';
 import { startBulletins } from './modules/bulletins.js';
 import { onQuote, QUOTE_MENU, startQuoteOfWeek } from './modules/quote.js';
 
@@ -46,6 +47,7 @@ client.once(Events.ClientReady, (c) => {
   look.avatar = c.user.displayAvatarURL();
   // rank roles drift when people add or move roles, so they're put back in order on every start and once a day
   const reorder = () => {
+    for (const guild of c.guilds.cache.values()) void mergeShoobRoles(guild, store).catch((e) => report('shoob roles', e));
     for (const guild of c.guilds.cache.values()) {
       const g = store.guild(guild.id);
       if (!store.rules(guild.id, 'levels').enabled || Object.keys(g.levels.rewards).length < 2) continue;
@@ -74,7 +76,7 @@ client.once(Events.ClientReady, (c) => {
   startDailyCharacter(client, store);
   watchSpawns(client, store);
   warmModel();
-  void loadTypeIcons(client).catch((e) => report('type icons', e));
+  void loadTypeIcons(client).catch((e) => report('type icons', e)).then(() => loadLogos(client)).catch((e) => report('team logos', e));
   startQuoteOfWeek(client, store);
   startHealth(client, store);
   sweepQuiz(async (id, payload) => {

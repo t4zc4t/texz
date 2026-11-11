@@ -48,21 +48,21 @@ AniList allows 30 requests a minute right now, so texz paces itself and keeps an
 - **⚽ Football** from ESPN's public scoreboards: the morning's matches worth watching, a kick-off card with both crests and VS, and a full-time card with the score and scorers. Big games are the World Cup and Euros, two big clubs meeting, or a big club in Europe, plus every match of the server's favourite clubs and anyone's own club. Over 25 leagues and cups are covered, MLS included. "On this day" comes from Wikipedia.
 - **📺 Anime** from AniList: the day's screenings, a ping when an episode is out (premieres and finales marked), and "on this day" with anniversaries and character birthdays.
 
-`tz history` shows today's history for all three, `tz f1 quiz` and `tz quiz crest` run quizzes that pay yen, and `tz football` shows today's matches as one board. Race day opens a live chat thread that closes with the podium, and anyone with a club in their profile gets pinged the moment their club scores.
+`tz history` shows today's history for all three, `tz f1 quiz` and `tz quiz crest` run quizzes that pay yen, and `tz football` shows today's matches as one board. Race day opens a live chat thread that closes with the podium, and anyone with a club in their profile gets pinged the moment their club scores. F1 teams and football clubs show their real logo and crest as emoji wherever they're named.
 
 `tz predict` lets people call the podium before each race and the result of the day's big matches. Right calls pay yen and show up under the result, and `tz predict top` is the season table.
 
 ## Pokétwo and Shoob
 
 - **Claim help:** every Pokétwo spawn gets a reply with the name, its types and the catch line, as tap to copy text for phones and a copy box for PC. It reads the picture with an open 1,025 species classifier (it downloads itself on first start), and remembers every spawn that gets confirmed by a catch, a hint or another helper bot, so Pokétwo's own forms and variants come out right after the first one. A weak guess is shown as a maybe, a wrong one gets crossed out with the next best guess, and hints get solved too (`tz poke p_k_ch_` by hand). Types show as Pokémon HOME badges, and admins can switch the whole helper off per server from `tz spawns` or `/setup`.
-- **Pings:** only for what matters. Legendary, mythical and ultra beast spawns, any of the 18 types you pick for quests, and a shout for shiny catches.
-- **Shoob:** a role per tier, so a drop only pings the people who want that tier.
+- **Pings:** only for what matters. Legendary, mythical and ultra beast spawns (their card gets pinned until it's caught), any of the 18 types you pick for quests, and a shout for shiny catches.
+- **Shoob:** one role for rare drops, so only tier 5 and 6 cards ping, the lower tiers stay quiet.
 
 `tz spawns` is where people opt in, with a status box for each bot. `tz dex` is the server's Pokédex by generation with the most wanted legends, and spawns not caught here yet get a 🆕. `tz race` is the weekly catch race, the winner gets yen on Monday. For Shoob, `tz wish add Gojo` pings you when that character drops, whatever the tier.
 
 ## Pings
 
-`tz pings` is one panel for every ping texz can send you: the bulletin roles, rare and type spawn pings, Shoob tiers, your anime episode alerts, OwO quest buddies, and mentions for your own club, F1 team and show (set in `tz profile edit`). When more than three people share a pick they get a role of their own, so one ping covers everyone.
+`tz pings` is one panel for every ping texz can send you: the bulletin roles, rare and type spawn pings, Shoob rare drops, your anime episode alerts, OwO quest buddies, and mentions for your own club, F1 team and show (set in `tz profile edit`). When more than three people share a pick they get a role of their own, so one ping covers everyone.
 
 ## Levels, yen and profiles
 

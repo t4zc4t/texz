@@ -11,6 +11,7 @@ import { picksOf, savePicks } from './profile.js';
 import { TYPES, addExtra, allSpecies, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
 import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize, recognise, remember, type Sparse } from '../features/pokeid.js';
 import { classify, keepSpawn, seedMemory } from '../features/pokemodel.js';
+import { teamDot } from '../feeds/f1.js';
 
 export const POKETWO_ID = '716390085896962058';
 // claim help for Pokétwo can be switched off per server, catches still count for the dex and the race
@@ -18,10 +19,11 @@ export const p2HelperOn = (store: Store, guildId: string) => store.getKv(`p2:off
 export const setP2Helper = (store: Store, guildId: string, on: boolean) => store.setKv(`p2:off:${guildId}`, on ? '0' : '1');
 export const SHOOB_ID = '673362753489993749';
 
-// the roles people can opt into: one for Pokétwo, one per Shoob tier
-const TIERS = ['1', '2', '3', '4', '5', '6', 'S'] as const;
-const tierRole = (t: string) => `Shoob Tier ${t}`;
-const tierMark: Record<string, string> = { '1': '⚪', '2': '🟢', '3': '🔵', '4': '🟣', '5': '🟡', '6': '🔴', S: '🌟' };
+// Shoob gets one role for the cards worth running for: tier 5 and 6 (tier S doesn't drop in servers)
+const SHOOB_RARE = ['5', '6'];
+const SHOOB_ROLE = 'Shoob Rare Drops';
+const OLD_TIERS = ['1', '2', '3', '4', '5', '6', 'S'];
+const tierMark: Record<string, string> = { '5': '🟡', '6': '🔴' };
 
 const row = (...b: (ButtonBuilder | StringSelectMenuBuilder)[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...b);
 
@@ -51,7 +53,28 @@ async function roleNamed(guild: Guild, store: Store, key: string, name: string, 
   if (role && role.id !== known) store.setKv(kv, role.id);
   return role;
 }
-const shoobRole = (guild: Guild, store: Store, t: string, make = false) => roleNamed(guild, store, `t${t}`, tierRole(t), make);
+const shoobRole = (guild: Guild, store: Store, make = false) => roleNamed(guild, store, 'shoobrare', SHOOB_ROLE, make);
+
+// from the old one-role-per-tier setup: tier 5 and 6 people move to the new role, then the tier roles go
+export async function mergeShoobRoles(guild: Guild, store: Store) {
+  const done = `shoob:merged:${guild.id}`;
+  if (store.getKv(done)) return;
+  const old = OLD_TIERS.map((t) => ({ t, id: store.getKv(`spawnrole:${guild.id}:t${t}`) ?? guild.roles.cache.find((r) => r.name === `Shoob Tier ${t}`)?.id ?? null }));
+  if (!old.some((o) => o.id)) { store.setKv(done, '1'); return; }
+  await guild.members.fetch().catch(() => null);
+  const keepers = new Set<string>();
+  for (const o of old) if (o.id && SHOOB_RARE.includes(o.t)) for (const id of guild.roles.cache.get(o.id)?.members.keys() ?? []) keepers.add(id);
+  if (keepers.size) {
+    const role = await shoobRole(guild, store, true);
+    if (!role) return;
+    for (const id of keepers) await guild.members.cache.get(id)?.roles.add(role, 'Shoob tier 5 and 6 pings, now one role').catch(() => {});
+  }
+  for (const o of old) {
+    if (o.id) await guild.roles.cache.get(o.id)?.delete('Shoob tier roles replaced by one rare drop role').catch(() => {});
+    store.setKv(`spawnrole:${guild.id}:t${o.t}`, null);
+  }
+  store.setKv(done, '1');
+}
 
 const last = new Map<string, number>();
 
@@ -67,7 +90,7 @@ export function watchSpawns(client: Client, store: Store) {
 type Waiting = {
   id: string; channelId: string; hash: string | null; image: Buffer | null; vec: Sparse | null; at: number;
   guess: { name: string; p: number; how: string } | null; confirmed: string | null; kept?: boolean;
-  sent: Message | null; shown: string | null; pinged: boolean; queue?: Promise<void>;
+  sent: Message | null; shown: string | null; pinged: boolean; queue?: Promise<void>; pinned?: boolean;
   others: string[]; wrong: string[]; unsure: boolean;
 };
 const waiting = new Map<string, Waiting>();
@@ -156,6 +179,12 @@ async function showNow(store: Store, m: Message, w: Waiting, name: string, guess
     reply: { messageReference: w.id, failIfNotExists: false },
     allowedMentions: { roles },
   }).catch(() => null);
+  // legends, mythicals and ultra beasts get pinned so nobody scrolls past them, and unpinned once it's over
+  if (w.sent && !w.unsure && rarityOf(base)) {
+    w.pinned = await w.sent.pin('Rare Pokétwo spawn').then(() => true).catch(() => false);
+    const sent = w.sent;
+    if (w.pinned) setTimeout(() => void sent.unpin('The spawn is long gone').catch(() => {}), 3600_000).unref?.();
+  }
 }
 
 // a name everyone agrees on: from the catch, a one-answer hint or another helper bot
@@ -215,6 +244,12 @@ async function onSpawn(store: Store, m: Message) {
     }
     // a catch: now the picture has a name for good
     const caught = /congratulations.*?you caught a (?:level|lvl\.?)\s*\d+\s+(.+)/i.exec(m.content);
+    if (caught && w?.pinned && w.sent) {
+      // caught, so the pin has done its job
+      const sent = w.sent;
+      w.pinned = false;
+      setTimeout(() => void sent.unpin('Caught').catch(() => {}), 60_000).unref?.();
+    }
     if (caught) {
       const name = catchName(m.content);
       // what the catcher typed is a name Pokétwo takes for this one, worth knowing for forms
@@ -285,14 +320,14 @@ async function onSpawn(store: Store, m: Message) {
   // one ping per channel every 20 seconds, spawns can come in bursts
   const key = `${m.channelId}:${which}`;
   if ((last.get(key) ?? 0) > Date.now() - 20_000) return;
-  // Shoob pings the people who asked for that tier, and anyone who wished for this exact character
+  // Shoob only pings for tier 5 and 6, and anyone who wished for this exact character
   const character = (e?.title ?? '').replace(/[*_`]/g, '').trim();
   const wishers = character ? wishersOf(store, m.guild, character) : [];
-  const role = s.tier ? await shoobRole(m.guild, store, s.tier) : null;
+  const role = s.tier && SHOOB_RARE.includes(s.tier) ? await shoobRole(m.guild, store) : null;
   if (!role && !wishers.length) return;
   last.set(key, Date.now());
   const lines = [
-    role ? `${tierMark[s.tier!]} <@&${role.id}> a **tier ${s.tier}** card just dropped, go claim it` : null,
+    role ? `${tierMark[s.tier!]} <@&${role.id}> a **tier ${s.tier}** card just dropped${character ? `: **${character}**` : ''}, go claim it` : null,
     wishers.length ? `💝 ${wishers.map((u) => `<@${u}>`).join(' ')} **${character}** is on your wishlist!` : null,
   ].filter(Boolean).join('\n');
   await m.channel.send({ content: lines, allowedMentions: { roles: role ? [role.id] : [], users: wishers } });
@@ -370,7 +405,7 @@ export function spawnStatus(store: Store, guild: Guild, which: 'p2' | 'shoob') {
   const seen = Number(store.getKv(`spawnseen:${guild.id}:${which}`) ?? 0);
   let lastMsg: { at: number; spawn: boolean; title: string } | null = null;
   try { lastMsg = JSON.parse(store.getKv(`spawnlast:${guild.id}:${which}`) ?? 'null'); } catch { /* old value */ }
-  const roles = which === 'p2' ? ['p2rare', ...TYPES.map((t) => `p2type:${t}`)] : TIERS.map((t) => `t${t}`);
+  const roles = which === 'p2' ? ['p2rare', ...TYPES.map((t) => `p2type:${t}`)] : ['shoobrare'];
   const people = new Set(roles.flatMap((r) => [...(guild.roles.cache.get(store.getKv(`spawnrole:${guild.id}:${r}`) ?? '')?.members.keys() ?? [])])).size;
   return [
     here ? '🟢 in this server' : '⚪ not seen here yet',
@@ -384,7 +419,7 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
   const member = await guild.members.fetch(userId).catch(() => null);
   const has = (id?: string | null) => !!id && !!member?.roles.cache.has(id);
   const p2 = has(store.getKv(`spawnrole:${guild.id}:p2rare`));
-  const mine = TIERS.filter((t) => has(store.getKv(`spawnrole:${guild.id}:t${t}`)));
+  const shoob = has(store.getKv(`spawnrole:${guild.id}:shoobrare`));
   const myTypes = TYPES.filter((t) => has(store.getKv(`spawnrole:${guild.id}:p2type:${t}`)));
   const e = card({
     kind: 'help', title: 'Spawn pings', emoji: '🎯', gif: 'off',
@@ -392,9 +427,9 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
       `${p2 ? '🟢' : '⚫'} 🌟 **Pokétwo rare spawns** · legendary, mythical and ultra beasts only`,
       `${myTypes.length ? '🟢' : '⚫'} 🧬 **Pokétwo types** · ${myTypes.length ? myTypes.map((t) => `${typeIcon(t)} ${t}`).join(' ') : 'none picked, handy when a quest wants a type'}`,
       p2HelperOn(store, guild.id) ? `🟢 🔎 **Claim help** · I read every spawn picture, and remember **${memorySize(store)}** confirmed spawns so variants come out right, plus I solve hints` : '⚫ 🔎 **Claim help** · switched off here, an admin can turn it back on below',
-      `${mine.length ? '🟢' : '⚫'} 🃏 **Shoob** · ${mine.length ? mine.map((t) => `${tierMark[t]} T${t}`).join(' ') : 'no tiers picked'}`,
+      `${shoob ? '🟢' : '⚫'} 🃏 **Shoob rare drops** · tier 5 and 6 cards only`,
       '',
-      '-# Shoob only pings the tiers you pick. Most people want 4 and up.',
+      '-# Lower tiers never ping, and `tz wish add Gojo` gets you a ping for one character at any tier.',
     ].join('\n'),
     fields: [
       { name: '🔴 Pokétwo', value: spawnStatus(store, guild, 'p2'), inline: true },
@@ -406,12 +441,11 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
     components: [
       row(
         new ButtonBuilder().setCustomId('spw|p2').setLabel(p2 ? 'Stop rare spawn pings' : 'Ping me for rare spawns').setEmoji('🌟').setStyle(p2 ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('spw|shoob').setLabel(shoob ? 'Stop Shoob pings' : 'Ping me for Shoob T5/T6').setEmoji('🃏').setStyle(shoob ? ButtonStyle.Success : ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('spw|helper').setLabel(`Pokétwo helper: ${p2HelperOn(store, guild.id) ? 'on' : 'off'}`).setEmoji('🔎').setStyle(p2HelperOn(store, guild.id) ? ButtonStyle.Success : ButtonStyle.Secondary),
       ),
       row(new StringSelectMenuBuilder().setCustomId('spw|types').setPlaceholder('🧬 Which Pokétwo types ping you').setMinValues(0).setMaxValues(TYPES.length)
         .addOptions(TYPES.map((t) => ({ label: t, value: t, emoji: typeEmoji(t), default: myTypes.includes(t) })))),
-      row(new StringSelectMenuBuilder().setCustomId('spw|tiers').setPlaceholder('🃏 Which Shoob tiers ping you').setMinValues(0).setMaxValues(TIERS.length)
-        .addOptions(TIERS.map((t) => ({ label: `Tier ${t}`, value: t, emoji: tierMark[t], default: mine.includes(t as never) })))),
     ],
   };
 }
@@ -517,14 +551,9 @@ export async function onSpawnButton(store: Store, i: Interaction) {
       if (!role || member.roles.cache.has(role.id) === want) continue;
       ok = await (want ? member.roles.add(role) : member.roles.remove(role)).then(() => ok).catch(() => false);
     }
-  } else if (i.isStringSelectMenu()) {
-    // add the picked tiers, drop the rest
-    for (const t of TIERS) {
-      const want = i.values.includes(t);
-      const role = await shoobRole(i.guild, store, t, want);
-      if (!role || member.roles.cache.has(role.id) === want) continue;
-      ok = await (want ? member.roles.add(role) : member.roles.remove(role)).then(() => ok).catch(() => false);
-    }
+  } else if (i.customId === 'spw|shoob') {
+    const role = await shoobRole(i.guild, store, true);
+    ok = !!role && await (member.roles.cache.has(role.id) ? member.roles.remove(role) : member.roles.add(role)).then(() => true).catch(() => false);
   }
   if (!ok) {
     const spawnRoles = store.kvByPrefix(`spawnrole:${i.guild.id}:`).map((x) => x.value);
@@ -562,9 +591,9 @@ async function pingsPanel(store: Store, guild: Guild, userId: string) {
     const types = TYPES.filter((t) => has(store.getKv(`spawnrole:${guild.id}:p2type:${t}`)));
     lines.push(`${mark(types.length > 0)} 🧬 **Pokétwo types** · ${types.length ? types.map((t) => typeIcon(t)).join(' ') : 'none, pick them on the spawn page'}`);
     buttons.push(new ButtonBuilder().setCustomId('pg|p2').setLabel('Rare pokémon').setEmoji('🌟').setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary));
-    const tiers = TIERS.filter((t) => has(store.getKv(`spawnrole:${guild.id}:t${t}`)));
-    lines.push(`${mark(tiers.length > 0)} 🃏 **Shoob** · ${tiers.length ? tiers.map((t) => `${tierMark[t]} T${t}`).join(' ') : 'no tiers picked'}`);
-    buttons.push(new ButtonBuilder().setCustomId(`nav|spawns|owner=${userId},back=pings`).setLabel('Shoob tiers').setEmoji('🃏').setStyle(tiers.length ? ButtonStyle.Success : ButtonStyle.Secondary));
+    const shoob = has(store.getKv(`spawnrole:${guild.id}:shoobrare`));
+    lines.push(`${mark(shoob)} 🃏 **Shoob rare drops** · tier 5 and 6 cards`);
+    buttons.push(new ButtonBuilder().setCustomId('pg|shoob').setLabel('Shoob T5/T6').setEmoji('🃏').setStyle(shoob ? ButtonStyle.Success : ButtonStyle.Secondary));
   }
   const buddy = store.buddies(guild.id).includes(userId);
   if (store.rules(guild.id, 'owo').enabled) {
@@ -578,7 +607,7 @@ async function pingsPanel(store: Store, guild: Guild, userId: string) {
     buttons.push(new ButtonBuilder().setCustomId(`nav|alerts|owner=${userId},back=pings`).setLabel('Episode alerts').setEmoji('🔔').setStyle(follows ? ButtonStyle.Success : ButtonStyle.Secondary));
   }
   const p = picksOf(store, userId);
-  const mine = [p.club && `⚽ ${p.club}`, p.team && `🏎️ ${p.team}`, p.anime && `📺 ${p.anime}`].filter(Boolean).join(' · ');
+  const mine = [p.club && `⚽ ${p.club}`, p.team && `${teamDot(p.team)} ${p.team}`, p.anime && `📺 ${p.anime}`].filter(Boolean).join(' · ');
   lines.push(`${mark(p.ping !== false && !!mine)} ⭐ **Just for you** · ${mine || 'no picks yet'}`);
   const rows = [];
   for (let n = 0; n < buttons.length; n += 5) rows.push(row(...buttons.slice(n, n + 5)));
@@ -612,7 +641,7 @@ export async function onPingsButton(store: Store, i: Interaction) {
   if (what === 'buddy') store.setBuddy(i.guild.id, i.user.id, !store.buddies(i.guild.id).includes(i.user.id));
   else if (what === 'personal') { const p = picksOf(store, i.user.id); p.ping = p.ping === false; savePicks(store, i.user.id, p); }
   else if (member) {
-    const role = what === 'p2' ? await rareRole(i.guild, store, true) : i.guild.roles.cache.get(store.guild(i.guild.id).bulletins[what as keyof typeof boards]?.role ?? '');
+    const role = what === 'p2' ? await rareRole(i.guild, store, true) : what === 'shoob' ? await shoobRole(i.guild, store, true) : i.guild.roles.cache.get(store.guild(i.guild.id).bulletins[what as keyof typeof boards]?.role ?? '');
     if (!role) problem = 'That role isn\'t there, an admin can fix it in /setup.';
     else {
       const has = member.roles.cache.has(role.id);
@@ -632,6 +661,6 @@ export async function onPingsButton(store: Store, i: Interaction) {
 export const spawnsModule: Module = {
   name: 'spawns',
   label: 'Pings and spawns',
-  about: 'One panel for every ping, Pokétwo spawns with hint solving, and Shoob pings by tier.',
+  about: 'One panel for every ping, Pokétwo spawns with hint solving, and Shoob pings for tier 5 and 6.',
   commands: [pings, spawns, pokemon, dex, race, wish],
 };
