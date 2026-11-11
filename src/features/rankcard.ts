@@ -190,6 +190,91 @@ export interface ProfileData {
   // the medals picked for show, with names, and how many of all of them are earned
   medals?: (Medal & { name: string })[];
   medalCount?: { won: number; total: number };
+  // favourite team, club, anime and manga drawn as glowing tiles with their logo or cover
+  favs?: Fav[];
+}
+
+export interface Fav { label: string; name: string; image?: string | null; color?: string | null; kind: 'badge' | 'crest' | 'cover' }
+
+// pictures from other sites, kept for a while so profile cards don't refetch them every time
+const pics = new Map<string, { at: number; img: Awaited<ReturnType<typeof loadImage>> | null }>();
+async function picture(url?: string | null) {
+  if (!url) return null;
+  const hit = pics.get(url);
+  if (hit && Date.now() - hit.at < 6 * 3600_000) return hit.img;
+  const img = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { 'user-agent': 'Mozilla/5.0 texz' } })
+    .then(async (r) => (r.ok ? loadImage(Buffer.from(await r.arrayBuffer())) : null)).catch(() => null);
+  pics.set(url, { at: Date.now(), img });
+  if (pics.size > 300) pics.delete(pics.keys().next().value!);
+  return img;
+}
+
+function favTiles(ctx: SKRSContext2D, favs: Fav[], imgs: (Awaited<ReturnType<typeof loadImage>> | null)[], top: number, PW: number, SAND: string) {
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(194,164,110,0.55)';
+  ctx.font = '700 13px "Texz Serif", serif';
+  ctx.fillText('FAVOURITES', 50, top + 26);
+  const gap = 16;
+  const n = favs.length;
+  const w = (PW - 100 - gap * (n - 1)) / n;
+  const h = 118;
+  const y = top + 42;
+  favs.forEach((f, i) => {
+    const x = 50 + i * (w + gap);
+    const color = f.color && /^#[0-9a-f]{6}$/i.test(f.color) ? f.color : SAND;
+    ctx.save();
+    rounded(ctx, x, y, w, h, 18);
+    ctx.clip();
+    ctx.fillStyle = '#181b22';
+    ctx.fillRect(x, y, w, h);
+    // the team colour glowing from behind the logo
+    const glow = ctx.createRadialGradient(x + 62, y + h / 2, 4, x + 62, y + h / 2, w * 0.9);
+    glow.addColorStop(0, `${color}66`);
+    glow.addColorStop(1, `${color}00`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(x, y, w, h);
+    // a thin bar of the colour along the bottom
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y + h - 4, w, 4);
+    ctx.restore();
+    const img = imgs[i];
+    const cx = x + 62;
+    const cy = y + h / 2 - 2;
+    ctx.save();
+    ctx.shadowColor = `${color}cc`;
+    ctx.shadowBlur = 22;
+    if (f.kind === 'badge') {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = color; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI * 2); ctx.stroke();
+      if (img) { const s = Math.min(54 / img.width, 54 / img.height); ctx.drawImage(img, cx - (img.width * s) / 2, cy - (img.height * s) / 2, img.width * s, img.height * s); }
+    } else if (f.kind === 'crest') {
+      if (img) { const s = Math.min(84 / img.width, 84 / img.height); ctx.drawImage(img, cx - (img.width * s) / 2, cy - (img.height * s) / 2, img.width * s, img.height * s); }
+      else { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.fill(); }
+    } else {
+      // a cover, tilted a touch like a card on a desk
+      ctx.translate(cx, cy);
+      ctx.rotate(-0.06);
+      const cw = 64, ch = 92;
+      rounded(ctx, -cw / 2, -ch / 2, cw, ch, 8);
+      ctx.fillStyle = color;
+      ctx.fill();
+      if (img) { ctx.save(); rounded(ctx, -cw / 2, -ch / 2, cw, ch, 8); ctx.clip(); ctx.shadowBlur = 0; const s = Math.max(cw / img.width, ch / img.height); ctx.drawImage(img, -(img.width * s) / 2, -(img.height * s) / 2, img.width * s, img.height * s); ctx.restore(); }
+    }
+    ctx.restore();
+    const tx = x + 118;
+    const tw = w - 130;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#8b8f9a';
+    ctx.font = '400 13px "Texz Sans", sans-serif';
+    ctx.fillText(f.label.toUpperCase(), tx, y + 42);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 19px "Texz Sans Bold", sans-serif';
+    const lines = wrap(ctx, f.name, tw, 2);
+    lines.forEach((l, k) => ctx.fillText(l, tx, y + 68 + k * 23));
+  });
 }
 
 function wrap(ctx: SKRSContext2D, text: string, max: number, lines: number) {
@@ -211,7 +296,10 @@ function wrap(ctx: SKRSContext2D, text: string, max: number, lines: number) {
 export async function profileCard(d: ProfileData): Promise<Buffer> {
   const SAND = d.accent ?? SAND_DEFAULT;
   const PW = 1000;
-  const PH = d.medalCount ? 610 : 420;
+  const favs = (d.favs ?? []).slice(0, 4);
+  const FH = favs.length ? 175 : 0;
+  const PH = 420 + FH + (d.medalCount ? 190 : 0);
+  const favImgs = await Promise.all(favs.map((f) => picture(f.image)));
   const c = createCanvas(PW, PH);
   const ctx = c.getContext('2d');
   rounded(ctx, 0, 0, PW, PH, 28);
@@ -289,8 +377,16 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
     x += w + 14;
   }
 
+  if (favs.length) {
+    ctx.strokeStyle = 'rgba(194,164,110,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(50, 420); ctx.lineTo(PW - 50, 420); ctx.stroke();
+    favTiles(ctx, favs, favImgs, 420, PW, SAND);
+  }
   // commendations: the medals someone picked to show, under a thin rule
   if (d.medalCount) {
+    ctx.save();
+    ctx.translate(0, FH);
     ctx.strokeStyle = 'rgba(194,164,110,0.18)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(50, 420); ctx.lineTo(PW - 50, 420); ctx.stroke();
@@ -322,6 +418,7 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
       while (ctx.measureText(name).width > step - 12 && name.length > 4) name = `${name.slice(0, -2)}…`;
       ctx.fillText(name, x, 590);
     });
+    ctx.restore();
   }
   return c.toBuffer('image/png');
 }

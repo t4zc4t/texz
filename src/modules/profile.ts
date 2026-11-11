@@ -7,12 +7,16 @@ import {
 import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
 import { card } from '../theme.js';
-import { fetchAvatar, profileCard } from '../features/rankcard.js';
+import { fetchAvatar, profileCard, type Fav } from '../features/rankcard.js';
 import { levelOf, rankFor } from './levels.js';
 import { fmtDate } from './birthdays.js';
 import { searchMedia, titleOf } from '../anime/anilist.js';
 import { asEmoji } from '../features/logos.js';
 import { teamDot } from '../feeds/f1.js';
+import { allClubs, clubLeagues, leagues } from '../feeds/football.js';
+import { clubEmoji, f1LogoOf } from '../features/logos.js';
+
+const leagueFlag: Record<string, string> = { 'eng.1': '🏴', 'esp.1': '🇪🇸', 'ita.1': '🇮🇹', 'ger.1': '🇩🇪', 'fra.1': '🇫🇷', 'usa.1': '🇺🇸', 'por.1': '🇵🇹', 'ned.1': '🇳🇱' };
 
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
 
@@ -27,7 +31,11 @@ const parts = {
   level: 'Level and rank', yen: 'Yen', birthday: 'Birthday', done: 'Anime finished',
 } as const;
 type Part = keyof typeof parts;
-interface Picks { club?: string; team?: string; anime?: string; manga?: string; color?: string; show: Part[]; ping?: boolean }
+interface Picks {
+  club?: string; team?: string; anime?: string; manga?: string; color?: string; show: Part[]; ping?: boolean;
+  // the pictures for the favourites strip on the card
+  clubId?: string; clubLogo?: string; clubColor?: string; animeCover?: string; animeColor?: string; mangaCover?: string; mangaColor?: string;
+}
 
 export function picksOf(store: Store, userId: string): Picks {
   const saved = JSON.parse(store.getKv(`picks:${userId}`) ?? '{}') as Partial<Picks>;
@@ -37,7 +45,7 @@ export function picksOf(store: Store, userId: string): Picks {
 }
 export const savePicks = (store: Store, userId: string, p: Picks) => store.setKv(`picks:${userId}`, JSON.stringify(p));
 
-function editPanel(store: Store, userId: string) {
+async function editPanel(store: Store, userId: string, league?: string) {
   const p = picksOf(store, userId);
   const bio = store.profile(userId).bio;
   const val = (k: Part) => ({ club: p.club, team: p.team, anime: p.anime, manga: p.manga } as Record<string, string | undefined>)[k];
@@ -52,8 +60,16 @@ function editPanel(store: Store, userId: string) {
         .addOptions((Object.keys(parts) as Part[]).map((k) => ({ label: parts[k], value: k, default: p.show.includes(k) })))),
       row(new StringSelectMenuBuilder().setCustomId(id('team')).setPlaceholder('🏎️ My F1 team').addOptions(
         { label: 'None', value: '-' }, ...Object.keys(f1Teams).map((t) => ({ label: t, value: t, default: p.team === t, emoji: asEmoji(teamDot(t)) })))),
+      // a club is two picks: the league, then the club with its crest
+      league ? row(new StringSelectMenuBuilder().setCustomId(id('clubpick')).setPlaceholder(`⚽ My club in ${leagues[league]?.name ?? league}`).addOptions(
+        { label: 'Back to the leagues', value: '-back', emoji: '⬅️' }, { label: 'No club', value: '-' },
+        ...(await allClubs().catch(() => [])).filter((c) => c.code === league).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 23)
+          .map((c) => ({ label: c.name, value: c.id, default: p.clubId === c.id, emoji: asEmoji(clubEmoji(c)) ?? '⚽' })),
+      )) : row(new StringSelectMenuBuilder().setCustomId(id('league')).setPlaceholder(`⚽ ${p.club ? `My club: ${p.club}` : 'Pick my club, start with the league'}`).addOptions(
+        ...clubLeagues.map((l) => ({ label: leagues[l]?.name ?? l, value: l, emoji: leagueFlag[l] ?? '⚽' })),
+        { label: 'Type a club myself', value: '-type', emoji: '⌨️' }, { label: 'No club', value: '-' },
+      )),
       row(
-        new ButtonBuilder().setCustomId(id('club')).setLabel('Club').setEmoji('⚽').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(id('anime')).setLabel('Anime').setEmoji('📺').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(id('manga')).setLabel('Manga').setEmoji('📖').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(id('bio')).setLabel('Bio').setEmoji('🖋️').setStyle(ButtonStyle.Secondary),
@@ -80,15 +96,17 @@ export async function drawProfile(store: Store, id: string, guildId: string | nu
   if (show.has('yen') && guildId && store.rules(guildId, 'economy').enabled) chips.push({ label: 'Yen', value: `¥${store.wallet(guildId, id).yen.toLocaleString()}` });
   const b = store.birthday(id);
   if (show.has('birthday') && b) chips.push({ label: 'Birthday', value: fmtDate(b.month, b.day) });
-  if (show.has('team') && p.team) chips.push({ label: 'F1 team', value: p.team, color: f1Teams[p.team] });
-  if (show.has('club') && p.club) chips.push({ label: 'Club', value: p.club });
-  if (show.has('anime') && p.anime) chips.push({ label: 'Anime', value: p.anime });
-  if (show.has('manga') && p.manga) chips.push({ label: 'Manga', value: p.manga });
+  // the favourites get their own strip with logos and covers instead of chips
+  const favs: Fav[] = [];
+  if (show.has('team') && p.team) { const l = f1LogoOf(p.team); favs.push({ label: 'F1 team', name: p.team, image: l?.url, color: f1Teams[p.team] ?? l?.color, kind: 'badge' }); }
+  if (show.has('club') && p.club) favs.push({ label: 'Club', name: p.club, image: p.clubLogo, color: p.clubColor, kind: 'crest' });
+  if (show.has('anime') && p.anime) favs.push({ label: 'Anime', name: p.anime, image: p.animeCover, color: p.animeColor, kind: 'cover' });
+  if (show.has('manga') && p.manga) favs.push({ label: 'Manga', name: p.manga, image: p.mangaCover, color: p.mangaColor, kind: 'cover' });
   const done = store.watchlist(id, 'completed').length;
   const have = guildId ? badgesOf(store, guildId, id) : [];
   if (show.has('done') && done) chips.push({ label: 'Anime done', value: String(done) });
   return profileCard({
-    name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: store.profile(id).bio, chips, accent: p.color,
+    name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: store.profile(id).bio, chips, accent: p.color, favs,
     medals: guildId ? shownOf(store, guildId, id, tierOf).map((x) => ({ id: x, earned: true, name: BADGES.find((b) => b.id === x)?.name ?? x })) : undefined,
     medalCount: guildId ? { won: have.length, total: BADGES.length } : undefined,
     avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null,
@@ -107,10 +125,27 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
   if (owner !== i.user.id) { if (i.isRepliable()) await i.reply({ content: 'That\'s someone else\'s file. `tz profile edit` opens yours.', flags: MessageFlags.Ephemeral }); return true; }
   const p = picksOf(store, owner);
   if (tag === 'pfe') {
-    if (i.isStringSelectMenu() && what === 'show') { p.show = i.values as Part[]; savePicks(store, owner, p); await i.update(editPanel(store, owner)); return true; }
-    if (i.isStringSelectMenu() && what === 'team') { p.team = i.values[0] === '-' ? undefined : i.values[0]; if (p.team && !p.show.includes('team')) p.show.push('team'); savePicks(store, owner, p); await i.update(editPanel(store, owner)); return true; }
+    if (i.isStringSelectMenu() && what === 'show') { p.show = i.values as Part[]; savePicks(store, owner, p); await i.update(await editPanel(store, owner)); return true; }
+    if (i.isStringSelectMenu() && what === 'team') { p.team = i.values[0] === '-' ? undefined : i.values[0]; if (p.team && !p.show.includes('team')) p.show.push('team'); savePicks(store, owner, p); await i.update(await editPanel(store, owner)); return true; }
+    if (i.isStringSelectMenu() && what === 'league') {
+      const v = i.values[0];
+      if (v === '-type') { await i.showModal(modal(owner, 'club', 'Football club (empty removes it)', p.club ?? '', 40, 'Real Madrid')); return true; }
+      if (v === '-') { p.club = p.clubId = p.clubLogo = p.clubColor = undefined; savePicks(store, owner, p); await i.update(await editPanel(store, owner)); return true; }
+      await i.update(await editPanel(store, owner, v));
+      return true;
+    }
+    if (i.isStringSelectMenu() && what === 'clubpick') {
+      const v = i.values[0];
+      if (v === '-back') { await i.update(await editPanel(store, owner)); return true; }
+      const c = v === '-' ? null : (await allClubs().catch(() => [])).find((x) => x.id === v);
+      p.club = c?.name; p.clubId = c?.id; p.clubLogo = c?.logo; p.clubColor = c?.color ? `#${c.color}` : undefined;
+      if (c && !p.show.includes('club')) p.show.push('club');
+      savePicks(store, owner, p);
+      await i.update(await editPanel(store, owner));
+      return true;
+    }
     if (!i.isButton()) return true;
-    if (what === 'ping') { p.ping = p.ping === false; savePicks(store, owner, p); await i.update(editPanel(store, owner)); return true; }
+    if (what === 'ping') { p.ping = p.ping === false; savePicks(store, owner, p); await i.update(await editPanel(store, owner)); return true; }
     if (what === 'preview') {
       await i.deferReply({ flags: MessageFlags.Ephemeral });
       const m = i.guild ? await i.guild.members.fetch(owner).catch(() => null) : null;
@@ -132,7 +167,12 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
   const v = i.fields.getTextInputValue('v').trim();
   let note = '';
   if (what === 'bio') store.setProfile(owner, { bio: v || null });
-  if (what === 'club') { p.club = v || undefined; if (v && !p.show.includes('club')) p.show.push('club'); }
+  if (what === 'club') {
+    // a typed club gets its crest if it matches one in the big leagues
+    const c = v ? (await allClubs().catch(() => [])).find((x) => x.name.toLowerCase() === v.toLowerCase() || x.name.toLowerCase().includes(v.toLowerCase())) : null;
+    p.club = c?.name ?? (v || undefined); p.clubId = c?.id; p.clubLogo = c?.logo; p.clubColor = c?.color ? `#${c.color}` : undefined;
+    if (v && !p.show.includes('club')) p.show.push('club');
+  }
   if (what === 'color') {
     if (v && !/^#?[0-9a-f]{6}$/i.test(v)) note = 'That isn\'t a colour like #c2a46e, kept the old one.';
     else p.color = v ? `#${v.replace('#', '')}` : undefined;
@@ -142,12 +182,14 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
     else {
       const [hit] = await searchMedia(v, what === 'anime' ? 'ANIME' : 'MANGA').catch(() => []);
       p[what] = hit ? titleOf(hit).slice(0, 40) : v.slice(0, 40);
+      p[`${what}Cover`] = hit?.coverImage.large ?? undefined;
+      p[`${what}Color`] = hit?.coverImage.color ?? undefined;
       if (!p.show.includes(what)) p.show.push(what);
     }
   }
   savePicks(store, owner, p);
-  if (i.isFromMessage()) await i.update(editPanel(store, owner));
-  else await i.reply({ ...editPanel(store, owner), flags: MessageFlags.Ephemeral });
+  if (i.isFromMessage()) await i.update(await editPanel(store, owner));
+  else await i.reply({ ...(await editPanel(store, owner)), flags: MessageFlags.Ephemeral });
   if (note) await i.followUp({ content: note, flags: MessageFlags.Ephemeral });
   return true;
 }
@@ -165,7 +207,7 @@ export const profile: Command = {
     let sub = ctx.sub() ?? 'view';
     let who = ctx.user('user');
     if (ctx.viaText && /^<@!?\d+>$/.test(sub)) { who = sub.replace(/\D/g, ''); sub = 'view'; }
-    if (['edit', 'settings', 'set', 'bio', 'fav', 'favourite', 'club', 'team'].includes(sub)) return ctx.reply(editPanel(store, ctx.userId));
+    if (['edit', 'settings', 'set', 'bio', 'fav', 'favourite', 'favourites', 'club', 'team'].includes(sub)) return ctx.reply(await editPanel(store, ctx.userId));
     const id = who ?? ctx.userId;
     const m = ctx.guild ? await ctx.guild.members.fetch(id).catch(() => null) : null;
     const png = await drawProfile(store, id, ctx.guildId, m);

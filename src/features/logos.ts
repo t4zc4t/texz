@@ -102,3 +102,9 @@ export function asEmoji(s: string | null | undefined): { id: string; name: strin
   const m = /^<a?:(\w+):(\d+)>$/.exec(s);
   return m ? { id: m[2], name: m[1] } : s;
 }
+
+// the logo picture itself, for drawing on cards
+export const f1LogoOf = (team: string) => {
+  const hit = F1_TEAMS.find(([re]) => re.test(team));
+  return hit ? { url: f1Logo(hit[1]), color: hit[2] } : null;
+};

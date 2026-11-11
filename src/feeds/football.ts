@@ -105,19 +105,22 @@ export function clubDot(t: Team) {
 const dist = (a: number[], b: number[]) => a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0);
 
 // every club in the big leagues with its crest, for the crest quiz
-interface EspnTeams { sports: { leagues: { teams: { team: { id: string; displayName: string; logos?: { href: string }[] } }[] }[] }[] }
-let clubs: { at: number; list: { name: string; logo: string; league: string }[] } | null = null;
+interface EspnTeams { sports: { leagues: { teams: { team: { id: string; displayName: string; color?: string; logos?: { href: string }[] } }[] }[] }[] }
+export interface Club { id: string; name: string; logo: string; league: string; code: string; color: string | null }
+let clubs: { at: number; list: Club[] } | null = null;
+// the leagues people can pick a favourite club from
+export const clubLeagues = ['eng.1', 'esp.1', 'ita.1', 'ger.1', 'fra.1', 'usa.1', 'por.1', 'ned.1'];
 export async function allClubs() {
   if (clubs && Date.now() - clubs.at < 24 * 3600_000) return clubs.list;
-  const out: { name: string; logo: string; league: string }[] = [];
-  for (const l of ['eng.1', 'esp.1', 'ita.1', 'ger.1', 'fra.1', 'usa.1', 'por.1', 'ned.1']) {
+  const out: Club[] = [];
+  for (const l of clubLeagues) {
     try {
       const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${l}/teams`, { signal: AbortSignal.timeout(10_000) });
       if (!res.ok) continue;
       const j = (await res.json()) as EspnTeams;
       for (const t of j.sports[0]?.leagues[0]?.teams ?? []) {
         const logo = t.team.logos?.[0]?.href;
-        if (logo) out.push({ name: t.team.displayName, logo, league: leagues[l]?.name ?? l });
+        if (logo) out.push({ id: t.team.id, name: t.team.displayName, logo, league: leagues[l]?.name ?? l, code: l, color: t.team.color ?? null });
       }
     } catch { /* one league missing is fine */ }
   }
