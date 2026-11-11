@@ -40,7 +40,7 @@ test('prefix commands and aliases', async () => {
   const a = fake('tz status');
   assert.equal(onText(store, a.m), true);
   await tick();
-  assert.match(said(a.replies[0]), /OwO dashboard/);
+  assert.match(said(a.replies[0]), /Stray Dogs Den/);
 
   const b = fake('TZ hb');
   assert.equal(onText(store, b.m), true);
@@ -84,7 +84,7 @@ test('channel and role limits', async () => {
   const right = fake('tz status', { channel: '222222222222222222' });
   onText(store, right.m);
   await tick();
-  assert.match(said(right.replies[0]), /OwO dashboard/);
+  assert.match(said(right.replies[0]), /Stray Dogs Den/);
 
   onText(store, fake('tz config role owo add <@&333333333333333333>', { admin: true }).m);
   await tick();
@@ -95,7 +95,7 @@ test('channel and role limits', async () => {
   const withRole = fake('tz status', { channel: '222222222222222222', roles: ['333333333333333333'] });
   onText(store, withRole.m);
   await tick();
-  assert.match(said(withRole.replies[0]), /OwO dashboard/);
+  assert.match(said(withRole.replies[0]), /Stray Dogs Den/);
 });
 
 test('custom prefix', async () => {
@@ -168,7 +168,7 @@ test('grouped commands keep the slash list short and work typed too', async () =
   const dash = fake('tz owo');
   assert.equal(onText(store0(), dash.m), true);
   await tick();
-  assert.match(said(dash.replies[0]), /OwO dashboard/);
+  assert.match(said(dash.replies[0]), /Stray Dogs Den/);
   const store = new Store(':memory:');
   const a = fake('tz owo hb');
   assert.equal(onText(store, a.m), true);
@@ -230,7 +230,16 @@ test('every group opens a dashboard and every pick can be asked for', async () =
   const a = fake('tz fun');
   onText(store, a.m);
   await tick();
-  assert.match(said(a.replies[0]), /Games/);
+  assert.match(said(a.replies[0]), /Lupin Bar/);
+  // old names still land on the new dashboards
+  const old = fake('tz games');
+  onText(store, old.m);
+  await tick();
+  assert.match(said(old.replies[0]), /Lupin Bar/);
+  const short = fake('tz yen');
+  onText(store, short.m);
+  await tick();
+  assert.match(said(short.replies[0]), /Yen Ledger/);
   const b = fake('tz ship');
   onText(store, b.m);
   await tick();

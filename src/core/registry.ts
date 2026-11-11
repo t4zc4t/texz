@@ -45,21 +45,45 @@ useModules(modules);
 // every group is one slash command and one typed word that opens its dashboard, everything else is picked from there
 type Group = GroupInfo & { description: string; perms?: bigint; anywhere?: boolean; dashboard?: string; staff?: boolean; old: string[] };
 const groups: Record<string, Group> = {
-  owo: { label: 'OwO', emoji: '🐾', about: '', description: 'OwO dashboard: huntbot, gems, zoo, weapons, quests and the shop', anywhere: true, dashboard: 'status', old: [] },
-  poketwo: { label: 'Pokétwo', emoji: '🔴', about: 'Claim help, hints, the server Pokédex and the weekly catch race.', description: 'Pokétwo: claim help status, hints, the Pokédex and the catch race', old: ['p2', 'pokétwo'], extra: ['pings'] },
-  shoob: { label: 'Shoob', emoji: '🃏', about: 'Tier 5 and 6 pings and a wishlist for the characters you want.', description: 'Shoob: rare drop pings and your character wishlist', old: [], extra: ['spawns', 'pings'] },
-  anime: { label: 'Anime', emoji: '📺', about: '', description: 'Anime dashboard, or a title to search', anywhere: true, dashboard: 'animehome', old: [] },
-  sports: { label: 'Sports', emoji: '🏁', about: 'Formula 1 from Parc Fermé and football from the big leagues.', description: 'F1 races, standings and football matches, plus predictions', anywhere: true, old: [], extra: ['pings'] },
-  games: { label: 'Games', emoji: '🎲', about: 'Games for the whole channel, quizzes that pay yen, and the small stuff.', description: 'Quizzes, guess the anime, ship, polls, quotes, dice and history', anywhere: true, old: ['fun'] },
-  you: { label: 'You', emoji: '🪪', about: 'Your profile, rank, yen, medals, pings and reminders, all in one place.', description: 'Your profile, rank, wallet, medals, mission, pings and reminders', anywhere: true, old: ['me', 'info', 'eco', 'levels'], extra: ['levels'] },
-  staff: { label: 'Staff', emoji: '🛡️', about: 'Moderation, giveaways, role pickers, announcements and xp tools. Admins and the staff role only.', description: 'Staff only: moderation, giveaways, role pickers, announcements, xp and stats', staff: true, old: ['mod', 'tools'] },
+  admin: { label: 'Port Mafia HQ', emoji: '🖤', about: '*The executives\' floor. Discipline, rewards and the building itself.*\nAdmins and the staff role only.', description: 'Admins only: moderation, giveaways, role pickers, posts, xp and setup', staff: true, perms: PermissionFlagsBits.ManageMessages, old: ['staff', 'mod', 'tools', 'hq', 'mafia'], extra: ['setup'] },
+  owo: { label: 'Stray Dogs Den', emoji: '🐾', about: '', description: 'OwO: huntbot, gems, zoo, weapons, quests, timers and the shop', anywhere: true, dashboard: 'status', old: [] },
+  poketwo: { label: 'Pokédex Bureau', emoji: '🔴', about: '*Every creature on file, every catch accounted for.*\nClaim help, hints, the server Pokédex and the weekly race.', description: 'Pokétwo: claim help, hints, the Pokédex and the catch race', old: ['p2', 'pokétwo'], extra: ['pings'] },
+  shoob: { label: 'Card Vault', emoji: '🃏', about: '*Some cards are worth waiting for.*\nRare drop pings and a wishlist for the characters you want.', description: 'Shoob: rare drop pings and your character wishlist', old: [], extra: ['spawns', 'pings'] },
+  anime: { label: 'Literary Annex', emoji: '📚', about: '', description: 'Anime and manga: what\'s airing, search, your list, watch parties', anywhere: true, dashboard: 'animehome', old: ['annex'] },
+  sports: { label: 'Paddock & Pitch', emoji: '🏁', about: '*Odds, engines and ninety minutes of chaos.*\nFormula 1, football from the big leagues, and predictions that pay.', description: 'F1, football and predictions', anywhere: true, old: ['sport'], extra: ['pings'] },
+  fun: { label: 'Lupin Bar', emoji: '🍸', about: '*Three glasses on the counter. Pull up a stool.*\nQuizzes that pay yen, games for the channel, confessions and dice.', description: 'Quizzes, guess the anime, ship, polls, quotes, confessions, dice', anywhere: true, old: ['games', 'game'] },
+  profile: { label: 'Personnel File', emoji: '🪪', about: '*Everything the Agency knows about you. Mostly flattering.*\nYour card, favourites, rank, medals, birthday and every ping you get.', description: 'Your profile card, favourites, rank, medals, birthday and pings', anywhere: true, old: ['you', 'me', 'file'] },
+  yen: { label: 'Yen Ledger', emoji: '💴', about: '*Kunikida balances it. Dazai owes it.*\nDaily yen, your wallet, paying people, the rich list and the role shop.', description: 'Daily yen, wallet, give, richest and the role shop', old: ['eco', 'money', 'bank'] },
+  misc: { label: 'Odds & Ends', emoji: '🧰', about: '*The drawer nobody labels.*\nLook people up, server info, afk, one-off reminders and the bot ping.', description: 'User and server info, avatar, afk, reminders', anywhere: true, old: ['info', 'utils', 'odds'], extra: ['ping'] },
 };
 
-// the old dashboard names still open the new ones, so "tz fun" or "/mod" habits keep working
+// where each command sits and the short name it goes by inside its dashboard, "/admin view:mute" or "tz admin mute"
+const place: Record<string, [string, string?]> = {
+  warn: ['admin'], case: ['admin'], timeout: ['admin', 'mute'], kick: ['admin'], ban: ['admin'], unban: ['admin'], purge: ['admin'], lock: ['admin'], slowmode: ['admin', 'slow'],
+  rolepicker: ['admin', 'roles'], xp: ['admin'], giveaway: ['admin', 'gaw'], announce: ['admin', 'post'], serverstats: ['admin', 'stats'], backup: ['admin'],
+  reminders: ['owo', 'timers'],
+  poll: ['fun'], choose: ['fun', 'pick'], roll: ['fun'], coin: ['fun', 'flip'], ship: ['fun'], '8ball': ['fun'], guess: ['fun'], quiz: ['fun'], trivia: ['fun'],
+  onthisday: ['fun', 'otd'], crestquiz: ['fun', 'crest'], quote: ['fun'], confess: ['fun'],
+  profile: ['profile', 'card'], achievements: ['profile', 'medals'], rank: ['profile'], levels: ['profile', 'top'], perks: ['profile'], mission: ['profile'], birthday: ['profile', 'bday'], pings: ['profile'],
+  daily: ['yen'], wallet: ['yen', 'bal'], give: ['yen'], rich: ['yen', 'top'], roleshop: ['yen', 'shop'],
+  user: ['misc'], avatar: ['misc', 'av'], server: ['misc'], afk: ['misc'], remind: ['misc'],
+};
+for (const mod of [owo, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, community, spawnsModule]) for (const cmd of mod.commands) {
+  const to = place[cmd.name];
+  if (!to) continue;
+  cmd.group = to[0];
+  cmd.as = to[1];
+  // a few levels pages were hidden before, they have a home now
+  if (['levels', 'perks', 'rich', 'daily', 'avatar'].includes(cmd.name)) cmd.hidden = false;
+}
+// "tz yen" opens the ledger now, the daily keeps its other names
+for (const cmd of economy.commands) if (cmd.text?.aliases) cmd.text.aliases = cmd.text.aliases.filter((a) => a !== 'yen');
+
+// the old dashboard names still open the new ones, so "tz games" or "/mod" habits keep working
 const oldGroup = new Map(Object.entries(groups).flatMap(([name, g]) => g.old.map((o) => [o, name] as const)));
 
-// staff run the staff dashboard like admins do, except the backup, which stays with admins
-const staffCmd = (cmd: Command) => (cmd.group === 'staff' || cmd.name === 'staffhome') && cmd.name !== 'backup';
+// staff run the admin dashboard like admins do, except the backup, which stays with admins
+const staffCmd = (cmd: Command) => (cmd.group === 'admin' || cmd.name === 'adminhome') && cmd.name !== 'backup';
 
 type Hit = { mod: Module; cmd: Command };
 const dashNames = new Set<string>();
@@ -150,7 +174,7 @@ type Block = { kind: Kind; vars?: Record<string, string> };
 
 function gate(store: Store, ctx: Ctx, mod: Module, cmd: Command): Block | null {
   if (!ctx.isAdmin && staffCmd(cmd) && isStaff(store, ctx)) ctx.isAdmin = true;
-  if (cmd.group === 'staff' && !ctx.isAdmin) return { kind: 'noPerm' };
+  if (cmd.group === 'admin' && !ctx.isAdmin) return { kind: 'noPerm' };
   if (cmd.admin && !ctx.isAdmin) return { kind: 'noPerm' };
   if (mod.locked || !ctx.guildId) return null;
   const r = store.rules(ctx.guildId, mod.name);

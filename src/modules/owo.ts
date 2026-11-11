@@ -96,7 +96,7 @@ const status: Command = {
         { label: 'Join the buddy network', value: 'buddy.join', emoji: '🕵️' }, { label: 'Ask buddies for a cookie, pray...', value: 'ask', emoji: '📣' },
         { label: 'Check one weapon', value: 'weapon', emoji: '🗡️' },
       ));
-    return ctx.reply({ embeds: [card({ kind: 'status', title: 'OwO dashboard', emoji: '🗂️', fields, gif: gifFor(store, ctx, 'status') })], components: [nav, more] });
+    return ctx.reply({ embeds: [card({ kind: 'status', title: 'Stray Dogs Den', emoji: '🐾', fields, gif: gifFor(store, ctx, 'status') })], components: [nav, more] });
   },
 };
 

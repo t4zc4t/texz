@@ -12,9 +12,9 @@ import { setupPanel } from '../features/setup.js';
 // filled in by the registry so help and config can list every module
 // a few words on what each dashboard holds, for the help page
 const blurb: Record<string, string> = {
-  owo: 'timers, huntbot, gems, weapons', poketwo: 'claim help, hints, dex, race', shoob: 'rare drops, wishlist',
-  anime: 'what\'s on, search, your list', sports: 'F1, football, predictions', games: 'quizzes, guess, ship, quotes',
-  you: 'profile, rank, yen, pings, reminders', staff: 'moderation, giveaways, roles, posts',
+  admin: 'mod, cases, giveaways, posts, setup', owo: 'huntbot, gems, zoo, weapons, timers', poketwo: 'claim help, hints, dex, race', shoob: 'rare drops, wishlist',
+  anime: 'airing, search, your list, parties', sports: 'F1, football, predictions', fun: 'quizzes, guess, ship, quotes, confess',
+  profile: 'card, favourites, rank, medals, pings', yen: 'daily, wallet, give, role shop', misc: 'user, server, afk, reminders',
 };
 
 // the dashboards, filled in by the registry, so help can list them
@@ -84,7 +84,7 @@ function examples(c: Command, prefix: string): { label: string; typed: string; s
 let staffNow = false;
 function allowed(ctx: Ctx, c: Command) {
   if (c.name === 'backup' || c.name === 'setup') return ctx.isAdmin;
-  if (c.admin || c.group === 'staff') return ctx.isAdmin || staffNow;
+  if (c.admin || c.group === 'admin') return ctx.isAdmin || staffNow;
   return true;
 }
 
@@ -116,7 +116,7 @@ const help: Command = {
     const want = raw === 'home' ? undefined : raw || undefined;
     const all = catalogue(ctx, store);
     staffNow = isStaff(store, ctx);
-    const staff = (d: { name: string }) => (d.name === 'staff' ? staffNow : true);
+    const staff = (d: { name: string }) => (d.name === 'admin' ? ctx.isAdmin || staffNow : true);
     const dashes = dashList.filter((d) => (ctx.guildId || d.anywhere) && staff(d));
     const dashMenu = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
       new StringSelectMenuBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=help`).setPlaceholder('🚪 Open a dashboard')
@@ -167,9 +167,15 @@ const help: Command = {
       new ButtonBuilder().setCustomId(`nav|setup|owner=${ctx.userId}`).setLabel('Admin desk').setEmoji('🛠️').setStyle(ButtonStyle.Secondary),
     ));
     return ctx.reply({ embeds: [card({
-      kind: 'help', title: 'At your service', emoji: '🕵️', gif,
-      body: `Everything lives in a few dashboards, open one and click, nothing to remember.\n🔎 Looking for something? Ask in plain words: \`${prefix} help money\`, \`${prefix} help ping me\`, \`${prefix} help birthday\`.\n🖼️ Right click a message → Apps → **Make it a Quote**${ctx.isAdmin ? '\n🛠️ Admin things live in `/setup`' : ''}`,
-      fields: dashes.map((d) => ({ name: `${d.emoji} ${d.label}`, value: `${blurb[d.name] ?? ''}\n\`${prefix} ${d.name}\``, inline: true })),
+      kind: 'help', title: 'The Agency directory', emoji: '🕵️', gif,
+      body: [
+        '*Ten doors, one building. Pick one and click around, nothing to memorise.*',
+        '',
+        ...dashes.map((d) => `${d.emoji} **${d.label}** · \`${prefix} ${d.name}\` · ${blurb[d.name] ?? ''}`),
+        '',
+        `🔎 Lost? Ask in plain words: \`${prefix} help money\` · \`${prefix} help ping me\``,
+        `✂️ Short forms work everywhere: \`${prefix} owo hb\` · \`${prefix} fun crest\` · \`${prefix} yen bal\``,
+      ].join('\n'),
     })], components: rows });
   },
 };

@@ -270,8 +270,8 @@ const home: Command = {
         { label: 'Plan a watch party', value: 'watchparty', emoji: '🍿' },
       )),
     ];
-    return ctx.reply({ embeds: [card({ kind: 'season', title: 'What\'s on', emoji: '📺', gif: 'off', fields,
-      body: 'Search with `tz anime <title>` or `/anime input:<title>`. Everything else is a click away.' })], components: rows });
+    return ctx.reply({ embeds: [card({ kind: 'season', title: 'Literary Annex', emoji: '📚', gif: 'off', fields,
+      body: '*Stories on the shelf, episodes on the air.*\nSearch with `tz anime <title>` or `/anime input:<title>`. Everything else is a click away.' })], components: rows });
   },
 };
 

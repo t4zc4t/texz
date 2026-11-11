@@ -26,7 +26,7 @@ export const menu: Record<string, [string, string, string?]> = {
   avatar: ['🖼️', 'Avatar'], user: ['🕵️', 'User dossier'], 'profile.view': ['🪪', 'Profile card'], 'profile.edit': ['✏️', 'Edit my profile'],
   achievements: ['🎖️', 'Achievements', 'Every medal, and which ones show on your profile'],
   confess: ['🕯️', 'Confess', 'Post something anonymously in the confessional'],
-  server: ['🏛️', 'Server info'], afk: ['💤', 'Go afk'],
+  server: ['🏛️', 'Server info'], afk: ['💤', 'Go afk'], ping: ['📡', 'Bot ping'], setup: ['🛠️', 'Setup desk', 'Features, channels, roles, welcome, logs, all with buttons'],
   'birthday.set': ['🎂', 'Set my birthday'], 'birthday.remove': ['🗑️', 'Forget my birthday'], 'birthday.list': ['📆', 'Upcoming birthdays'], 'birthday.check': ['🔍', 'Someone\'s birthday'],
   'f1~view=next': ['🏎️', 'Next Grand Prix', 'Every session with your local times'], 'f1~view=standings': ['🏆', 'F1 standings', 'Drivers and teams'],
   'f1~view=last': ['🏁', 'Last race', 'The top ten and the gaps'], 'f1~view=quiz': ['❓', 'F1 quiz', 'Win yen'],
@@ -43,41 +43,48 @@ export const menu: Record<string, [string, string, string?]> = {
 
 // sections and the quick buttons of each generic dashboard
 export const layout: Record<string, { sections: [string, string[]][]; quick: string[] }> = {
+  admin: {
+    sections: [
+      ['⚖️ Deal with someone', ['warn', 'timeout', 'kick', 'ban', 'unban']],
+      ['🧹 This channel', ['purge', 'lock', 'slowmode']],
+      ['🗄️ Case files', ['case.list', 'case.view', 'case.reason', 'case.delete']],
+      ['🎁 Giveaways and roles', ['giveaway.start', 'giveaway.list', 'giveaway.end', 'giveaway.reroll', 'rolepicker']],
+      ['📣 Posts, xp and numbers', ['announce.add', 'announce.list', 'xp.give', 'xp.level', 'serverstats']],
+      ['🛠️ The building itself', ['setup', 'backup.export', 'backup.import']],
+    ],
+    quick: ['setup', 'giveaway.start', 'rolepicker', 'case.list', 'serverstats'],
+  },
   poketwo: {
     sections: [['🔎 Claim help', ['spawns', 'pokemon']], ['📕 The server', ['dex', 'race']], ['🔔 Pings', ['pings']]],
     quick: ['spawns', 'pokemon', 'dex', 'race', 'pings'],
   },
   shoob: {
-    sections: [['⭐ Your wishlist', ['wish.list', 'wish.add', 'wish.remove']], ['🔔 Pings', ['pings', 'spawns']]],
+    sections: [['💝 Your wishlist', ['wish.list', 'wish.add', 'wish.remove']], ['🔔 Rare drops', ['pings', 'spawns']]],
     quick: ['wish.list', 'wish.add', 'pings'],
   },
-  games: {
-    sections: [['🏆 Games that pay yen', ['quiz', 'crestquiz', 'guess', 'trivia']], ['🎉 For the channel', ['quote', 'ship', 'poll', 'onthisday']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']]],
-    quick: ['quiz', 'crestquiz', 'guess', 'ship', 'onthisday'],
+  fun: {
+    sections: [['🏆 Games that pay yen', ['quiz', 'crestquiz', 'guess', 'trivia']], ['🎉 For the channel', ['quote', 'ship', 'poll', 'onthisday', 'confess']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']]],
+    quick: ['quiz', 'crestquiz', 'guess', 'ship', 'quote'],
   },
-  you: {
+  profile: {
     sections: [
-      ['🪪 Your file', ['profile.view', 'profile.edit', 'achievements', 'rank', 'mission']],
-      ['👛 Yen', ['wallet', 'give', 'roleshop.view', 'roleshop.buy']],
-      ['🔔 Pings and reminders', ['pings', 'remind', 'reminders']],
-      ['🎂 Birthdays, away and secrets', ['birthday.set', 'birthday.list', 'afk', 'confess']],
-      ['🔍 Look up', ['user', 'server', 'levels']],
+      ['🪪 Your file', ['profile.view', 'profile.edit', 'achievements', 'mission']],
+      ['🎖️ Rank', ['rank', 'levels', 'perks']],
+      ['🔔 Pings and birthdays', ['pings', 'birthday.set', 'birthday.list', 'birthday.check']],
     ],
-    quick: ['profile.view', 'rank', 'wallet', 'pings', 'achievements'],
+    quick: ['profile.view', 'profile.edit', 'rank', 'achievements', 'pings'],
+  },
+  yen: {
+    sections: [['💴 Your money', ['daily', 'wallet', 'give']], ['🛍️ Spend it', ['roleshop.view', 'roleshop.buy']], ['🏆 Rich list', ['rich']], ['🔧 Shop keeping', ['roleshop.add', 'roleshop.remove']]],
+    quick: ['daily', 'wallet', 'give', 'roleshop.view', 'rich'],
+  },
+  misc: {
+    sections: [['🔍 Look up', ['user', 'avatar', 'server']], ['⏰ You', ['remind', 'afk']], ['📡 The bot', ['ping']]],
+    quick: ['user', 'server', 'remind', 'afk'],
   },
   sports: {
     sections: [['🏎️ Formula 1', ['f1~view=next', 'f1~view=standings', 'f1~view=last']], ['⚽ Football', ['football.today', 'football.favs', 'football.fav']], ['🔮 Predictions', ['predict', 'predtop']], ['🔔 Pings', ['pings']]],
     quick: ['f1~view=next', 'f1~view=standings', 'football.today', 'predict', 'pings'],
-  },
-  staff: {
-    sections: [
-      ['⚖️ Act on someone', ['warn', 'timeout', 'kick', 'ban', 'unban']],
-      ['🧹 This channel', ['purge', 'lock', 'slowmode']],
-      ['🗄️ Case archive', ['case.list', 'case.view', 'case.reason', 'case.delete']],
-      ['🎁 Giveaways and roles', ['giveaway.start', 'giveaway.list', 'giveaway.end', 'giveaway.reroll', 'rolepicker']],
-      ['📣 Posts and numbers', ['announce.add', 'announce.list', 'serverstats', 'xp.give', 'xp.level', 'backup.export']],
-    ],
-    quick: ['giveaway.start', 'rolepicker', 'announce.add', 'case.list', 'serverstats'],
   },
 };
 
@@ -87,7 +94,7 @@ const ago = (ms: number) => `<t:${Math.floor(ms / 1000)}:R>`;
 export function glance(group: string, ctx: Ctx, store: Store): string | null {
   const g = ctx.guildId;
   try {
-    if (group === 'you' && g) {
+    if (group === 'profile' && g) {
       const w = store.wallet(g, ctx.userId);
       const l = levelOf(store.xpOf(g, ctx.userId).xp);
       const r = rankFor(l.level);
@@ -96,7 +103,7 @@ export function glance(group: string, ctx: Ctx, store: Store): string | null {
       const done = Number(store.getKv(`mission:${g}:${new Date().toISOString().slice(0, 10)}:${ctx.userId}`) ?? 0) >= m.need;
       return `${r.emoji} **${r.name}** · level **${l.level}** · 👛 **¥${w.yen.toLocaleString()}** · ${ready ? '💴 daily **ready**' : '💴 daily done'}${w.streak ? ` · 🔥 ${w.streak}` : ''}\n🕵️ Mission: **${m.text}** ${done ? '✅' : ''}`;
     }
-    if (group === 'eco' && g) {
+    if (group === 'yen' && g) {
       const w = store.wallet(g, ctx.userId);
       const ready = w.daily_day !== new Date().toISOString().slice(0, 10);
       return `👛 **¥${w.yen.toLocaleString()}** · ${ready ? '💴 daily is **ready**' : `daily again ${ago(Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`) + 86_400_000)}`}${w.streak ? ` · 🔥 ${w.streak} day streak` : ''}`;
@@ -107,19 +114,13 @@ export function glance(group: string, ctx: Ctx, store: Store): string | null {
       const p = perksFor(l.level);
       return `${r.emoji} **${r.name}** · level **${l.level}** · ${l.into.toLocaleString()}/${l.need.toLocaleString()} xp to the next${p.xp > 1 ? ` · ✨ ${p.xp}x xp` : ''}`;
     }
-    if (group === 'info') {
-      const b = store.birthday(ctx.userId);
-      const p = picksOf(store, ctx.userId);
-      const picks = [p.club && `⚽ ${p.club}`, p.team && `🏎️ ${p.team}`, p.anime && `📺 ${p.anime}`].filter(Boolean).join(' · ');
-      return `🎂 ${b ? fmtDate(b.month, b.day) : '*no birthday saved*'} · ${picks || '*no picks yet, Edit my profile adds them*'}`;
-    }
-    if (group === 'staff' && g) {
+    if (group === 'admin' && g) {
       const { total } = store.findCases(g, {}, 1);
       const gw = store.activeGiveaways(g).length;
       const posts = store.schedules(g).length;
       return `🗄️ **${total}** case${total === 1 ? '' : 's'} on file · 🎁 **${gw}** giveaway${gw === 1 ? '' : 's'} running · 📣 **${posts}** planned post${posts === 1 ? '' : 's'}`;
     }
-    if (group === 'games' && g && store.rules(g, 'economy').enabled) {
+    if (group === 'fun' && g && store.rules(g, 'economy').enabled) {
       const w = store.wallet(g, ctx.userId);
       const wins = winsOf(store, g, ctx.userId);
       return `👛 **¥${w.yen.toLocaleString()}** · 🏆 **${wins}** quiz and guess win${wins === 1 ? '' : 's'} · the quiz pays up to ¥60 a question`;
