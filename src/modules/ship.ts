@@ -130,7 +130,7 @@ export async function onShip(i: Interaction): Promise<boolean> {
 
 export const ship: Command = {
   name: 'ship',
-  group: 'fun',
+  group: 'games',
   data: new SlashCommandBuilder().setName('ship').setDescription('A compatibility case file: both answer questions, then the verdict')
     .addUserOption((o) => o.setName('user').setDescription('Who to test with').setRequired(true))
     .addUserOption((o) => o.setName('other').setDescription('Test two other people instead of you')).toJSON(),

@@ -263,6 +263,7 @@ const home: Command = {
       row(new StringSelectMenuBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=animehome`).setPlaceholder('📂 Open anything else').addOptions(
         { label: 'Guess game', value: 'guess', emoji: '🔎' }, { label: 'Random pick', value: 'recommend', emoji: '🎲' },
         { label: 'Character of the day', value: 'today', emoji: '🎭' }, { label: 'My episode alerts', value: 'alerts', emoji: '🔔' },
+        { label: 'All my pings and reminders', value: 'pings', emoji: '⏰' },
         { label: 'Search an anime', value: 'anime', emoji: '🔍' }, { label: 'Search a manga', value: 'manga', emoji: '📚' },
         { label: 'Find a character', value: 'character', emoji: '🎭' }, { label: 'Add to my list', value: 'watchlist.add', emoji: '➕' },
         { label: 'Airing on another day', value: 'airing', emoji: '📅' }, { label: 'My pings', value: 'pings', emoji: '🔔' },
@@ -322,7 +323,7 @@ const rounds = new Map<string, { answer: number; titles: string[]; ends: number;
 
 export const guess: Command = {
   name: 'guess',
-  group: 'fun',
+  group: 'games',
   data: new SlashCommandBuilder().setName('guess').setDescription('Name the anime from a picture, first right answer wins yen').toJSON(),
   text: { aliases: ['gta', 'animequiz'] },
   run: async (ctx, store) => {

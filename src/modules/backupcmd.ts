@@ -40,7 +40,7 @@ function swapIn(v: unknown, g: Guild, missing: string[]): unknown {
 
 export const backupCmd: Command = {
   name: 'backup',
-  group: 'tools',
+  group: 'staff',
   admin: true,
   data: new SlashCommandBuilder().setName('backup').setDescription('Save this server\'s Texz setup to a file, or load one')
     .addSubcommand((c) => c.setName('export').setDescription('Download the setup as a file'))

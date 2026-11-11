@@ -169,7 +169,7 @@ export function startServerTimers(client: Client, store: Store) {
 
 const announce: Command = {
   name: 'announce',
-  group: 'tools',
+  group: 'staff',
   admin: true,
   data: new SlashCommandBuilder().setName('announce').setDescription('Posts that go out later, once or on repeat')
     .addSubcommand((s) => s.setName('add').setDescription('Plan a post')
@@ -218,7 +218,7 @@ const announce: Command = {
 
 const stats: Command = {
   name: 'serverstats',
-  group: 'tools',
+  group: 'staff',
   as: 'stats',
   admin: true,
   data: new SlashCommandBuilder().setName('serverstats').setDescription('Messages, busiest channels and people, joins and leaves')

@@ -154,7 +154,7 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
 
 export const profile: Command = {
   name: 'profile',
-  group: 'info',
+  group: 'you',
   data: new SlashCommandBuilder().setName('profile').setDescription('Your personnel file as a picture, with what you choose to show')
     .addSubcommand((s) => s.setName('view').setDescription('Show a profile card')
       .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')))

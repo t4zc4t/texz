@@ -85,16 +85,16 @@ const status: Command = {
     if (shopSnap && (!shopSnap.data.until || shopSnap.data.until > Date.now())) glance.push('🛒 today\'s weapon shop is on file, `tz shop`');
     if (glance.length) fields.push({ name: '🧭 At a glance', value: glance.join('\n'), inline: false });
     const nav = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      ...[['huntbot', '🤖', 'Huntbot'], ['armoury', '⚔️', 'Armoury'], ['zoo', '🦁', 'Zoo'], ['quests', '📜', 'Quests'], ['reminders', '🎛️', 'Reminders']]
+      ...[['huntbot', '🤖', 'Huntbot'], ['armoury', '⚔️', 'Armoury'], ['zoo', '🦁', 'Zoo'], ['quests', '📜', 'Quests'], ['pings', '🔔', 'Pings and reminders']]
         .map(([cmd, emoji, label]) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId},back=status`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary)),
     );
     const more = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
       new StringSelectMenuBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=status`).setPlaceholder('📂 Open anything else').addOptions(
         { label: 'Gems', value: 'gems', emoji: '💎' }, { label: 'Team', value: 'team', emoji: '🐾' }, { label: 'Weapon shop', value: 'shop', emoji: '🛒' },
         { label: 'Weekly stats', value: 'stats', emoji: '📈' }, { label: 'Leaderboard', value: 'leaderboard', emoji: '🏆' },
-        { label: 'Reminders queued', value: 'remind', emoji: '⏰' }, { label: 'Buddies', value: 'buddy', emoji: '🤝' },
+        { label: 'OwO reminder settings', value: 'reminders', emoji: '🎛️' }, { label: 'Buddies', value: 'buddy', emoji: '🤝' },
         { label: 'Join the buddy network', value: 'buddy.join', emoji: '🕵️' }, { label: 'Ask buddies for a cookie, pray...', value: 'ask', emoji: '📣' },
-        { label: 'Check one weapon', value: 'weapon', emoji: '🗡️' }, { label: 'My pings', value: 'pings', emoji: '🔔' },
+        { label: 'Check one weapon', value: 'weapon', emoji: '🗡️' },
       ));
     return ctx.reply({ embeds: [card({ kind: 'status', title: 'OwO dashboard', emoji: '🗂️', fields, gif: gifFor(store, ctx, 'status') })], components: [nav, more] });
   },
@@ -338,7 +338,7 @@ const leaderboard: Command = {
 
 const remind: Command = {
   name: 'remind',
-  group: 'owo',
+  group: 'you',
   data: new SlashCommandBuilder().setName('remind').setDescription('Your reminders, or add one straight away')
     .addIntegerOption((o) => o.setName('minutes').setDescription('Remind me in this many minutes').setMinValue(1).setMaxValue(10080))
     .addStringOption((o) => o.setName('note').setDescription('What about').setMaxLength(200)).toJSON(),
@@ -360,7 +360,7 @@ const remind: Command = {
 
 const settings: Command = {
   name: 'reminders',
-  group: 'owo',
+  group: 'you',
   data: new SlashCommandBuilder().setName('reminders').setDescription('Your reminder control room: what, where and when').toJSON(),
   text: { aliases: ['settings', 'set'] },
   run: (ctx, store) => ctx.reply(panel(store, ctx.userId, 'settings')),

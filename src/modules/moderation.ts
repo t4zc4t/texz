@@ -83,7 +83,7 @@ const reason = (o: Builder) => o.addStringOption((x) => x.setName('reason').setD
 
 const warn: Command = {
   name: 'warn',
-  group: 'mod',
+  group: 'staff',
   data: reason(user(new SlashCommandBuilder().setName('warn').setDescription('Warn someone, it goes in their file')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).setDMPermission(false))).toJSON(),
   text: { args: ['user', 'reason'] },
@@ -102,7 +102,7 @@ const warn: Command = {
 
 const timeout: Command = {
   name: 'timeout',
-  group: 'mod',
+  group: 'staff',
   data: reason(user(new SlashCommandBuilder().setName('timeout').setDescription('No Longer Human: mute someone for a while')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).setDMPermission(false))
     .addStringOption((x) => x.setName('length').setDescription('Like 10m, 2h, 1d (max 28d), or off to lift it').setRequired(true))).toJSON(),
@@ -143,7 +143,7 @@ const untimeout: Command = {
 
 const kick: Command = {
   name: 'kick',
-  group: 'mod',
+  group: 'staff',
   data: reason(user(new SlashCommandBuilder().setName('kick').setDescription('Show someone the door')
     .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers).setDMPermission(false))).toJSON(),
   text: { args: ['user', 'reason'] },
@@ -162,7 +162,7 @@ const kick: Command = {
 
 const ban: Command = {
   name: 'ban',
-  group: 'mod',
+  group: 'staff',
   data: reason(user(new SlashCommandBuilder().setName('ban').setDescription('Banish someone, for good or for a while')
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers).setDMPermission(false)))
     .addStringOption((x) => x.setName('length').setDescription('Temporary ban, like 1d or 2w (empty = forever)'))
@@ -194,7 +194,7 @@ const ban: Command = {
 
 const unban: Command = {
   name: 'unban',
-  group: 'mod',
+  group: 'staff',
   data: new SlashCommandBuilder().setName('unban').setDescription('Pardon a banned user by their ID')
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers).setDMPermission(false)
     .addStringOption((x) => x.setName('id').setDescription('Their user ID').setRequired(true)).toJSON(),
@@ -215,7 +215,7 @@ const unban: Command = {
 
 const purge: Command = {
   name: 'purge',
-  group: 'mod',
+  group: 'staff',
   data: new SlashCommandBuilder().setName('purge').setDescription('Delete recent messages here, optionally from one person')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages).setDMPermission(false)
     .addIntegerOption((x) => x.setName('amount').setDescription('How many, up to 100').setRequired(true).setMinValue(1).setMaxValue(100))
@@ -243,7 +243,7 @@ const purge: Command = {
 
 const lock: Command = {
   name: 'lock',
-  group: 'mod',
+  group: 'staff',
   data: new SlashCommandBuilder().setName('lock').setDescription('Lock or unlock this channel for everyone')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels).setDMPermission(false)
     .addBooleanOption((x) => x.setName('on').setDescription('Lock (true) or unlock (false)')).toJSON(),
@@ -262,7 +262,7 @@ const lock: Command = {
 
 const slowmode: Command = {
   name: 'slowmode',
-  group: 'mod',
+  group: 'staff',
   data: new SlashCommandBuilder().setName('slowmode').setDescription('Set slowmode here, 0 turns it off')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels).setDMPermission(false)
     .addStringOption((x) => x.setName('length').setDescription('Like 5s, 1m, or 0').setRequired(true)).toJSON(),
@@ -325,7 +325,7 @@ export async function onCaseComponent(store: Store, i: Interaction): Promise<boo
 
 const cases: Command = {
   name: 'case',
-  group: 'mod',
+  group: 'staff',
   data: new SlashCommandBuilder().setName('case').setDescription('The moderation archive: look up, search, edit cases')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).setDMPermission(false)
     .addSubcommand((c) => c.setName('view').setDescription('Open one case')

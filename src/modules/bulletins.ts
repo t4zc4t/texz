@@ -640,7 +640,7 @@ const f1: Command = {
 // the trivia side of /f1, also on the fun dashboard
 const asView = (name: string, view: string, about: string, aliases: string[]): Command => ({
   name,
-  group: 'fun',
+  group: 'games',
   data: new SlashCommandBuilder().setName(name).setDescription(about).toJSON(),
   text: { aliases },
   run: (ctx, store) => f1.run({ ...ctx, str: (n) => (n === 'view' ? view : ctx.str(n)) }, store),
@@ -651,7 +651,7 @@ const f1Story = asView('f1otd', 'today', 'What happened in F1 on this day', []);
 // history for today: F1 from Parc Fermé, football from Wikipedia, anime from AniList
 export const f1Today: Command = {
   name: 'onthisday',
-  group: 'fun',
+  group: 'games',
   data: new SlashCommandBuilder().setName('onthisday').setDescription('F1, football and anime history for today')
     .addStringOption((o) => o.setName('topic').setDescription('Which one').addChoices({ name: 'F1', value: 'f1' }, { name: 'football', value: 'football' }, { name: 'anime', value: 'anime' })).toJSON(),
   call: 'history',

@@ -116,7 +116,7 @@ export const winsOf = (store: Store, guildId: string, userId: string) => Number(
 // football's turn: a crest, four clubs, twenty seconds
 export const crestQuiz: Command = {
   name: 'crestquiz',
-  group: 'fun',
+  group: 'games',
   data: new SlashCommandBuilder().setName('crestquiz').setDescription('Guess the club from its crest, first right answer wins yen').toJSON(),
   call: 'quiz crest',
   text: { aliases: ['quiz crest', 'crest', 'cq', 'badge'] },

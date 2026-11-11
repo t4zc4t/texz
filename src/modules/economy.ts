@@ -44,7 +44,7 @@ const fmt = (n: number) => `${YEN}${n.toLocaleString()}`;
 
 const daily: Command = {
   name: 'daily',
-  group: 'eco',
+  group: 'you',
   hidden: true,
   data: new SlashCommandBuilder().setName('daily').setDescription('Collect your daily yen, more for each day in a row').toJSON(),
   text: { aliases: ['yen'] },
@@ -65,7 +65,7 @@ const daily: Command = {
 // balance, daily and the richest list on one page
 const balance: Command = {
   name: 'wallet',
-  group: 'eco',
+  group: 'you',
   data: new SlashCommandBuilder().setName('wallet').setDescription('Your yen, your daily and the richest people here')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
   text: { aliases: ['bal', 'balance'], args: ['user'] },
@@ -93,7 +93,7 @@ const balance: Command = {
 
 const give: Command = {
   name: 'give',
-  group: 'eco',
+  group: 'you',
   data: new SlashCommandBuilder().setName('give').setDescription('Hand some of your yen to someone')
     .addUserOption((o) => o.setName('user').setDescription('Who').setRequired(true))
     .addIntegerOption((o) => o.setName('amount').setDescription('How much').setRequired(true).setMinValue(1).setMaxValue(10_000_000)).toJSON(),
@@ -113,7 +113,7 @@ const give: Command = {
 
 const rich: Command = {
   name: 'rich',
-  group: 'eco',
+  group: 'you',
   hidden: true,
   as: 'top',
   data: new SlashCommandBuilder().setName('rich').setDescription('The richest people in the server').toJSON(),
@@ -129,7 +129,7 @@ const rich: Command = {
 
 const shop: Command = {
   name: 'roleshop',
-  group: 'eco',
+  group: 'you',
   as: 'shop',
   data: new SlashCommandBuilder().setName('roleshop').setDescription('Roles you can buy with yen')
     .addSubcommand((s) => s.setName('view').setDescription('What\'s for sale'))

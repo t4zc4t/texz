@@ -230,7 +230,7 @@ test('every group opens a dashboard and every pick can be asked for', async () =
   const a = fake('tz fun');
   onText(store, a.m);
   await tick();
-  assert.match(said(a.replies[0]), /Games and trivia/);
+  assert.match(said(a.replies[0]), /Games/);
   const b = fake('tz ship');
   onText(store, b.m);
   await tick();

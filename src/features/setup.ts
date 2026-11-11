@@ -14,6 +14,7 @@ import { searchMedia, titleOf } from '../anime/anilist.js';
 import { carryRankPerms, fixRankOrder, perks, rankFor, ranks, tidyRanks } from '../modules/levels.js';
 import { parseLength } from '../modules/moderation.js';
 import { p2HelperOn, setP2Helper } from '../modules/spawns.js';
+import { staffRoles } from '../core/staff.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
@@ -56,7 +57,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { label: 'Features on or off, and where they work', value: 'features', emoji: '🧩' },
       { label: 'Welcome and goodbye messages', value: 'welcome', emoji: '🌸' },
       { label: 'Autorole for newcomers', value: 'autorole', emoji: '🎭' },
-      { label: 'Log channel and automod', value: 'mod', emoji: '🛡️' },
+      { label: 'Staff role, logs and automod', value: 'mod', emoji: '🛡️' },
       { label: 'Levels, xp and reward roles', value: 'levels', emoji: '🎖️' },
       { label: 'Birthday greetings and role', value: 'birthdays', emoji: '🎂' },
       { label: 'Bulletins: F1, football, anime', value: 'bulletins', emoji: '🗞️' },
@@ -138,14 +139,17 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
   }
 
   if (page === 'mod') {
-    title = 'Logs and automod';
-    body = 'The log channel gets joins, leaves, deleted and edited messages, bans and every moderation action. Automod never touches anyone who can manage messages.';
+    title = 'Staff, logs and automod';
+    body = 'The staff roles get the Staff dashboard: giveaways, role pickers, announcements, xp tools and the case archive. Kicks, bans and timeouts still need the matching Discord permission. The log channel gets joins, leaves, deleted and edited messages, bans and every moderation action. Automod never touches anyone who can manage messages.';
+    const staff = staffRoles(store, guild.id);
     fields.push(
+      { name: '🛡️ Staff', value: `${staff.length ? staff.map((r) => `<@&${r}>`).join(' ') : '*only people with Manage Server*'}`, inline: false },
       { name: '🔗 Invites', value: 'deletes invite links', inline: true },
       { name: '🌊 Spam', value: '6 messages in 5s → 5 min timeout', inline: true },
       { name: '📣 Mentions', value: 'deletes messages pinging 6+ people', inline: true },
     );
     comps.push(
+      row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'staff')).setPlaceholder('🛡️ Staff roles (empty = only Manage Server)').setMinValues(0).setMaxValues(5).setDefaultRoles(staff)),
       row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'logch')).setPlaceholder('📜 Log channel (empty = no logs)')
         .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(g.mod.logChannel ? [g.mod.logChannel] : [])),
       row(
@@ -411,7 +415,7 @@ async function canGive(guild: Guild, roleId: string) {
 
 const pageOf: Record<string, string> = {
   mod: 'f', p2help: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome',
-  arole: 'autorole', logch: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
+  arole: 'autorole', logch: 'mod', staff: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
   clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
   qch: 'quotes', bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', bultrack: 'bulletins', f1look: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
@@ -580,6 +584,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       g.welcome.autorole = values[0] ?? null;
     }
     if (action === 'logch') g.mod.logChannel = values[0] ?? null;
+    if (action === 'staff') store.setKv(`staffroles:${i.guild.id}`, JSON.stringify(values));
     if (action === 'am' && (arg === 'invites' || arg === 'spam' || arg === 'mentions')) g.mod[arg] = !g.mod[arg];
     if (action === 'lvch') g.levels.channel = values[0] ?? null;
     if (action === 'ann') g.levels.announce = !g.levels.announce;

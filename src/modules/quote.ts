@@ -86,7 +86,7 @@ export async function onQuote(store: Store, i: MessageContextMenuCommandInteract
 // "tz quote" as a reply to a message, or "/fun view:quote" with a message link
 export const quote: Command = {
   name: 'quote',
-  group: 'fun',
+  group: 'games',
   data: new SlashCommandBuilder().setName('quote').setDescription('Make it a quote: frame a message as a picture')
     .addStringOption((o) => o.setName('link').setDescription('Link to the message (or reply to it with tz quote)')).toJSON(),
   text: { aliases: ['frame', 'miq', 'makeitaquote'], args: ['link'] },

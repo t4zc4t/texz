@@ -33,6 +33,7 @@ import { fromComponent, fromSlash, fromText, withTokens, type Ctx } from './ctx.
 import { slashPath, type Command, type Module } from './module.js';
 import { glance, layout } from './glance.js';
 import { closest } from './fuzzy.js';
+import { isStaff } from './staff.js';
 import { fixText, setupButton, usualPerms } from './fixes.js';
 import { askModal, entriesOf, homePage, needsInput, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
 
@@ -41,18 +42,23 @@ allModules.push(...modules);
 useModules(modules);
 
 // every group is one slash command and one typed word that opens its dashboard, everything else is picked from there
-type Group = GroupInfo & { description: string; perms?: bigint; anywhere?: boolean; dashboard?: string };
+type Group = GroupInfo & { description: string; perms?: bigint; anywhere?: boolean; dashboard?: string; staff?: boolean; old: string[] };
 const groups: Record<string, Group> = {
-  owo: { label: 'OwO', emoji: '🐾', about: '', description: 'OwO dashboard: huntbot, gems, zoo, weapons, quests, shop and reminders', anywhere: true, dashboard: 'status' },
-  anime: { label: 'Anime', emoji: '📺', about: '', description: 'Anime dashboard, or a title to search', anywhere: true, dashboard: 'animehome' },
-  fun: { label: 'Games and trivia', emoji: '🎲', about: 'Games for the whole channel, trivia that pays yen, and the small stuff.', description: 'Games, trivia, ship, polls, dice and spawn pings', anywhere: true },
-  eco: { label: 'Yen', emoji: '💴', about: 'Claim, spend and give yen. The quiz and the guess game pay out too.', description: 'Yen: daily, balance, giving, the richest, the role shop and games that pay', extra: ['daily', 'rich', 'quiz', 'crestquiz', 'guess'] },
-  levels: { label: 'Levels', emoji: '🎖️', about: 'Ranks, perks and the roster.', description: 'Rank cards, perks, the leaderboard and xp tools', extra: ['perks', 'levels'] },
-  info: { label: 'You and the server', emoji: '🗂️', about: 'Your profile, your pings, birthdays and a look at people and the server.', description: 'Profile, pings, birthdays, avatars, away notes and the server', anywhere: true, extra: ['avatar'] },
-  sports: { label: 'Sports', emoji: '🏁', about: 'Formula 1 from Parc Fermé and football from the big leagues.', description: 'F1 races, standings, quiz and football matches', anywhere: true },
-  mod: { label: 'Moderation', emoji: '🛡️', about: 'Pick an action, then pick who. Everything lands in the case archive.', description: 'Moderation: warn, timeout, kick, ban, purge, lock, slowmode and cases', perms: PermissionFlagsBits.ModerateMembers },
-  tools: { label: 'Server tools', emoji: '🧰', about: 'Giveaways, role pickers, planned announcements and activity numbers.', description: 'Giveaways, role pickers, announcements and server stats (admins)', perms: PermissionFlagsBits.ManageGuild },
+  owo: { label: 'OwO', emoji: '🐾', about: '', description: 'OwO dashboard: huntbot, gems, zoo, weapons, quests and the shop', anywhere: true, dashboard: 'status', old: [] },
+  poketwo: { label: 'Pokétwo', emoji: '🔴', about: 'Claim help, hints, the server Pokédex and the weekly catch race.', description: 'Pokétwo: claim help status, hints, the Pokédex and the catch race', old: ['p2', 'pokétwo'], extra: ['pings'] },
+  shoob: { label: 'Shoob', emoji: '🃏', about: 'Tier 5 and 6 pings and a wishlist for the characters you want.', description: 'Shoob: rare drop pings and your character wishlist', old: [], extra: ['spawns', 'pings'] },
+  anime: { label: 'Anime', emoji: '📺', about: '', description: 'Anime dashboard, or a title to search', anywhere: true, dashboard: 'animehome', old: [] },
+  sports: { label: 'Sports', emoji: '🏁', about: 'Formula 1 from Parc Fermé and football from the big leagues.', description: 'F1 races, standings and football matches, plus predictions', anywhere: true, old: [], extra: ['pings'] },
+  games: { label: 'Games', emoji: '🎲', about: 'Games for the whole channel, quizzes that pay yen, and the small stuff.', description: 'Quizzes, guess the anime, ship, polls, quotes, dice and history', anywhere: true, old: ['fun'] },
+  you: { label: 'You', emoji: '🪪', about: 'Your profile, rank, yen, medals, pings and reminders, all in one place.', description: 'Your profile, rank, wallet, medals, mission, pings and reminders', anywhere: true, old: ['me', 'info', 'eco', 'levels'], extra: ['levels'] },
+  staff: { label: 'Staff', emoji: '🛡️', about: 'Moderation, giveaways, role pickers, announcements and xp tools. Admins and the staff role only.', description: 'Staff only: moderation, giveaways, role pickers, announcements, xp and stats', staff: true, old: ['mod', 'tools'] },
 };
+
+// the old dashboard names still open the new ones, so "tz fun" or "/mod" habits keep working
+const oldGroup = new Map(Object.entries(groups).flatMap(([name, g]) => g.old.map((o) => [o, name] as const)));
+
+// staff run the staff dashboard like admins do, except the backup, which stays with admins
+const staffCmd = (cmd: Command) => (cmd.group === 'staff' || cmd.name === 'staffhome') && cmd.name !== 'backup';
 
 type Hit = { mod: Module; cmd: Command };
 const dashNames = new Set<string>();
@@ -142,6 +148,8 @@ export const definitions: Json[] = [
 type Block = { kind: Kind; vars?: Record<string, string> };
 
 function gate(store: Store, ctx: Ctx, mod: Module, cmd: Command): Block | null {
+  if (!ctx.isAdmin && staffCmd(cmd) && isStaff(store, ctx)) ctx.isAdmin = true;
+  if (cmd.group === 'staff' && !ctx.isAdmin) return { kind: 'noPerm' };
   if (cmd.admin && !ctx.isAdmin) return { kind: 'noPerm' };
   if (mod.locked || !ctx.guildId) return null;
   const r = store.rules(ctx.guildId, mod.name);
@@ -172,6 +180,9 @@ function coolingDown(ctx: Ctx, cmd: Command): number {
 }
 
 async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command, cool = true) {
+  // where Back goes from this page: a dashboard goes back to help, anything else to its own dashboard
+  ctx.self = cmd.name;
+  ctx.home ??= dashNames.has(cmd.name) ? 'help' : groups[cmd.group ?? '']?.dashboard ?? 'help';
   const blocked = gate(store, ctx, mod, cmd);
   if (blocked) return ctx.reply({ embeds: [card({ ...blocked, title: 'Not this time', emoji: '🚫', color: RED, gif: 'off' })], temp: true });
   // buttons on dashboards move between pages, they don't count
@@ -243,6 +254,7 @@ export function onText(store: Store, m: Message): boolean {
   const body = text.slice(prefix.length);
   const tokens = body.trim().split(/\s+/).filter(Boolean);
   let name = tokens.shift()?.toLowerCase();
+  if (name && oldGroup.has(name) && !byText.has(name)) name = oldGroup.get(name)!;
   // just the prefix on its own opens help
   if (!name && text.length === prefix.length) name = 'help';
   if (!name) return false;

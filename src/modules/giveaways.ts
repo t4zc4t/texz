@@ -194,7 +194,7 @@ export async function onGiveawayButton(store: Store, i: Interaction): Promise<bo
 
 const giveaway: Command = {
   name: 'giveaway',
-  group: 'tools',
+  group: 'staff',
   admin: true,
   data: new SlashCommandBuilder().setName('giveaway').setDescription('Run giveaways with a button to enter (admins)')
     .addSubcommand((c) => c.setName('start').setDescription('Start one')

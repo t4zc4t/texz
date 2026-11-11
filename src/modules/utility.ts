@@ -47,7 +47,7 @@ export async function mugshot(guild: Guild | null, client: Client, targetId: str
 
 const avatar: Command = {
   name: 'avatar',
-  group: 'info',
+  group: 'you',
   hidden: true,
   data: new SlashCommandBuilder().setName('avatar').setDescription('Someone\'s picture, server or main, animated ones included')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
@@ -107,7 +107,7 @@ async function memberList(guild: Guild) {
 
 const user: Command = {
   name: 'user',
-  group: 'info',
+  group: 'you',
   data: new SlashCommandBuilder().setName('user').setDescription('Texz opens a dossier on someone, deductions included')
     .addUserOption((o) => o.setName('user').setDescription('Who, you if empty')).toJSON(),
   text: { aliases: ['whois', 'ui', 'dossier'], args: ['user'] },
@@ -155,7 +155,7 @@ const user: Command = {
 
 const server: Command = {
   name: 'server',
-  group: 'info',
+  group: 'you',
   data: new SlashCommandBuilder().setName('server').setDescription('Everything about this server at a glance').toJSON(),
   text: { aliases: ['si', 'guild'] },
   run: async (ctx) => {
@@ -208,7 +208,7 @@ export function pollView(messageId: string | null, p: { question: string; option
 
 const poll: Command = {
   name: 'poll',
-  group: 'fun',
+  group: 'games',
   data: new SlashCommandBuilder().setName('poll').setDescription('Start a vote with buttons, up to 5 options')
     .addStringOption((o) => o.setName('question').setDescription('What are we voting on').setRequired(true).setMaxLength(200))
     .addStringOption((o) => o.setName('options').setDescription('Options split with | like pizza | burger | crab').setRequired(true).setMaxLength(400)).toJSON(),
@@ -258,7 +258,7 @@ export async function onPollButton(store: Store, i: Interaction) {
 
 const choose: Command = {
   name: 'choose',
-  group: 'fun',
+  group: 'games',
   data: new SlashCommandBuilder().setName('choose').setDescription('Let Texz pick for you')
     .addStringOption((o) => o.setName('options').setDescription('Split with | like sleep | work').setRequired(true)).toJSON(),
   text: { aliases: ['pick'], args: ['options'] },
@@ -271,7 +271,7 @@ const choose: Command = {
 
 const roll: Command = {
   name: 'roll',
-  group: 'fun',
+  group: 'games',
   data: new SlashCommandBuilder().setName('roll').setDescription('Roll dice, like 2d6 or d20')
     .addStringOption((o) => o.setName('dice').setDescription('Like 2d6, d20, 100')).toJSON(),
   text: { aliases: ['dice'], args: ['dice'] },
@@ -289,7 +289,7 @@ const roll: Command = {
 
 const coin: Command = {
   name: 'coin',
-  group: 'fun',
+  group: 'games',
   data: new SlashCommandBuilder().setName('coin').setDescription('Flip a coin').toJSON(),
   text: { aliases: ['flip', 'cf'] },
   run: (ctx) => ctx.reply({ content: `🪙 **${Math.random() < 0.5 ? 'Heads' : 'Tails'}**. ${say('coin')}`, temp: true }),
@@ -297,7 +297,7 @@ const coin: Command = {
 
 const eightball: Command = {
   name: '8ball',
-  group: 'fun',
+  group: 'games',
   data: new SlashCommandBuilder().setName('8ball').setDescription('Ask Texz a yes or no question')
     .addStringOption((o) => o.setName('question').setDescription('Your question').setRequired(true).setMaxLength(200)).toJSON(),
   text: { aliases: ['ask8', '8b'], args: ['question'] },
@@ -310,7 +310,7 @@ const eightball: Command = {
 
 const afk: Command = {
   name: 'afk',
-  group: 'info',
+  group: 'you',
   data: new SlashCommandBuilder().setName('afk').setDescription('Tell people you\'re away, Texz answers when they ping you')
     .addStringOption((o) => o.setName('reason').setDescription('Why, optional').setMaxLength(120)).toJSON(),
   text: { args: ['reason'] },

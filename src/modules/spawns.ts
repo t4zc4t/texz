@@ -343,7 +343,7 @@ function wishersOf(store: Store, guild: Guild, character: string) {
 
 const wish: Command = {
   name: 'wish',
-  group: 'fun',
+  group: 'shoob',
   data: new SlashCommandBuilder().setName('wish').setDescription('Your Shoob wishlist, a ping when one of these characters drops')
     .addSubcommand((c) => c.setName('list').setDescription('Your wishlist'))
     .addSubcommand((c) => c.setName('add').setDescription('Wish for a character').addStringOption((o) => o.setName('character').setDescription('Their name, part of it is fine').setRequired(true).setMaxLength(60)))
@@ -454,7 +454,7 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
 const GENS: [string, number, number][] = [['Kanto', 1, 151], ['Johto', 152, 251], ['Hoenn', 252, 386], ['Sinnoh', 387, 493], ['Unova', 494, 649], ['Kalos', 650, 721], ['Alola', 722, 809], ['Galar', 810, 905], ['Paldea', 906, 1025]];
 const dex: Command = {
   name: 'dex',
-  group: 'fun',
+  group: 'poketwo',
   data: new SlashCommandBuilder().setName('dex').setDescription('The server\'s Pokédex: what has been caught here and what\'s still missing').toJSON(),
   text: { aliases: ['pokedex', 'caught'] },
   run: (ctx, store) => {
@@ -483,7 +483,7 @@ const weekStart = (d = new Date()) => { const x = new Date(Date.UTC(d.getUTCFull
 const RACE_PRIZE = 300;
 const race: Command = {
   name: 'race',
-  group: 'fun',
+  group: 'poketwo',
   data: new SlashCommandBuilder().setName('race').setDescription('This week\'s Pokétwo catch race').toJSON(),
   text: { aliases: ['catchrace', 'catches'] },
   run: (ctx, store) => {
@@ -510,7 +510,7 @@ async function raceTick(client: Client, store: Store) {
 
 const spawns: Command = {
   name: 'spawns',
-  group: 'fun',
+  group: 'poketwo',
   data: new SlashCommandBuilder().setName('spawns').setDescription('Pokétwo and Shoob spawn pings, and how they\'re doing here').toJSON(),
   text: { aliases: ['spawn', 'p2', 'shoob'] },
   run: async (ctx, store) => {
@@ -521,7 +521,7 @@ const spawns: Command = {
 
 const pokemon: Command = {
   name: 'pokemon',
-  group: 'fun',
+  group: 'poketwo',
   data: new SlashCommandBuilder().setName('pokemon').setDescription('Work out a pokémon from a hint like p_k_ch_ or part of a name')
     .addStringOption((o) => o.setName('hint').setDescription('Use _ for the letters you don\'t know').setRequired(true).setMaxLength(40)).toJSON(),
   text: { aliases: ['poke', 'dex', 'whosthat'], args: ['hint'] },
@@ -615,18 +615,30 @@ async function pingsPanel(store: Store, guild: Guild, userId: string) {
     new ButtonBuilder().setCustomId('pg|personal').setLabel(`Mention me for my picks: ${p.ping === false ? 'off' : 'on'}`).setEmoji('⭐').setStyle(p.ping === false ? ButtonStyle.Secondary : ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`nav|profile|owner=${userId},sub=edit`).setLabel('Change my picks').setEmoji('✏️').setStyle(ButtonStyle.Secondary),
   ));
+  // reminders live here too: your own ones and the OwO timers
+  const mineR = store.userReminders(userId);
+  const own = mineR.filter((r) => r.kind === 'custom').sort((a, b) => a.due_at - b.due_at);
+  const owoOn = store.rules(guild.id, 'owo').enabled;
+  const reminderLines = [
+    `⏰ **Your reminders** · ${own.length ? `${own.length} set, next <t:${Math.floor(own[0].due_at / 1000)}:R>: ${own[0].note.slice(0, 60)}` : 'none, `tz remind 2h drink water` sets one'}`,
+    ...(owoOn ? [`🐾 **OwO timers** · ${mineR.filter((r) => r.kind !== 'custom').length} running`] : []),
+  ];
+  rows.push(row(
+    new ButtonBuilder().setCustomId(`nav|remind|owner=${userId},back=pings`).setLabel('My reminders').setEmoji('⏰').setStyle(own.length ? ButtonStyle.Success : ButtonStyle.Secondary),
+    ...(owoOn ? [new ButtonBuilder().setCustomId(`nav|reminders|owner=${userId},back=pings`).setLabel('OwO reminders').setEmoji('🎛️').setStyle(ButtonStyle.Secondary)] : []),
+  ));
   const e = card({
-    kind: 'help', title: 'Your pings', emoji: '🔔', gif: 'off',
-    body: `${lines.join('\n')}\n\n-# 🟢 on · ⚫ off. Press to switch. When more than three people share a pick, they get a role of their own so one ping covers everyone.`,
+    kind: 'help', title: 'Pings and reminders', emoji: '🔔', gif: 'off',
+    body: `**Pings**\n${lines.join('\n')}\n\n**Reminders**\n${reminderLines.join('\n')}\n\n-# 🟢 on · ⚫ off. Press to switch. When more than three people share a pick, they get a role of their own so one ping covers everyone.`,
   });
-  return { embeds: [e], components: rows.slice(0, 5) };
+  return { embeds: [e], components: rows.slice(0, 4) };
 }
 
 const pings: Command = {
   name: 'pings',
-  group: 'info',
-  data: new SlashCommandBuilder().setName('pings').setDescription('Every ping Texz can send you, on or off in one place').toJSON(),
-  text: { aliases: ['notify', 'notifications'] },
+  group: 'you',
+  data: new SlashCommandBuilder().setName('pings').setDescription('Every ping and reminder Texz can send you, in one place').toJSON(),
+  text: { aliases: ['notify', 'notifications', 'alarms'] },
   run: async (ctx, store) => {
     if (!ctx.guild) return ctx.reply('Pings live in servers.');
     return ctx.reply(await pingsPanel(store, ctx.guild, ctx.userId));

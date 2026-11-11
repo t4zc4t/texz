@@ -53,7 +53,7 @@ export async function onLeave(store: Store, m: GuildMember | PartialGuildMember)
 
 const rolepicker: Command = {
   name: 'rolepicker',
-  group: 'tools',
+  group: 'staff',
   admin: true,
   data: new SlashCommandBuilder().setName('rolepicker').setDescription('Post a panel people use to give themselves roles')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles).setDMPermission(false)

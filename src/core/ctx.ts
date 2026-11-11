@@ -19,6 +19,9 @@ export interface Ctx {
   channelId: string;
   member: GuildMember | null;
   isAdmin: boolean;
+  // the dashboard this page belongs to, so a Back button always has somewhere to go
+  home?: string;
+  self?: string;
   viaText: boolean;
   latency(): number;
   client: Client;
@@ -79,7 +82,7 @@ export function fromSlash(i: ChatInputCommandInteraction, sub?: string | null): 
 // a button or menu press that runs a command, with optional fixed option values
 export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction, opts: Record<string, string> = {}, edit = false): Ctx {
   const member = (i.member && 'permissions' in i.member && typeof i.member.permissions !== 'string') ? (i.member as GuildMember) : null;
-  return {
+  const ctx: Ctx = {
     userId: i.user.id,
     guildId: i.guildId,
     guild: i.guild,
@@ -110,12 +113,17 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
       // a one line answer like "+¥150" shows next to the dashboard instead of replacing it
       const quick = !n.embeds.length && !n.files.length && !n.components.length;
       if (edit && !quick && (!i.isModalSubmit() || i.isFromMessage())) {
-        // pages opened from another screen get a way back to it
+        // every page opened by a click gets a way back: to where it came from, or its dashboard, and to help
         const rows = [...n.components];
-        if (opts.back && rows.length < 5) {
-          rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-            new ButtonBuilder().setCustomId(`nav|${opts.back}|owner=${opts.owner}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
-          ));
+        const target = opts.back ?? ctx.home ?? 'help';
+        const buttons = rows.flatMap((r) => ('components' in r ? (r as { components: { data?: { custom_id?: string; label?: string } }[] }).components : []).map((c) => c.data ?? {}));
+        const hasBack = buttons.some((b) => b.label === 'Back' || b.custom_id?.startsWith(`nav|${target}|`));
+        if (!hasBack && rows.length < 5 && target !== ctx.self) {
+          const nav = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`nav|${target}|owner=${opts.owner ?? i.user.id}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
+          );
+          if (target !== 'help') nav.addComponents(new ButtonBuilder().setCustomId(`nav|help|owner=${opts.owner ?? i.user.id}`).setLabel('All dashboards').setEmoji('🏠').setStyle(ButtonStyle.Secondary));
+          rows.push(nav);
         }
         const page = { content: n.content ?? null, embeds: n.embeds, components: rows, ...(n.files.length ? { files: n.files } : { attachments: [] }) };
         if (i.replied || i.deferred) return i.editReply(page);
@@ -126,6 +134,7 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
       return i.reply({ content: n.content, embeds: n.embeds, components: n.components, files: n.files, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     },
   };
+  return ctx;
 }
 
 // text args are positional, the last named arg soaks up the rest of the line

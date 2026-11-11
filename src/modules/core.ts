@@ -2,6 +2,7 @@ import { servers } from './servers.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits, SlashCommandBuilder, StringSelectMenuBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
 import type { Ctx } from '../core/ctx.js';
 import { closest, search } from '../core/fuzzy.js';
+import { isStaff } from '../core/staff.js';
 import { defaultRules, type Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { card, say } from '../theme.js';
@@ -11,9 +12,9 @@ import { setupPanel } from '../features/setup.js';
 // filled in by the registry so help and config can list every module
 // a few words on what each dashboard holds, for the help page
 const blurb: Record<string, string> = {
-  owo: 'timers, huntbot, gems, weapons', anime: 'what\'s on, search, your list', fun: 'quizzes, quotes, ship, spawns',
-  eco: 'wallet, daily, role shop', levels: 'rank card, perks, top', info: 'profile, medals, pings, birthdays',
-  sports: 'F1 and football', mod: 'actions and cases', tools: 'giveaways, posts, stats',
+  owo: 'timers, huntbot, gems, weapons', poketwo: 'claim help, hints, dex, race', shoob: 'rare drops, wishlist',
+  anime: 'what\'s on, search, your list', sports: 'F1, football, predictions', games: 'quizzes, guess, ship, quotes',
+  you: 'profile, rank, yen, pings, reminders', staff: 'moderation, giveaways, roles, posts',
 };
 
 // the dashboards, filled in by the registry, so help can list them
@@ -79,10 +80,11 @@ function examples(c: Command, prefix: string): { label: string; typed: string; s
   return [{ label: call, typed: `${prefix} ${call}${ex ? ` ${ex}` : ''}`, slash: c.group && ex ? `/${c.group} view:${c.as ?? c.name} input:${ex}` : slashOf(null, shown) }];
 }
 
-// who may see a command in help: admin ones only for admins, mod ones for people who can moderate
+// who may see a command in help: staff things only for admins and the staff role
+let staffNow = false;
 function allowed(ctx: Ctx, c: Command) {
-  if (c.admin || c.group === 'tools') return ctx.isAdmin;
-  if (c.group === 'mod') return ctx.isAdmin || !!ctx.member?.permissions.has(PermissionFlagsBits.ModerateMembers);
+  if (c.name === 'backup' || c.name === 'setup') return ctx.isAdmin;
+  if (c.admin || c.group === 'staff') return ctx.isAdmin || staffNow;
   return true;
 }
 
@@ -113,7 +115,8 @@ const help: Command = {
     const raw = ctx.str('feature')?.toLowerCase().trim();
     const want = raw === 'home' ? undefined : raw || undefined;
     const all = catalogue(ctx, store);
-    const staff = (d: { name: string }) => (d.name === 'tools' ? ctx.isAdmin : d.name === 'mod' ? ctx.isAdmin || !!ctx.member?.permissions.has(PermissionFlagsBits.ModerateMembers) : true);
+    staffNow = isStaff(store, ctx);
+    const staff = (d: { name: string }) => (d.name === 'staff' ? staffNow : true);
     const dashes = dashList.filter((d) => (ctx.guildId || d.anywhere) && staff(d));
     const dashMenu = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
       new StringSelectMenuBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=help`).setPlaceholder('🚪 Open a dashboard')
@@ -127,7 +130,7 @@ const help: Command = {
     if (want) {
       // an admin command asked for by name gets a straight answer instead of a near miss
       const locked = allModules.flatMap((m) => m.commands).find((c) => (c.name === want || c.call === want || c.text?.aliases?.includes(want)) && !allowed(ctx, c));
-      if (locked) return ctx.reply({ embeds: [card({ kind: 'help', title: `${prefix} ${locked.call ?? locked.name}`, emoji: '🔐', gif: 'off', body: `${locked.data.description}.\nThat one is for ${locked.group === 'mod' ? 'moderators' : 'admins'}, so it stays out of your menus.` })], components: [dashMenu] });
+      if (locked) return ctx.reply({ embeds: [card({ kind: 'help', title: `${prefix} ${locked.call ?? locked.name}`, emoji: '🔐', gif: 'off', body: `${locked.data.description}.\nThat one is for staff, so it stays out of your menus.` })], components: [dashMenu] });
       const exact = all.find(({ c }) => c.name === want || c.call === want || c.text?.aliases?.includes(want));
       const found = search(want, all.map(({ m, c }) => ({ id: c.name, names: [c.name, c.call ?? '', ...(c.text?.aliases ?? []), c.as ?? ''].filter(Boolean), text: `${c.data.description} ${m.label} ${m.about} ${c.group ?? ''}` })));
       const pick = exact ?? all.find(({ c }) => c.name === found[0]?.id);

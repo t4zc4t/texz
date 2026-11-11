@@ -159,7 +159,7 @@ export function track(store: Store, guild: string | null, user: string, event: E
 
 export const mission: Command = {
   name: 'mission',
-  group: 'fun',
+  group: 'you',
   data: new SlashCommandBuilder().setName('mission').setDescription('Today\'s Agency mission and your badges').toJSON(),
   text: { aliases: ['missions'] },
   run: (ctx, store) => {
@@ -181,7 +181,7 @@ const shortDate = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { day
 // every medal, how to earn it and how close you are, and the pick of which ones go on the profile card
 export const achievements: Command = {
   name: 'achievements',
-  group: 'info',
+  group: 'you',
   data: new SlashCommandBuilder().setName('achievements').setDescription('Every medal, how to earn it, and which ones show on your profile')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
   text: { aliases: ['medals', 'badges', 'ach'], args: ['user'] },

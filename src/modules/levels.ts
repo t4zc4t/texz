@@ -167,7 +167,7 @@ export async function giveXp(store: Store, m: Message) {
 
 const rank: Command = {
   name: 'rank',
-  group: 'levels',
+  group: 'you',
   data: new SlashCommandBuilder().setName('rank').setDescription('Your level and Agency rank card')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
   text: { aliases: ['level', 'lvl'], args: ['user'] },
@@ -195,7 +195,7 @@ const rank: Command = {
 
 const levels: Command = {
   name: 'levels',
-  group: 'levels',
+  group: 'you',
   hidden: true,
   as: 'top',
   data: new SlashCommandBuilder().setName('levels').setDescription('The server\'s top 10 by level').toJSON(),
@@ -216,7 +216,7 @@ const levels: Command = {
 
 const perksCmd: Command = {
   name: 'perks',
-  group: 'levels',
+  group: 'you',
   hidden: true,
   data: new SlashCommandBuilder().setName('perks').setDescription('What every Agency rank earns, and where you are').toJSON(),
   text: { aliases: ['rankperks'] },
@@ -230,7 +230,7 @@ const perksCmd: Command = {
 
 const xp: Command = {
   name: 'xp',
-  group: 'levels',
+  group: 'staff',
   admin: true,
   data: new SlashCommandBuilder().setName('xp').setDescription('Hand out, take or reset xp (admins)')
     .addSubcommand((c) => c.setName('give').setDescription('Add xp to someone')
