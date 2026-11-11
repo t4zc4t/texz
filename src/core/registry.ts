@@ -28,6 +28,7 @@ import { quoteCommand } from '../modules/quote.js';
 import { onProfileEdit } from '../modules/profile.js';
 import { onAchPick } from '../modules/missions.js';
 import { community, onConfess } from '../modules/community.js';
+import { actions, onAct } from '../modules/actions.js';
 import { onShip } from '../modules/ship.js';
 import { onCatchCopy, onPingsButton, onSpawnButton, spawnsModule } from '../modules/spawns.js';
 import { fromComponent, fromSlash, fromText, withTokens, type Ctx } from './ctx.js';
@@ -38,7 +39,7 @@ import { isStaff } from './staff.js';
 import { fixText, setupButton, usualPerms } from './fixes.js';
 import { askModal, entriesOf, homePage, needsInput, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
 
-export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule, community];
+export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule, community, actions];
 allModules.push(...modules);
 useModules(modules);
 
@@ -60,6 +61,7 @@ const groups: Record<string, Group> = {
 // where each command sits and the short name it goes by inside its dashboard, "/admin view:mute" or "tz admin mute"
 const place: Record<string, [string, string?]> = {
   warn: ['admin'], case: ['admin'], timeout: ['admin', 'mute'], kick: ['admin'], ban: ['admin'], unban: ['admin'], purge: ['admin'], lock: ['admin'], slowmode: ['admin', 'slow'],
+  act: ['fun'],
   rolepicker: ['admin', 'roles'], xp: ['admin'], giveaway: ['admin', 'gaw'], announce: ['admin', 'post'], serverstats: ['admin', 'stats'], backup: ['admin'],
   reminders: ['owo', 'timers'],
   poll: ['fun'], choose: ['fun', 'pick'], roll: ['fun'], coin: ['fun', 'flip'], ship: ['fun'], '8ball': ['fun'], guess: ['fun'], quiz: ['fun'], trivia: ['fun'],
@@ -68,7 +70,7 @@ const place: Record<string, [string, string?]> = {
   daily: ['yen'], wallet: ['yen', 'bal'], give: ['yen'], rich: ['yen', 'top'], roleshop: ['yen', 'shop'],
   user: ['misc'], avatar: ['misc', 'av'], server: ['misc'], afk: ['misc'], remind: ['misc'],
 };
-for (const mod of [owo, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, community, spawnsModule]) for (const cmd of mod.commands) {
+for (const mod of [owo, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, community, spawnsModule, actions]) for (const cmd of mod.commands) {
   const to = place[cmd.name];
   if (!to) continue;
   cmd.group = to[0];
@@ -364,6 +366,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onAchPick(store, i)) return;
     if (await onConfess(store, i)) return;
     if (await onShip(i)) return;
+    if (await onAct(store, i)) return;
     if (await onBulletinButton(i, store)) return;
   } catch (e) {
     report('component', e);

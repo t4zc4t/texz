@@ -51,6 +51,30 @@ export async function onLeave(store: Store, m: GuildMember | PartialGuildMember)
   }
 }
 
+// booster thank-yous are off until an admin switches them on, and go to their own room
+export const boostOn = (store: Store, g: string) => store.getKv(`boostann:${g}`) === 'on';
+const boostLines = [
+  '{user} just boosted the server. Dazai calls it an investment, Kunikida calls it the only sensible thing anyone did today.',
+  '{user} boosted us. The Agency\'s budget thanks you, and so does whoever was about to sell the office sofa.',
+  'A boost from {user}. Even the Port Mafia would be jealous of that loyalty.',
+  '{user} has become a patron of the Agency. Your name goes in Kunikida\'s notebook, the good page.',
+];
+export async function onBoost(store: Store, m: GuildMember) {
+  const id = store.getKv(`boostch:${m.guild.id}`);
+  if (!boostOn(store, m.guild.id) || !id) return;
+  // the member update and Discord's own boost message can both arrive, one thank-you is enough
+  const seen = `boosted:${m.guild.id}:${m.id}`;
+  if (Date.now() - Number(store.getKv(seen) ?? 0) < 30 * 60_000) return;
+  store.setKv(seen, String(Date.now()));
+  const ch = await m.guild.channels.fetch(id).catch(() => null);
+  if (!ch?.isSendable()) return;
+  const line = boostLines[Math.floor(Math.random() * boostLines.length)].replace('{user}', `<@${m.id}>`);
+  const n = m.guild.premiumSubscriptionCount ?? 0;
+  const e = card({ kind: 'bulletin', title: `💎 A new patron · ${m.displayName}`, emoji: '', gif: store.guild(m.guild.id).gifs.boost ?? 'off', body: `${line}\n\n-# ${n} boost${n === 1 ? '' : 's'} on the server now · level ${m.guild.premiumTier}` });
+  e.setThumbnail(m.displayAvatarURL({ size: 256 })).setColor(0xf47fff);
+  await ch.send({ content: `<@${m.id}>`, embeds: [e], allowedMentions: { users: [m.id] } }).catch(() => {});
+}
+
 const rolepicker: Command = {
   name: 'rolepicker',
   group: 'staff',

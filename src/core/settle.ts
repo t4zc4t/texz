@@ -15,10 +15,19 @@ function setAll(store: Store, guild: Guild, home: boolean) {
 
 // a server Texz meets for the first time, on start or when it's added
 export function settleGuild(store: Store, guild: Guild) {
-  if (store.getKv(`settled:${guild.id}`)) return;
+  if (store.getKv(`settled:${guild.id}`)) return fillNew(store, guild);
   setAll(store, guild, isHome(guild));
   store.setKv(`settled:${guild.id}`, String(Date.now()));
   console.log(`${guild.name}: features ${isHome(guild) ? 'kept as they are' : 'off until an admin turns them on'}`);
+}
+
+// features added later start off in servers that started quiet, and on in the home server
+function fillNew(store: Store, guild: Guild) {
+  const g = store.guild(guild.id);
+  const missing = allModules.filter((m) => !m.locked && !g.modules[m.name]);
+  if (!missing.length) return;
+  for (const m of missing) g.modules[m.name] = { ...defaultRules(m.name), enabled: isHome(guild) };
+  store.saveGuild(guild.id, g);
 }
 
 // data from before servers kept their own copies belongs to the home server

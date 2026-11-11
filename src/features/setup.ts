@@ -7,7 +7,7 @@ import { defaultRules, type Store } from '../db.js';
 import { isGifLink, resolve } from '../gifs.js';
 import type { Module } from '../core/module.js';
 import { card } from '../theme.js';
-import { welcomeCard } from '../modules/welcome.js';
+import { boostOn, welcomeCard } from '../modules/welcome.js';
 import { ticketPanel } from '../modules/server.js';
 import { buildBoard } from '../modules/bulletins.js';
 import { searchMedia, titleOf } from '../anime/anilist.js';
@@ -121,6 +121,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { name: '👋 Welcome text', value: g.welcome.message ?? '*my own lines*', inline: false },
       { name: '🍂 Goodbye text', value: g.welcome.goodbyeMessage ?? '*my own lines*', inline: false },
       { name: '🧩 Placeholders', value: '`{user}` ping · `{name}` name · `{server}` server · `{count}` member number', inline: false },
+      { name: '💎 Booster thank-you', value: `${boostOn(store, guild.id) ? '🟢 on' : '⚫ off'} · ${ch(store.getKv(`boostch:${guild.id}`))}`, inline: false },
     );
     comps.push(
       row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'wch')).setPlaceholder('👋 Welcome channel (empty = off)')
@@ -134,6 +135,9 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
         new ButtonBuilder().setCustomId(id(owner, 'preview')).setLabel('Preview').setEmoji('👁️').setStyle(ButtonStyle.Secondary),
         back(owner),
       ),
+      row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'boostch')).setPlaceholder('💎 Booster thank-you channel')
+        .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(store.getKv(`boostch:${guild.id}`) ? [store.getKv(`boostch:${guild.id}`)!] : [])),
+      row(new ButtonBuilder().setCustomId(id(owner, 'boost')).setLabel(`Booster thank-you: ${boostOn(store, guild.id) ? 'on' : 'off'}`).setEmoji('💎').setStyle(boostOn(store, guild.id) ? ButtonStyle.Success : ButtonStyle.Secondary)),
     );
   }
 
@@ -436,7 +440,7 @@ async function canGive(guild: Guild, roleId: string) {
 }
 
 const pageOf: Record<string, string> = {
-  mod: 'f', p2help: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome',
+  mod: 'f', p2help: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome', boost: 'welcome', boostch: 'welcome',
   arole: 'autorole', logch: 'mod', staff: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
   clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
@@ -626,6 +630,12 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'modrole') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], roles: values };
     if (action === 'wch') g.welcome.channel = values[0] ?? null;
     if (action === 'gch') g.welcome.goodbyeChannel = values[0] ?? null;
+    if (action === 'boostch') store.setKv(`boostch:${i.guild.id}`, values[0] ?? null);
+    if (action === 'boost') {
+      const on = !boostOn(store, i.guild.id);
+      store.setKv(`boostann:${i.guild.id}`, on ? 'on' : null);
+      void botLog(i.guild, store, `💎 <@${i.user.id}> switched booster thank-yous ${on ? 'on' : 'off'}.`);
+    }
     if (action === 'wreset') { g.welcome.message = null; g.welcome.goodbyeMessage = null; }
     if (action === 'arole') {
       if (values[0] && !(await canGive(i.guild, values[0]))) return fail('I can\'t hand out that role. Move my role above it in Server Settings → Roles, then try again.');

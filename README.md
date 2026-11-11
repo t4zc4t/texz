@@ -16,7 +16,7 @@ Ten dashboards, each a single slash command and the same word typed after `tz`. 
 | 🃏 Card Vault | `/shoob` | rare drop pings and your character wishlist |
 | 📚 Literary Annex | `/anime` | what's on, anime, manga and character search, your list, alerts, watch parties |
 | 🏁 Paddock & Pitch | `/sports` | the next Grand Prix, standings, last race, today's football and predictions |
-| 🥃 Bar Lupin | `/fun` | F1 quiz, crest quiz, guess the anime, trivia, on this day, make it a quote, ship, polls, confessions and dice |
+| 🥃 Bar Lupin | `/fun` | hugs, pats, bonks and 27 more interactions with anime gifs, F1 quiz, crest quiz, guess the anime, trivia, on this day, make it a quote, ship, polls, confessions and dice |
 | 🪪 Personnel File | `/profile` | your profile card and favourites, rank, medals, mission, birthday and every ping you get |
 | 💴 Yen Ledger | `/yen` | daily, wallet, give, the rich list and the role shop |
 | 🧰 Odds & Ends | `/misc` | user and server info, avatar, afk, one-off reminders and the bot ping |
@@ -55,7 +55,7 @@ AniList allows 30 requests a minute right now, so texz paces itself and keeps an
 
 ## Pokétwo and Shoob
 
-- **Claim help:** every Pokétwo spawn gets a reply with the name, its types and the catch line, as tap to copy text for phones and a copy box for PC. It reads the picture with an open 1,025 species classifier (it downloads itself on first start), and remembers every spawn that gets confirmed by a catch, a hint or another helper bot, so Pokétwo's own forms and variants come out right after the first one. A weak guess is shown as a maybe, a wrong one gets crossed out with the next best guess, and hints get solved too (`tz poke p_k_ch_` by hand). Types show as Pokémon HOME badges, and admins can switch the whole helper off per server from `tz spawns` or `/setup`.
+- **Claim help:** every Pokétwo spawn gets a reply with the name, its types and the catch line, as tap to copy text for phones and a copy box for PC. It reads the picture with an open 1,025 species classifier (it downloads itself on first start), and remembers every spawn that gets confirmed by a catch, a hint or another helper bot, so Pokétwo's own forms and variants come out right after the first one. A weak guess is shown as a maybe, a wrong one gets crossed out with the next best guess, and hints get solved too (`tz hint p_k_ch_` by hand). Types show as Pokémon HOME badges, and admins can switch the whole helper off per server from `tz spawns` or `/setup`.
 - **Pings:** only for what matters. Legendary, mythical and ultra beast spawns (their card gets pinned until it's caught), any of the 18 types you pick for quests, and a shout for shiny catches.
 - **Shoob:** one role for rare drops, so only tier 5 and 6 cards ping, the lower tiers stay quiet.
 
@@ -75,9 +75,9 @@ Yen comes from `tz daily` (more for every day in a row), chatting a little, and 
 
 `/setup` → **Build the Agency** lays out the whole Texz corner of a server in one click, with the right locks on every room:
 
-- 🚪 **Agency Front Door**, at the very top: `🌸┃new-recruits`, where welcomes and goodbyes go. Read-only.
+- 🚪 **Agency Front Door**, at the very top: `🌸┃new-recruits`, where welcomes and goodbyes go, and `💎┃agency-patrons` for booster thank-yous (off until switched on in `/setup` → Welcome). Both read-only.
 - 🕵️ **Agency Bulletin Board**: the F1, football and anime feeds, `🖋️┃ink-and-regret` for quotes and `⭐┃the-agency-files` for messages that get five ⭐. Read-only, people react.
-- 🥃 **Bar Lupin**: `🔢┃kunikidas-ledger` (one number each, a wrong one resets it, no files, stickers or threads) and `🕯️┃midnight-confessions`, where `tz confess` or the pinned button posts anonymous numbered confessions (staff can look one up with `tz confess trace 12`).
+- 🥃 **Bar Lupin**: `🔢┃kunikidas-ledger` (one number each, a wrong one resets it, no files, stickers or threads), `💴┃the-yen-counter` (yen commands only answer there, so they don't spam the rest of the server) and `🕯️┃midnight-confessions`, where `tz confess` or the pinned button posts anonymous numbered confessions (staff can look one up with `tz confess trace 12`).
 - 🗄️ **Port Mafia Archives**, at the very bottom and hidden from everyone but staff: `⚖️┃executive-orders` for moderation and automod, `👁️┃black-lizard-watch` for joins, leaves, edits and deletes, and `📓┃texz-ledger` for settings changes.
 
 Channels Texz made before are moved and renamed instead of duplicated, and the ping roles it hands out carry no permissions. Every Monday the week's file goes to the archive: top chatters, top catchers, the busiest channel and the count.
@@ -91,6 +91,10 @@ Every day the server gets one Agency mission (make a quote, win two quiz questio
 ## Fun
 
 Make it a Quote turns a message into the classic black and white quote picture, from the right click menu, by replying with `tz quote`, or with a message link. It posts where you made it and a copy goes to the quotes channel if one is set, and every Sunday the quote with the most reactions becomes quote of the week. There's also an 8 question ship test, polls, dice, coin, 8ball and pick for me.
+
+## Interactions
+
+`tz hug @someone`, `tz pat`, `tz bonk`, `tz slap`, `tz yeet` and 25 more, or `/fun view:act`. Each one comes with an anime gif from [nekos.best](https://nekos.best) and a line in the Agency's voice, counts how many times one person did it to another, and the person on the other end gets a button to send one straight back. A few work alone too, like `tz cry`, `tz dance` and `tz tableflip`.
 
 ## Moderation and server tools
 

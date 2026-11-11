@@ -24,6 +24,7 @@ export const menu: Record<string, [string, string, string?]> = {
   avatar: ['🖼️', 'Avatar'], user: ['🕵️', 'User dossier'], 'profile.view': ['🪪', 'Profile card'], 'profile.edit': ['✏️', 'Edit my profile'],
   achievements: ['🎖️', 'Achievements', 'Every medal, and which ones show on your profile'],
   confess: ['🕯️', 'Confess', 'Post something anonymously in the confessional'],
+  act: ['🤗', 'Hug, pat, bonk...', '25 ways to bother someone, each with an anime gif'],
   server: ['🏛️', 'Server info'], afk: ['💤', 'Go afk'], ping: ['📡', 'Bot ping'], setup: ['🛠️', 'Setup desk', 'Features, channels, roles, welcome, logs, all with buttons'],
   'birthday.set': ['🎂', 'Set my birthday'], 'birthday.remove': ['🗑️', 'Forget my birthday'], 'birthday.list': ['📆', 'Upcoming birthdays'], 'birthday.check': ['🔍', 'Someone\'s birthday'],
   'f1~view=next': ['🏎️', 'Next Grand Prix', 'Every session with your local times'], 'f1~view=standings': ['🏆', 'F1 standings', 'Drivers and teams'],
@@ -61,8 +62,8 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
     quick: ['wish.list', 'wish.add', 'pings'],
   },
   fun: {
-    sections: [['🏆 Games that pay yen', ['quiz', 'crestquiz', 'guess', 'trivia']], ['🎉 For the channel', ['quote', 'ship', 'poll', 'onthisday', 'confess']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']]],
-    quick: ['quiz', 'crestquiz', 'guess', 'ship', 'quote'],
+    sections: [['🏆 Games that pay yen', ['quiz', 'crestquiz', 'guess', 'trivia']], ['🫂 Hugs, pats and bonks', ['act']], ['🎉 For the channel', ['quote', 'ship', 'poll', 'onthisday', 'confess']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']]],
+    quick: ['act', 'quiz', 'crestquiz', 'guess', 'ship'],
   },
   profile: {
     sections: [

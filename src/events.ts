@@ -1,10 +1,10 @@
 import { report } from './ops.js';
-import { Events, PermissionFlagsBits, type Client, type Message } from 'discord.js';
+import { MessageType, Events, PermissionFlagsBits, type Client, type Message } from 'discord.js';
 import type { Store } from './db.js';
 import { log } from './modules/moderation.js';
 import { giveXp } from './modules/levels.js';
 import { chatPay } from './modules/economy.js';
-import { onJoin, onLeave } from './modules/welcome.js';
+import { onBoost, onJoin, onLeave } from './modules/welcome.js';
 import { RED, card } from './theme.js';
 
 const unix = (ms: number) => Math.floor(ms / 1000);
@@ -49,6 +49,8 @@ const logOn = (store: Store, guildId: string | null) => !!guildId && store.rules
 
 export function wireEvents(client: Client, store: Store) {
   client.on(Events.MessageCreate, (m) => {
+    // Discord's own "just boosted" message, for when the member wasn't cached
+    if ([MessageType.GuildBoost, MessageType.GuildBoostTier1, MessageType.GuildBoostTier2, MessageType.GuildBoostTier3].includes(m.type) && m.member && store.rules(m.member.guild.id, 'welcome').enabled) void onBoost(store, m.member).catch((e) => report('boost', e));
     void automod(store, m).catch((e) => report('automod', e));
     void giveXp(store, m).catch((e) => report('xp', e));
     chatPay(store, m);
@@ -62,6 +64,11 @@ export function wireEvents(client: Client, store: Store) {
         fields: [{ name: '👤 Who', value: `<@${m.id}> · ${m.user.username}`, inline: true }, { name: '🎂 Account', value: `<t:${unix(m.user.createdTimestamp)}:R>`, inline: true }],
       }), 'server');
     }
+  });
+
+  // a member who wasn't boosting and now is
+  client.on(Events.GuildMemberUpdate, (old, m) => {
+    if (!old.partial && !old.premiumSince && m.premiumSince && store.rules(m.guild.id, 'welcome').enabled) void onBoost(store, m).catch((e) => report('boost', e));
   });
 
   client.on(Events.GuildMemberRemove, (m) => {

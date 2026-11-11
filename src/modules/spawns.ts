@@ -530,7 +530,7 @@ const pokemon: Command = {
   group: 'poketwo',
   data: new SlashCommandBuilder().setName('pokemon').setDescription('Work out a pokémon from a hint like p_k_ch_ or part of a name')
     .addStringOption((o) => o.setName('hint').setDescription('Use _ for the letters you don\'t know').setRequired(true).setMaxLength(40)).toJSON(),
-  text: { aliases: ['poke', 'dex', 'whosthat'], args: ['hint'] },
+  text: { aliases: ['hint', 'whosthat'], args: ['hint'] },
   run: (ctx) => {
     const hint = (ctx.str('hint') ?? '').replace(/\\/g, '').trim();
     return ctx.reply(answer(hint, solve(hint).slice(0, 8)));

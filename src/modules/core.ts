@@ -13,7 +13,7 @@ import { setupPanel } from '../features/setup.js';
 // a few words on what each dashboard holds, for the help page
 const blurb: Record<string, string> = {
   admin: 'mod, cases, giveaways, posts, setup', owo: 'huntbot, gems, zoo, weapons, timers', poketwo: 'claim help, hints, dex, race', shoob: 'rare drops, wishlist',
-  anime: 'airing, search, your list, parties', sports: 'F1, football, predictions', fun: 'quizzes, guess, ship, quotes, confess',
+  anime: 'airing, search, your list, parties', sports: 'F1, football, predictions', fun: 'hug, bonk, quizzes, ship, quotes',
   profile: 'card, favourites, rank, medals, pings', yen: 'daily, wallet, give, role shop', misc: 'user, server, afk, reminders',
 };
 
