@@ -110,10 +110,9 @@ export interface Club { id: string; name: string; logo: string; league: string; 
 let clubs: { at: number; list: Club[] } | null = null;
 // the leagues people can pick a favourite club from
 export const clubLeagues = ['eng.1', 'esp.1', 'ita.1', 'ger.1', 'fra.1', 'usa.1', 'por.1', 'ned.1'];
-export async function allClubs() {
-  if (clubs && Date.now() - clubs.at < 24 * 3600_000) return clubs.list;
+async function clubsFrom(codes: string[]) {
   const out: Club[] = [];
-  for (const l of clubLeagues) {
+  for (const l of codes) {
     try {
       const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${l}/teams`, { signal: AbortSignal.timeout(10_000) });
       if (!res.ok) continue;
@@ -124,8 +123,31 @@ export async function allClubs() {
       }
     } catch { /* one league missing is fine */ }
   }
+  return out;
+}
+
+export async function allClubs() {
+  if (clubs && Date.now() - clubs.at < 24 * 3600_000) return clubs.list;
+  const out = await clubsFrom(clubLeagues);
   if (out.length) clubs = { at: Date.now(), list: out };
   return out;
+}
+
+// every club league ESPN covers, for matching a club someone typed in their own words
+let wide: { at: number; list: Club[] } | null = null;
+const otherLeagues = ['ind.1', 'mex.1', 'sco.1', 'tur.1', 'sau.1', 'bra.1', 'arg.1', 'bel.1', 'eng.2', 'uefa.champions', 'uefa.europa', 'uefa.europa.conf', 'conmebol.libertadores'];
+const plain = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\b(fc|cf|afc|sc|ac|cd|club|de|the)\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+export async function findClub(name: string): Promise<Club | null> {
+  const want = plain(name);
+  if (!want) return null;
+  const pick = (list: Club[]) => list.find((c) => plain(c.name) === want)
+    ?? list.find((c) => plain(c.name).startsWith(want) || want.startsWith(plain(c.name)))
+    ?? list.find((c) => plain(c.name).includes(want) || (want.length > 4 && want.includes(plain(c.name))))
+    ?? null;
+  const first = pick(await allClubs().catch(() => []));
+  if (first) return first;
+  if (!wide || Date.now() - wide.at > 24 * 3600_000) wide = { at: Date.now(), list: await clubsFrom(otherLeagues) };
+  return pick(wide.list);
 }
 
 // a crest and four clubs from the same league to pick from

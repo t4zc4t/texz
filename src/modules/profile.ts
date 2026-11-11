@@ -13,7 +13,7 @@ import { fmtDate } from './birthdays.js';
 import { searchMedia, titleOf } from '../anime/anilist.js';
 import { asEmoji } from '../features/logos.js';
 import { teamDot } from '../feeds/f1.js';
-import { allClubs, clubLeagues, leagues } from '../feeds/football.js';
+import { allClubs, clubLeagues, findClub, leagues } from '../feeds/football.js';
 import { clubEmoji, f1LogoOf } from '../features/logos.js';
 
 const leagueFlag: Record<string, string> = { 'eng.1': '🏴', 'esp.1': '🇪🇸', 'ita.1': '🇮🇹', 'ger.1': '🇩🇪', 'fra.1': '🇫🇷', 'usa.1': '🇺🇸', 'por.1': '🇵🇹', 'ned.1': '🇳🇱' };
@@ -35,6 +35,8 @@ interface Picks {
   club?: string; team?: string; anime?: string; manga?: string; color?: string; show: Part[]; ping?: boolean;
   // the pictures for the favourites strip on the card
   clubId?: string; clubLogo?: string; clubColor?: string; animeCover?: string; animeColor?: string; mangaCover?: string; mangaColor?: string;
+  // looked up once already, so a name with no match isn't searched on every card
+  clubTried?: boolean; animeTried?: boolean; mangaTried?: boolean;
 }
 
 export function picksOf(store: Store, userId: string): Picks {
@@ -83,8 +85,29 @@ async function editPanel(store: Store, userId: string, league?: string) {
   };
 }
 
+// picks saved before there were pictures, or typed by hand, get their crest and covers looked up once and kept
+async function fillPictures(store: Store, id: string, p: Picks) {
+  let changed = false;
+  if (p.club && !p.clubLogo && !p.clubTried) {
+    const c = await findClub(p.club).catch(() => null);
+    if (c) { p.club = c.name; p.clubId = c.id; p.clubLogo = c.logo; p.clubColor = c.color ? `#${c.color}` : undefined; }
+    p.clubTried = true;
+    changed = true;
+  }
+  for (const what of ['anime', 'manga'] as const) {
+    const title = p[what];
+    if (!title || p[`${what}Cover`] || p[`${what}Tried`]) continue;
+    const [hit] = await searchMedia(title, what === 'anime' ? 'ANIME' : 'MANGA').catch(() => []);
+    if (hit) { p[`${what}Cover`] = hit.coverImage.large ?? undefined; p[`${what}Color`] = hit.coverImage.color ?? undefined; }
+    p[`${what}Tried`] = true;
+    changed = true;
+  }
+  if (changed) savePicks(store, id, p);
+}
+
 export async function drawProfile(store: Store, id: string, guildId: string | null, m: { displayName: string; user: { username: string }; displayAvatarURL: (o: object) => string } | null) {
   const p = picksOf(store, id);
+  await fillPictures(store, id, p);
   const show = new Set(p.show);
   const chips: { label: string; value: string; color?: string }[] = [];
   let title = 'Agency visitor';
@@ -169,8 +192,8 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
   if (what === 'bio') store.setProfile(owner, { bio: v || null });
   if (what === 'club') {
     // a typed club gets its crest if it matches one in the big leagues
-    const c = v ? (await allClubs().catch(() => [])).find((x) => x.name.toLowerCase() === v.toLowerCase() || x.name.toLowerCase().includes(v.toLowerCase())) : null;
-    p.club = c?.name ?? (v || undefined); p.clubId = c?.id; p.clubLogo = c?.logo; p.clubColor = c?.color ? `#${c.color}` : undefined;
+    const c = v ? await findClub(v).catch(() => null) : null;
+    p.club = c?.name ?? (v || undefined); p.clubId = c?.id; p.clubLogo = c?.logo; p.clubColor = c?.color ? `#${c.color}` : undefined; p.clubTried = true;
     if (v && !p.show.includes('club')) p.show.push('club');
   }
   if (what === 'color') {
@@ -184,6 +207,7 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
       p[what] = hit ? titleOf(hit).slice(0, 40) : v.slice(0, 40);
       p[`${what}Cover`] = hit?.coverImage.large ?? undefined;
       p[`${what}Color`] = hit?.coverImage.color ?? undefined;
+      p[`${what}Tried`] = true;
       if (!p.show.includes(what)) p.show.push(what);
     }
   }
