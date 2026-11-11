@@ -15,7 +15,7 @@ import { carryRankPerms, fixRankOrder, perks, rankFor, ranks, tidyRanks } from '
 import { parseLength } from '../modules/moderation.js';
 import { p2HelperOn, setP2Helper } from '../modules/spawns.js';
 import { staffRoles } from '../core/staff.js';
-import { buildCommunity } from '../modules/community.js';
+import { botLog, buildAgency } from './layout.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
@@ -73,6 +73,11 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       [[0, 'Off, keep everything'], [10, 'After 10 seconds'], [30, 'After 30 seconds'], [60, 'After a minute'], [300, 'After 5 minutes']]
         .map(([v, label]) => ({ label: `🧹 ${label}`, value: String(v), default: g.autoclean === v })),
     )));
+    comps.push(row(
+      new ButtonBuilder().setCustomId(id(owner, 'agency')).setLabel('Build the Agency').setEmoji('🏗️').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(id(owner, 'page', 'features')).setLabel('Features').setEmoji('🧩').setStyle(ButtonStyle.Secondary),
+    ));
+    fields.push({ name: '🏗️ Build the Agency', value: 'One click lays out the whole Texz corner: a front door for welcomes, the bulletin board, the Bar Lupin for counting and confessions, and staff-only archives for logs. Existing Texz channels are moved and renamed, the right locks go on every room.', inline: false });
   }
 
   if (page === 'features') {
@@ -86,7 +91,11 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
     }).join('\n') });
     comps.push(row(new StringSelectMenuBuilder().setCustomId(id(owner, 'page')).setPlaceholder('🧩 Pick a feature').addOptions(
       switchable().map((m) => ({ label: m.label, value: `f:${m.name}`, emoji: icon[m.name] ?? '📁', description: m.about.slice(0, 100) })),
-    )), row(back(owner)));
+    )), row(
+      back(owner),
+      new ButtonBuilder().setCustomId(id(owner, 'allon')).setLabel('Everything on').setEmoji('🟢').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(id(owner, 'alloff')).setLabel('Everything off').setEmoji('⚫').setStyle(ButtonStyle.Secondary),
+    ));
   }
 
   if (page.startsWith('f:')) {
@@ -279,7 +288,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
 
   if (page === 'quotes') {
     title = 'Community';
-    body = 'The corner of the Agency board for everyone. **Make the channels** puts all four under the bulletin category in the same style:\n🖋️ quotes made with Make it a Quote get hung there\n📁 the archive keeps messages that get 5 ⭐\n🔢 the count goes up one number at a time, a wrong one resets it\n🕯️ the confessional posts anonymous confessions\nEvery Monday the week\'s file (top chatters, catchers, numbers) goes to the archive.';
+    body = 'The rooms everyone uses. **Build the Agency** puts them where they belong, with the right locks:\n🖋️ quotes and ⭐ the archive (5 stars) on the bulletin board, read-only\n🔢 the count and 🕯️ the confessional in the 🥃 Bar Lupin\n🌸 a front door for welcomes, 🗄️ staff-only archives for logs\nEvery Monday the week\'s file (top chatters, catchers, numbers) goes to the archive.';
     const count = JSON.parse(store.getKv(`count:${guild.id}`) ?? '{}') as { channel?: string; n?: number; best?: number };
     const conf = store.getKv(`confessch:${guild.id}`);
     fields.push(
@@ -291,7 +300,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
     );
     comps.push(
       row(
-        new ButtonBuilder().setCustomId(id(owner, 'commbuild')).setLabel('Make the channels').setEmoji('🏗️').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(id(owner, 'commbuild')).setLabel('Build the Agency').setEmoji('🏗️').setStyle(ButtonStyle.Primary),
         toggle(owner, 'recap', '', 'Monday recap', store.getKv(`recap:${guild.id}`) !== 'off', '🗂️'),
       ),
       row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'qch')).setPlaceholder('🖼️ Quotes channel (empty = where it was asked)')
@@ -534,9 +543,24 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       ]));
       return true;
     }
+    if (action === 'agency') {
+      await i.deferUpdate();
+      const msg = await buildAgency(store, i.guild).catch((e: unknown) => `Something went wrong: ${e instanceof Error ? e.message : e}`);
+      await i.editReply(setupPanel(store, i.guild, owner, 'home'));
+      await i.followUp({ content: msg, flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    if (action === 'allon' || action === 'alloff') {
+      const on = action === 'allon';
+      for (const m of switchable()) g.modules[m.name] = { ...defaultRules(m.name), ...g.modules[m.name], enabled: on };
+      store.saveGuild(i.guild.id, g);
+      void botLog(i.guild, store, `🧩 <@${i.user.id}> switched **every feature ${on ? 'on' : 'off'}**.`);
+      await i.update(setupPanel(store, i.guild, owner, 'features'));
+      return true;
+    }
     if (action === 'commbuild') {
       await i.deferUpdate();
-      const msg = await buildCommunity(store, i.guild).catch((e) => `Something went wrong: ${e instanceof Error ? e.message : e}`);
+      const msg = await buildAgency(store, i.guild).catch((e: unknown) => `Something went wrong: ${e instanceof Error ? e.message : e}`);
       await i.editReply(setupPanel(store, i.guild, owner, 'quotes'));
       await i.followUp({ content: msg, flags: MessageFlags.Ephemeral });
       return true;
@@ -594,7 +618,10 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'f1look') store.setKv(`f1theme:${i.guild.id}`, store.getKv(`f1theme:${i.guild.id}`) === 'agency' ? 'mafia' : 'agency');
     if (action === 'recap') store.setKv(`recap:${i.guild.id}`, store.getKv(`recap:${i.guild.id}`) === 'off' ? 'on' : 'off');
     if (action === 'p2help') setP2Helper(store, i.guild.id, !p2HelperOn(store, i.guild.id));
-    if (action === 'mod') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], enabled: !store.rules(i.guild.id, arg).enabled };
+    if (action === 'mod') {
+      g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], enabled: !store.rules(i.guild.id, arg).enabled };
+      void botLog(i.guild, store, `🧩 <@${i.user.id}> switched **${switchable().find((m) => m.name === arg)?.label ?? arg}** ${g.modules[arg].enabled ? 'on' : 'off'}.`);
+    }
     if (action === 'modch') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], channels: values };
     if (action === 'modrole') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], roles: values };
     if (action === 'wch') g.welcome.channel = values[0] ?? null;

@@ -71,6 +71,7 @@ export async function framed(store: Store, m: Message, by: string) {
 }
 
 export async function onQuote(store: Store, i: MessageContextMenuCommandInteraction) {
+  if (i.guildId && !store.rules(i.guildId, 'utility').enabled) return i.reply({ content: '🚫 Quotes are switched off here. An admin can turn them on in `/setup` → Features.', flags: MessageFlags.Ephemeral });
   await i.deferReply({ flags: MessageFlags.Ephemeral });
   const q = await framed(store, i.targetMessage, i.user.displayName);
   if (!q) return i.editReply('There\'s nothing in that message I can frame.');

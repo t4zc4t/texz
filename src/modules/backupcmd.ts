@@ -52,7 +52,7 @@ export const backupCmd: Command = {
     const sub = ctx.sub() ?? 'export';
     if (sub === 'import') {
       const url = ctx.attachment?.('file');
-      if (!url) return ctx.reply('Attach the setup file, `/tools view:backup` → import, or send it with `tz backup import`.');
+      if (!url) return ctx.reply('Attach the setup file, `/admin view:backup` → import, or send it with `tz backup import`.');
       const raw = await fetch(url).then((r) => r.text()).catch(() => null);
       let data: { texz?: number; settings?: GuildSettings } | null = null;
       try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
@@ -63,6 +63,6 @@ export const backupCmd: Command = {
       return ctx.reply(`📥 Setup loaded.${missing.length ? `\nThese weren't found here and were left empty: ${[...new Set(missing)].slice(0, 20).join(', ')}` : ' Everything matched.'}`);
     }
     const file = JSON.stringify({ texz: 1, server: ctx.guild.name, at: new Date().toISOString(), settings: swapOut(store.guild(ctx.guild.id), ctx.guild) }, null, 2);
-    return ctx.reply({ content: '📤 Here\'s the setup. Load it here or on another server with `/tools view:backup` → import.', files: [new AttachmentBuilder(Buffer.from(file), { name: `texz-setup-${ctx.guild.name.replace(/[^\w-]+/g, '-').toLowerCase()}.json` })] });
+    return ctx.reply({ content: '📤 Here\'s the setup. Load it here or on another server with `/admin view:backup` → import.', files: [new AttachmentBuilder(Buffer.from(file), { name: `texz-setup-${ctx.guild.name.replace(/[^\w-]+/g, '-').toLowerCase()}.json` })] });
   },
 };

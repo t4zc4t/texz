@@ -567,10 +567,14 @@ export class Store {
     return rows.map((r) => r.user_id);
   }
 
-  // everyone's personal picks, for club pings
-  allPicks(): { user: string; club?: string; ping?: boolean }[] {
+  // everyone's personal picks, for club pings, only the ones kept in that server when one is named
+  allPicks(guildId?: string): { guild: string | null; user: string; club?: string; ping?: boolean }[] {
     return (this.db.prepare("SELECT key, value FROM kv WHERE key LIKE 'picks:%'").all() as { key: string; value: string }[])
-      .map((r) => ({ user: r.key.slice(6), ...(JSON.parse(r.value) as { club?: string; ping?: boolean }) }));
+      .map((r) => {
+        const parts = r.key.split(':');
+        return { guild: parts.length > 2 ? parts[1] : null, user: parts[parts.length - 1], ...(JSON.parse(r.value) as { club?: string; ping?: boolean }) };
+      })
+      .filter((p) => !guildId || !p.guild || p.guild === guildId);
   }
 
   // true the first time a key is seen, so each alert goes out once per server

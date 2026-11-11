@@ -230,12 +230,12 @@ test('every group opens a dashboard and every pick can be asked for', async () =
   const a = fake('tz fun');
   onText(store, a.m);
   await tick();
-  assert.match(said(a.replies[0]), /Lupin Bar/);
+  assert.match(said(a.replies[0]), /Bar Lupin/);
   // old names still land on the new dashboards
   const old = fake('tz games');
   onText(store, old.m);
   await tick();
-  assert.match(said(old.replies[0]), /Lupin Bar/);
+  assert.match(said(old.replies[0]), /Bar Lupin/);
   const short = fake('tz yen');
   onText(store, short.m);
   await tick();

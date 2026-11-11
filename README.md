@@ -6,18 +6,20 @@ Everything is behind a few dashboards, so nobody has to remember commands. Type 
 
 ## The dashboards
 
-Each one is a single slash command and the same word typed after `tz`, and every page has a Back button to its dashboard and one to all of them. The old names (`tz fun`, `tz mod` and so on) still open the new ones. Every ping and reminder lives on one page, `tz pings`, linked from the OwO, Pokétwo, Shoob, Sports and Anime dashboards. Buttons open the quick things, a menu lists the rest, and anything that needs a person, a number or some text opens a small form, so there are no arguments to remember.
+Ten dashboards, each a single slash command and the same word typed after `tz`. Every page has a Back button to its dashboard and one to all of them, and old names (`tz games`, `tz you`, `tz staff`, `tz mod`) still open the new ones. Buttons open the quick things, a menu lists the rest, and anything that needs a person, a number or some text opens a small form. Everything also has a short form: `tz owo hb`, `tz fun crest`, `tz yen bal`, `tz admin mute`.
 
-| Dashboard | What's in it |
-|---|---|
-| `/owo` | huntbot, gems, zoo, weapons and armoury, quests, the shop and quest buddies |
-| `/poketwo` | claim help and the helper switch, hint solving, the server Pokédex and the weekly catch race |
-| `/shoob` | tier 5 and 6 drop pings and your character wishlist |
-| `/anime` | what's on today (schedule, trending, the season, the weekly recap), search anime, manga and characters, your list, watch parties |
-| `/sports` | the next Grand Prix, standings, last race, today's football and predictions |
-| `/games` | F1 quiz, crest quiz, guess the anime, trivia, on this day, make it a quote, ship, polls and dice |
-| `/you` | your profile card and favourites, rank, wallet, achievements, today's mission, pings and reminders, birthdays, afk, confessions |
-| `/staff` | moderation and the case archive, giveaways, role pickers, announcements, xp tools and server activity, for admins and the staff role set in `/setup` |
+| Dashboard | Command | What's in it |
+|---|---|---|
+| 🖤 Port Mafia HQ | `/admin` | moderation and the case files, giveaways, role pickers, planned posts, xp tools, server activity, backups and `/setup`. Only admins and the staff role see it |
+| 🐾 Stray Dogs Den | `/owo` | huntbot, gems, zoo, weapons and armoury, quests, the shop, OwO timers and quest buddies |
+| 🔴 Pokédex Bureau | `/poketwo` | claim help and the helper switch, hint solving, the server Pokédex and the weekly catch race |
+| 🃏 Card Vault | `/shoob` | rare drop pings and your character wishlist |
+| 📚 Literary Annex | `/anime` | what's on, anime, manga and character search, your list, alerts, watch parties |
+| 🏁 Paddock & Pitch | `/sports` | the next Grand Prix, standings, last race, today's football and predictions |
+| 🥃 Bar Lupin | `/fun` | F1 quiz, crest quiz, guess the anime, trivia, on this day, make it a quote, ship, polls, confessions and dice |
+| 🪪 Personnel File | `/profile` | your profile card and favourites, rank, medals, mission, birthday and every ping you get |
+| 💴 Yen Ledger | `/yen` | daily, wallet, give, the rich list and the role shop |
+| 🧰 Odds & Ends | `/misc` | user and server info, avatar, afk, one-off reminders and the bot ping |
 
 `/setup` is the admin front desk (members never see admin commands in help or the dashboards), `/ping` checks the bot, and right clicking a message gives **Make it a Quote**. When something fails because of a missing permission or a role sitting above texz, the message says exactly which one and how to fix it.
 
@@ -67,11 +69,18 @@ AniList allows 30 requests a minute right now, so texz paces itself and keeps an
 
 Levels are off until an admin turns them on. Ranks go from Stray up to Living Legend of Yokohama, and each one has perks: more xp, a bigger daily and extra giveaway chances (the Perks button on `tz rank`). Everyone keeps only their highest rank role, and each rank role carries the permissions of the ones below it. `/setup` makes the rank roles in order, picks where level-ups go, and handles xp rules, boosts and reward roles. `tz rank` draws a rank card.
 
-Yen comes from `tz daily` (more for every day in a row), chatting a little, and the quizzes and guess game. `tz wallet` (your balance, daily and the richest), `tz give` and a role shop (on `/you`) cover the rest. `tz profile` draws a profile card with your colour, your medals and a favourites strip: your F1 team's logo, your club's crest and your favourite anime and manga covers, each glowing in its own colour. Pick them in `tz profile edit`, the club from a list by league.
+Yen comes from `tz daily` (more for every day in a row), chatting a little, and the quizzes and guess game. `tz wallet` (your balance, daily and the richest), `tz give` and a role shop (on `/yen`) cover the rest. `tz profile` draws a profile card with your colour, your medals and a favourites strip: your F1 team's logo, your club's crest and your favourite anime and manga covers, each glowing in its own colour. Pick them in `tz profile edit`, the club from a list by league. Profiles, birthdays and wishlists belong to the server they were made in, so a file in one server says nothing in another.
 
-## Community
+## Community and the server layout
 
-`/setup` → Community makes four channels under the bulletin category, in the same style: one for quotes, the **Agency Archive** for messages that get five ⭐, **the count** (one number each, a wrong one resets it, the record is kept) and **the confessional**, where `tz confess` or the pinned button posts anonymous numbered confessions (staff can look one up with `tz confess trace 12` if it breaks the rules). Every Monday the week's file goes to the archive: top chatters, top catchers, the busiest channel and the count.
+`/setup` → **Build the Agency** lays out the whole Texz corner of a server in one click, with the right locks on every room:
+
+- 🚪 **Agency Front Door**, at the very top: `🌸┃new-recruits`, where welcomes and goodbyes go. Read-only.
+- 🕵️ **Agency Bulletin Board**: the F1, football and anime feeds, `🖋️┃ink-and-regret` for quotes and `⭐┃the-agency-files` for messages that get five ⭐. Read-only, people react.
+- 🥃 **Bar Lupin**: `🔢┃kunikidas-ledger` (one number each, a wrong one resets it, no files, stickers or threads) and `🕯️┃midnight-confessions`, where `tz confess` or the pinned button posts anonymous numbered confessions (staff can look one up with `tz confess trace 12`).
+- 🗄️ **Port Mafia Archives**, at the very bottom and hidden from everyone but staff: `⚖️┃executive-orders` for moderation and automod, `👁️┃black-lizard-watch` for joins, leaves, edits and deletes, and `📓┃texz-ledger` for settings changes.
+
+Channels Texz made before are moved and renamed instead of duplicated, and the ping roles it hands out carry no permissions. Every Monday the week's file goes to the archive: top chatters, top catchers, the busiest channel and the count.
 
 ## Missions and achievements
 
@@ -85,7 +94,7 @@ Make it a Quote turns a message into the classic black and white quote picture, 
 
 ## Moderation and server tools
 
-`tz warn`, `tz timeout @someone 10m`, `tz kick`, `tz ban` (`tz ban @someone 3d` lifts itself), `tz unban`, `tz purge 20`, `tz lock` and `tz slow 10s`. Every action is a numbered case with a DM to the person, and `tz case` searches the archive. Logs, automod (invites, spam, mass mentions), welcome and goodbye, autorole, tickets, giveaways with entry conditions, birthdays, role pickers, planned announcements and server stats are all set from `/setup` or `/tools`.
+`tz warn`, `tz timeout @someone 10m`, `tz kick`, `tz ban` (`tz ban @someone 3d` lifts itself), `tz unban`, `tz purge 20`, `tz lock` and `tz slow 10s`. Every action is a numbered case with a DM to the person, and `tz case` searches the archive. Logs, automod (invites, spam, mass mentions), welcome and goodbye, autorole, tickets, giveaways with entry conditions, birthdays, role pickers, planned announcements and server stats are all set from `/setup` or `/admin`.
 
 ## Setting it up
 
@@ -100,7 +109,7 @@ npm run build
 npm start
 ```
 
-Slash commands register themselves when they change, so there's no separate deploy step. It needs Node 24 or newer and stores everything in one SQLite file using Node's built in sqlite.
+Every feature starts switched off in a new server, so nothing happens until an admin picks what they want in `/setup` → Features (there's an Everything on button). Slash commands register themselves when they change, so there's no separate deploy step. It needs Node 24 or newer and stores everything in one SQLite file using Node's built in sqlite.
 
 ## Keeping it online
 

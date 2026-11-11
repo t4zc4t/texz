@@ -232,7 +232,7 @@ const giveaway: Command = {
       let prize = ctx.str('prize');
       // "tz gw start 1d Nitro" works without a winner count
       if (ctx.viaText && ctx.str('winners') && Number.isNaN(Number(ctx.str('winners')))) { prize = `${ctx.str('winners')} ${prize ?? ''}`.trim(); winners = 1; }
-      if (!ms || ms < 60_000 || ms > 60 * 86_400_000) return ctx.reply(`Like this: \`${p} gw start 1d 2 Nitro\` (length from a minute to 60 days, then winners, then the prize). Conditions are on \`/tools view:giveaway\`.`);
+      if (!ms || ms < 60_000 || ms > 60 * 86_400_000) return ctx.reply(`Like this: \`${p} gw start 1d 2 Nitro\` (length from a minute to 60 days, then winners, then the prize). Conditions are on \`/admin view:gaw\`.`);
       if (!prize) return ctx.reply('What\'s the prize?');
       if (winners < 1 || winners > 20) return ctx.reply('Between 1 and 20 winners.');
       const r = noRules();

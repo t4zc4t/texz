@@ -23,6 +23,7 @@ import { loadTypeIcons } from './features/typeicons.js';
 import { loadLogos } from './features/logos.js';
 import { startBulletins } from './modules/bulletins.js';
 import { onQuote, QUOTE_MENU, startQuoteOfWeek } from './modules/quote.js';
+import { settleAll, settleGuild } from './core/settle.js';
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) throw new Error('DISCORD_TOKEN is missing, copy .env.example to .env and fill it in');
@@ -46,6 +47,8 @@ const client = new Client({
 client.once(Events.ClientReady, (c) => {
   console.log(`texz online as ${c.user.tag}`);
   look.avatar = c.user.displayAvatarURL();
+  // new servers start switched off, the home server keeps everything
+  settleAll(c, store);
   // rank roles drift when people add or move roles, so they're put back in order on every start and once a day
   const reorder = () => {
     for (const guild of c.guilds.cache.values()) void mergeShoobRoles(guild, store).catch((e) => report('shoob roles', e));
@@ -101,6 +104,8 @@ client.once(Events.ClientReady, (c) => {
   mood();
   setInterval(mood, 10 * 60_000);
 });
+
+client.on(Events.GuildCreate, (guild) => settleGuild(store, guild));
 
 client.on(Events.InteractionCreate, (i) => {
   if (i.isChatInputCommand()) void onSlash(store, i);

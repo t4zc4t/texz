@@ -16,10 +16,10 @@ const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<M
 const COLOR = 0xc8283c;
 
 export const rooms = {
-  quotes: { name: '🖋️┃words-on-file', topic: 'Messages made into quotes, hung here by Texz. Right click a message → Apps → Make it a Quote.' },
-  archive: { name: '📁┃agency-archive', topic: 'Messages the server starred enough to keep. React with ⭐ anywhere, five stars and it\'s filed here.' },
-  count: { name: '🔢┃the-count', topic: 'Count up together, one number each, no two in a row. A wrong number sends it back to 1.' },
-  confess: { name: '🕯️┃the-confessional', topic: 'Anonymous confessions, posted by Texz. Press the button on the pinned message, or /you view:confess.' },
+  quotes: { name: '🖋️┃ink-and-regret', topic: 'Things people said and can never take back, framed by Texz. Right click a message → Apps → Make it a Quote.' },
+  archive: { name: '⭐┃the-agency-files', topic: 'Messages the server starred enough to keep. React with ⭐ anywhere, five stars and it\'s filed here.' },
+  count: { name: '🔢┃kunikidas-ledger', topic: 'Kunikida keeps the numbers. Count up together, one number each, no two in a row. A wrong number sends it back to 1.' },
+  confess: { name: '🕯️┃midnight-confessions', topic: 'Anonymous confessions, posted by Texz. Press the button on the pinned message, or /fun view:confess.' },
 } as const;
 
 interface Count { channel: string | null; n: number; last: string | null; best: number }
@@ -28,59 +28,14 @@ const saveCount = (store: Store, g: string, c: Count) => store.setKv(`count:${g}
 const confessCh = (store: Store, g: string) => store.getKv(`confessch:${g}`);
 export const recapOn = (store: Store, g: string) => store.getKv(`recap:${g}`) !== 'off';
 
-// the bulletin category, made if it isn't there yet, so every Texz channel sits together
-async function category(store: Store, guild: Guild): Promise<CategoryChannel> {
-  const g = store.guild(guild.id);
-  let cat = g.bulletins.category ? await guild.channels.fetch(g.bulletins.category).catch(() => null) : null;
-  cat ??= guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name === CATEGORY) ?? null;
-  cat ??= await guild.channels.create({ name: CATEGORY, type: ChannelType.GuildCategory, reason: 'Agency channels from /setup' });
-  g.bulletins.category = cat.id;
-  store.saveGuild(guild.id, g);
-  return cat as CategoryChannel;
-}
+// the rooms themselves are made by the Agency layout in /setup, see features/layout.ts
 
-async function room(guild: Guild, catId: string, saved: string | null | undefined, key: keyof typeof rooms, quiet: boolean) {
-  const r = rooms[key];
-  let ch: GuildBasedChannel | null = saved ? await guild.channels.fetch(saved).catch(() => null) : null;
-  ch ??= guild.channels.cache.find((c) => c.type === ChannelType.GuildText && c.name === r.name) ?? null;
-  const fresh = !ch;
-  ch ??= await guild.channels.create({ name: r.name, type: ChannelType.GuildText, parent: catId, topic: r.topic, reason: 'Agency channels from /setup' });
-  // the read-only rooms: people react and read, Texz posts
-  if (quiet && 'permissionOverwrites' in ch) {
-    await ch.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false, CreatePublicThreads: false, CreatePrivateThreads: false, AddReactions: true }).catch(() => {});
-    await ch.permissionOverwrites.edit(guild.members.me!.id, { SendMessages: true, EmbedLinks: true, AttachFiles: true }).catch(() => {});
-  }
-  return { ch, fresh };
-}
-
-// makes the four rooms under the bulletin category, reusing any that exist
-export async function buildCommunity(store: Store, guild: Guild): Promise<string> {
-  const me = await guild.members.fetchMe();
-  if (!me.permissions.has(PermissionFlagsBits.ManageChannels)) return fixText(guild, { perms: ['ManageChannels'], doing: 'make the channels' }) ?? 'I need Manage Channels for that.';
-  const cat = await category(store, guild);
-  const g = store.guild(guild.id);
-  const q = await room(guild, cat.id, g.quotes.channel, 'quotes', true);
-  const a = await room(guild, cat.id, g.starboard.channel, 'archive', true);
-  const c = countOf(store, guild.id);
-  const k = await room(guild, cat.id, c.channel, 'count', false);
-  const f = await room(guild, cat.id, confessCh(store, guild.id), 'confess', true);
-  const fresh = store.guild(guild.id);
-  fresh.quotes.channel = q.ch.id;
-  fresh.starboard.channel = a.ch.id;
-  if (fresh.starboard.min < 5) fresh.starboard.min = 5;
-  store.saveGuild(guild.id, fresh);
-  c.channel = k.ch.id;
-  saveCount(store, guild.id, c);
-  store.setKv(`confessch:${guild.id}`, f.ch.id);
-  if (k.fresh && k.ch.isSendable()) await k.ch.send({ embeds: [card({ kind: 'bulletin', title: '🔢 The count', emoji: '', gif: 'off', body: 'One number each, going up from **1**. Nobody counts twice in a row, and a wrong number sends everyone back to the start. The record is kept.' })] }).then((m) => m.pin().catch(() => {})).catch(() => {});
-  if (f.fresh && f.ch.isSendable()) await f.ch.send(confessIntro()).then((m) => m.pin().catch(() => {})).catch(() => {});
-  return `🕵️ Done, all under **${CATEGORY}**: <#${q.ch.id}> for quotes, <#${a.ch.id}> for the archive (5 ⭐), <#${k.ch.id}> for counting and <#${f.ch.id}> for confessions.`;
-}
+export const countIntro = () => ({ embeds: [card({ kind: 'bulletin', title: '🔢 The count', emoji: '', gif: 'off', body: 'One number each, going up from **1**. Nobody counts twice in a row, and a wrong number sends everyone back to the start. The record is kept.' })] });
 
 // ---------- the count ----------
 
 export async function onCount(store: Store, m: Message) {
-  if (!m.guildId || m.author.bot) return;
+  if (!m.guildId || m.author.bot || !store.rules(m.guildId, 'community').enabled) return;
   const c = countOf(store, m.guildId);
   if (!c.channel || m.channelId !== c.channel) return;
   const said = /^\s*(\d{1,7})\b/.exec(m.content)?.[1];
@@ -108,7 +63,7 @@ export async function onCount(store: Store, m: Message) {
 
 // ---------- the confessional ----------
 
-function confessIntro() {
+export function confessIntro() {
   return {
     embeds: [card({ kind: 'bulletin', title: '🕯️ The confessional', emoji: '', gif: 'off', body: 'Say it without your name on it. Press the button, write it, and Texz posts it here as a numbered confession.\n-# Staff can look up who wrote one if it breaks the rules, so keep it kind.' })],
     components: [row(new ButtonBuilder().setCustomId('cf|open').setLabel('Write a confession').setEmoji('🕯️').setStyle(ButtonStyle.Secondary))],

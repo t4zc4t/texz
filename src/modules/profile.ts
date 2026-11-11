@@ -9,7 +9,7 @@ import type { Command } from '../core/module.js';
 import { card } from '../theme.js';
 import { fetchAvatar, profileCard, type Fav } from '../features/rankcard.js';
 import { levelOf, rankFor } from './levels.js';
-import { fmtDate } from './birthdays.js';
+import { toldHere, fmtDate } from './birthdays.js';
 import { currentSeason, searchMedia, titleOf, topMedia, type Media } from '../anime/anilist.js';
 
 // the lists to pick a favourite anime or manga from
@@ -45,19 +45,31 @@ interface Picks {
   clubId?: string; clubLogo?: string; clubColor?: string; animeCover?: string; animeColor?: string; mangaCover?: string; mangaColor?: string;
   // looked up once already, so a name with no match isn't searched on every card
   clubTried?: boolean; animeTried?: boolean; mangaTried?: boolean;
+  bio?: string;
 }
 
-export function picksOf(store: Store, userId: string): Picks {
-  const saved = JSON.parse(store.getKv(`picks:${userId}`) ?? '{}') as Partial<Picks>;
-  // the old favourite anime moves over on its own
-  const old = store.profile(userId).favourite;
-  return { anime: old ?? undefined, ...saved, show: saved.show ?? ['level', 'birthday'] };
+// each server keeps its own file, so a profile in one server says nothing in another
+export function picksOf(store: Store, guildId: string | null, userId: string): Picks {
+  const key = `picks:${guildId ?? 'dm'}:${userId}`;
+  let saved = JSON.parse(store.getKv(key) ?? 'null') as Partial<Picks> | null;
+  if (!saved) {
+    // a file from before servers kept their own goes to the first server that opens it, and only there
+    const legacy = JSON.parse(store.getKv(`picks:${userId}`) ?? 'null') as Partial<Picks> | null;
+    const old = store.profile(userId);
+    saved = { ...(old.favourite ? { anime: old.favourite } : {}), ...(old.bio ? { bio: old.bio } : {}), ...legacy };
+    if (guildId && (legacy || old.bio || old.favourite)) {
+      store.setKv(key, JSON.stringify(saved));
+      store.setKv(`picks:${userId}`, null);
+      store.setProfile(userId, { bio: null, favourite: null });
+    }
+  }
+  return { ...saved, show: saved.show ?? ['level', 'birthday'] };
 }
-export const savePicks = (store: Store, userId: string, p: Picks) => store.setKv(`picks:${userId}`, JSON.stringify(p));
+export const savePicks = (store: Store, guildId: string | null, userId: string, p: Picks) => store.setKv(`picks:${guildId ?? 'dm'}:${userId}`, JSON.stringify(p));
 
-async function editPanel(store: Store, userId: string, league?: string, list?: string) {
-  const p = picksOf(store, userId);
-  const bio = store.profile(userId).bio;
+async function editPanel(store: Store, guildId: string | null, userId: string, league?: string, list?: string) {
+  const p = picksOf(store, guildId, userId);
+  const bio = p.bio;
   const val = (k: Part) => ({ club: p.club, team: p.team, anime: p.anime, manga: p.manga } as Record<string, string | undefined>)[k];
   const lines = (Object.keys(parts) as Part[]).map((k) => `${p.show.includes(k) ? '👁️' : '🙈'} **${parts[k]}**${val(k) !== undefined ? ` · ${val(k) ?? ''}` : ''}${['club', 'team', 'anime', 'manga'].includes(k) && !val(k) ? ' · *not picked*' : ''}`);
   const e = card({ kind: 'profile', title: 'Your personnel file', emoji: '🗂️', gif: 'off',
@@ -101,7 +113,7 @@ async function editPanel(store: Store, userId: string, league?: string, list?: s
 }
 
 // picks saved before there were pictures, or typed by hand, get their crest and covers looked up once and kept
-async function fillPictures(store: Store, id: string, p: Picks) {
+async function fillPictures(store: Store, guildId: string | null, id: string, p: Picks) {
   let changed = false;
   if (p.club && !p.clubLogo && !p.clubTried) {
     const c = await findClub(p.club).catch(() => null);
@@ -117,12 +129,12 @@ async function fillPictures(store: Store, id: string, p: Picks) {
     p[`${what}Tried`] = true;
     changed = true;
   }
-  if (changed) savePicks(store, id, p);
+  if (changed) savePicks(store, guildId, id, p);
 }
 
 export async function drawProfile(store: Store, id: string, guildId: string | null, m: { displayName: string; user: { username: string }; displayAvatarURL: (o: object) => string } | null) {
-  const p = picksOf(store, id);
-  await fillPictures(store, id, p);
+  const p = picksOf(store, guildId, id);
+  await fillPictures(store, guildId, id, p);
   const show = new Set(p.show);
   const chips: { label: string; value: string; color?: string }[] = [];
   let title = 'Agency visitor';
@@ -132,7 +144,7 @@ export async function drawProfile(store: Store, id: string, guildId: string | nu
     if (show.has('level')) chips.push({ label: 'Level', value: String(l) });
   }
   if (show.has('yen') && guildId && store.rules(guildId, 'economy').enabled) chips.push({ label: 'Yen', value: `¥${store.wallet(guildId, id).yen.toLocaleString()}` });
-  const b = store.birthday(id);
+  const b = toldHere(store, guildId, id) ? store.birthday(id) : null;
   if (show.has('birthday') && b) chips.push({ label: 'Birthday', value: fmtDate(b.month, b.day) });
   // the favourites get their own strip with logos and covers instead of chips
   const favs: Fav[] = [];
@@ -144,7 +156,7 @@ export async function drawProfile(store: Store, id: string, guildId: string | nu
   const have = guildId ? badgesOf(store, guildId, id) : [];
   if (show.has('done') && done) chips.push({ label: 'Anime done', value: String(done) });
   return profileCard({
-    name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: store.profile(id).bio, chips, accent: p.color, favs,
+    name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: p.bio ?? null, chips, accent: p.color, favs,
     medals: guildId ? shownOf(store, guildId, id, tierOf).map((x) => ({ id: x, earned: true, name: BADGES.find((b) => b.id === x)?.name ?? x })) : undefined,
     medalCount: guildId ? { won: have.length, total: BADGES.length } : undefined,
     avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null,
@@ -161,28 +173,29 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
   const [tag, owner, what] = i.customId.split('|');
   if (tag !== 'pfe' && tag !== 'pfm') return false;
   if (owner !== i.user.id) { if (i.isRepliable()) await i.reply({ content: 'That\'s someone else\'s file. `tz profile edit` opens yours.', flags: MessageFlags.Ephemeral }); return true; }
-  const p = picksOf(store, owner);
+  const g = i.guildId;
+  const p = picksOf(store, g, owner);
   if (tag === 'pfe') {
-    if (i.isStringSelectMenu() && what === 'show') { p.show = i.values as Part[]; savePicks(store, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
-    if (i.isStringSelectMenu() && what === 'team') { p.team = i.values[0] === '-' ? undefined : i.values[0]; if (p.team && !p.show.includes('team')) p.show.push('team'); savePicks(store, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
+    if (i.isStringSelectMenu() && what === 'show') { p.show = i.values as Part[]; savePicks(store, g, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); } return true; }
+    if (i.isStringSelectMenu() && what === 'team') { p.team = i.values[0] === '-' ? undefined : i.values[0]; if (p.team && !p.show.includes('team')) p.show.push('team'); savePicks(store, g, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); } return true; }
     if (i.isStringSelectMenu() && what === 'league') {
       const v = i.values[0];
       if (v === '-type') { await i.showModal(modal(owner, 'club', 'Football club (empty removes it)', p.club ?? '', 40, 'Real Madrid')); return true; }
-      if (v === '-') { p.club = p.clubId = p.clubLogo = p.clubColor = undefined; savePicks(store, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
-      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner, v)); }
+      if (v === '-') { p.club = p.clubId = p.clubLogo = p.clubColor = undefined; savePicks(store, g, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); } return true; }
+      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner, v)); }
       return true;
     }
     if (i.isStringSelectMenu() && what === 'medialist') {
       const [kind, arg] = i.values[0].split(':');
       if (kind === 'type') { await i.showModal(modal(owner, arg, `${arg === 'anime' ? 'Anime' : 'Manga'} title, I'll look it up`, (arg === 'manga' ? p.manga : p.anime) ?? '', 100, arg === 'anime' ? 'Bungo Stray Dogs' : 'Chainsaw Man')); return true; }
-      if (kind === 'none') { const w = arg as 'anime' | 'manga'; p[w] = p[`${w}Cover`] = p[`${w}Color`] = undefined; savePicks(store, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
-      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner, undefined, i.values[0])); }
+      if (kind === 'none') { const w = arg as 'anime' | 'manga'; p[w] = p[`${w}Cover`] = p[`${w}Color`] = undefined; savePicks(store, g, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); } return true; }
+      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner, undefined, i.values[0])); }
       return true;
     }
     if (i.isStringSelectMenu() && what?.startsWith('mediapick:')) {
       const v = i.values[0];
       const listKey = what.slice('mediapick:'.length);
-      if (v === '-back') { { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
+      if (v === '-back') { { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); } return true; }
       const m = (await mediaList(listKey)).find((x) => String(x.id) === v);
       const w = listKey.startsWith('MANGA') ? 'manga' : 'anime';
       if (m) {
@@ -191,23 +204,23 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
         p[`${w}Color`] = m.coverImage.color ?? undefined;
         p[`${w}Tried`] = true;
         if (!p.show.includes(w)) p.show.push(w);
-        savePicks(store, owner, p);
+        savePicks(store, g, owner, p);
       }
-      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); }
+      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); }
       return true;
     }
     if (i.isStringSelectMenu() && what === 'clubpick') {
       const v = i.values[0];
-      if (v === '-back') { { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
+      if (v === '-back') { { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); } return true; }
       const c = v === '-' ? null : (await allClubs().catch(() => [])).find((x) => x.id === v);
       p.club = c?.name; p.clubId = c?.id; p.clubLogo = c?.logo; p.clubColor = c?.color ? `#${c.color}` : undefined;
       if (c && !p.show.includes('club')) p.show.push('club');
-      savePicks(store, owner, p);
-      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); }
+      savePicks(store, g, owner, p);
+      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); }
       return true;
     }
     if (!i.isButton()) return true;
-    if (what === 'ping') { p.ping = p.ping === false; savePicks(store, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
+    if (what === 'ping') { p.ping = p.ping === false; savePicks(store, g, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); } return true; }
     if (what === 'preview') {
       await i.deferReply({ flags: MessageFlags.Ephemeral });
       const m = i.guild ? await i.guild.members.fetch(owner).catch(() => null) : null;
@@ -215,7 +228,7 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
       await i.editReply({ files: [new AttachmentBuilder(png, { name: 'profile.png' })] });
       return true;
     }
-    const current = what === 'bio' ? store.profile(owner).bio ?? '' : (p as unknown as Record<string, string | undefined>)[what] ?? '';
+    const current = what === 'bio' ? p.bio ?? '' : (p as unknown as Record<string, string | undefined>)[what] ?? '';
     const labels: Record<string, [string, number, string]> = {
       club: ['Football club (empty removes it)', 40, 'Real Madrid'], anime: ['Anime title, I\'ll look it up', 100, 'Bungo Stray Dogs'],
       manga: ['Manga title, I\'ll look it up', 100, 'Chainsaw Man'], bio: ['About you (empty removes it)', 180, 'A line or two'],
@@ -228,7 +241,7 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
   if (!i.isModalSubmit()) return true;
   const v = i.fields.getTextInputValue('v').trim();
   let note = '';
-  if (what === 'bio') store.setProfile(owner, { bio: v || null });
+  if (what === 'bio') p.bio = v || undefined;
   if (what === 'club') {
     // a typed club gets its crest if it matches one in the big leagues
     const c = v ? await findClub(v).catch(() => null) : null;
@@ -250,9 +263,9 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
       if (!p.show.includes(what)) p.show.push(what);
     }
   }
-  savePicks(store, owner, p);
-  if (i.isFromMessage()) { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); }
-  else await i.reply({ ...(await editPanel(store, owner)), flags: MessageFlags.Ephemeral });
+  savePicks(store, g, owner, p);
+  if (i.isFromMessage()) { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); }
+  else await i.reply({ ...(await editPanel(store, g, owner)), flags: MessageFlags.Ephemeral });
   if (note) await i.followUp({ content: note, flags: MessageFlags.Ephemeral });
   return true;
 }
@@ -270,7 +283,7 @@ export const profile: Command = {
     let sub = ctx.sub() ?? 'view';
     let who = ctx.user('user');
     if (ctx.viaText && /^<@!?\d+>$/.test(sub)) { who = sub.replace(/\D/g, ''); sub = 'view'; }
-    if (['edit', 'settings', 'set', 'bio', 'fav', 'favourite', 'favourites', 'club', 'team'].includes(sub)) return ctx.reply(await editPanel(store, ctx.userId));
+    if (['edit', 'settings', 'set', 'bio', 'fav', 'favourite', 'favourites', 'club', 'team'].includes(sub)) return ctx.reply(await editPanel(store, ctx.guildId, ctx.userId));
     const id = who ?? ctx.userId;
     const m = ctx.guild ? await ctx.guild.members.fetch(id).catch(() => null) : null;
     const png = await drawProfile(store, id, ctx.guildId, m);

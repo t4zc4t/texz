@@ -1,8 +1,6 @@
 import type { Store } from '../db.js';
 import type { Ctx } from './ctx.js';
 import { levelOf, perksFor, rankFor } from '../modules/levels.js';
-import { fmtDate } from '../modules/birthdays.js';
-import { picksOf } from '../modules/profile.js';
 import { winsOf } from '../modules/f1quiz.js';
 import { missionOf } from '../modules/missions.js';
 

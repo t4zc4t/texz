@@ -338,11 +338,12 @@ async function onSpawn(store: Store, m: Message) {
 }
 
 // Shoob wishlists: characters people want, matched loosely so "Gojo" finds "Satoru Gojo"
-const wishOf = (store: Store, user: string) => JSON.parse(store.getKv(`shoobwish:${user}`) ?? '[]') as string[];
+// each server keeps its own wishlists
+const wishOf = (store: Store, guild: string | null, user: string) => JSON.parse(store.getKv(`shoobwish:${guild}:${user}`) ?? '[]') as string[];
 function wishersOf(store: Store, guild: Guild, character: string) {
   const c = character.toLowerCase();
-  return store.kvByPrefix('shoobwish:').filter(({ value }) => (JSON.parse(value) as string[]).some((w) => c.includes(w.toLowerCase()) || w.toLowerCase().includes(c)))
-    .map(({ key }) => key.slice(10)).slice(0, 20);
+  return store.kvByPrefix(`shoobwish:${guild.id}:`).filter(({ value }) => (JSON.parse(value) as string[]).some((w) => c.includes(w.toLowerCase()) || w.toLowerCase().includes(c)))
+    .map(({ key }) => key.split(':')[2]).slice(0, 20);
 }
 
 const wish: Command = {
@@ -356,17 +357,18 @@ const wish: Command = {
   text: { aliases: ['wishlist'], sub: true, subArgs: { add: ['character'], remove: ['character'] } },
   run: (ctx, store) => {
     const sub = ctx.sub() ?? 'list';
-    const list = wishOf(store, ctx.userId);
+    if (!ctx.guildId) return ctx.reply('Wishlists live inside a server.');
+    const list = wishOf(store, ctx.guildId, ctx.userId);
     const name = (ctx.str('character') ?? '').trim();
     if (sub === 'add' && name) {
       if (list.length >= 25) return ctx.reply('Your wishlist is full at 25, take one off first.');
       if (!list.some((x) => x.toLowerCase() === name.toLowerCase())) list.push(name);
-      store.setKv(`shoobwish:${ctx.userId}`, JSON.stringify(list));
+      store.setKv(`shoobwish:${ctx.guildId}:${ctx.userId}`, JSON.stringify(list));
       return ctx.reply({ content: `💝 **${name}** is on your wishlist, I'll ping you when they drop.`, temp: false });
     }
     if (sub === 'remove' && name) {
       const left = list.filter((x) => x.toLowerCase() !== name.toLowerCase());
-      store.setKv(`shoobwish:${ctx.userId}`, JSON.stringify(left));
+      store.setKv(`shoobwish:${ctx.guildId}:${ctx.userId}`, JSON.stringify(left));
       return ctx.reply(left.length < list.length ? `🗑️ **${name}** is off your wishlist.` : `**${name}** wasn't on it.`);
     }
     return ctx.reply({ embeds: [card({ kind: 'help', title: 'Your Shoob wishlist', emoji: '💝', gif: 'off', line: '',
@@ -610,7 +612,7 @@ async function pingsPanel(store: Store, guild: Guild, userId: string) {
     lines.push(`${mark(follows > 0)} 🔔 **Episode alerts** · ${follows ? `${follows} show${follows === 1 ? '' : 's'}, a ping when a new episode is out` : 'none, look an anime up and press 🔔'}`);
     buttons.push(new ButtonBuilder().setCustomId(`nav|alerts|owner=${userId},back=pings`).setLabel('Episode alerts').setEmoji('🔔').setStyle(follows ? ButtonStyle.Success : ButtonStyle.Secondary));
   }
-  const p = picksOf(store, userId);
+  const p = picksOf(store, guild.id, userId);
   const mine = [p.club && `⚽ ${p.club}`, p.team && `${teamDot(p.team)} ${p.team}`, p.anime && `📺 ${p.anime}`].filter(Boolean).join(' · ');
   lines.push(`${mark(p.ping !== false && !!mine)} ⭐ **Just for you** · ${mine || 'no picks yet'}`);
   const rows = [];
@@ -655,7 +657,7 @@ export async function onPingsButton(store: Store, i: Interaction) {
   const member = await i.guild.members.fetch(i.user.id).catch(() => null);
   let problem = '';
   if (what === 'buddy') store.setBuddy(i.guild.id, i.user.id, !store.buddies(i.guild.id).includes(i.user.id));
-  else if (what === 'personal') { const p = picksOf(store, i.user.id); p.ping = p.ping === false; savePicks(store, i.user.id, p); }
+  else if (what === 'personal') { const p = picksOf(store, i.guild.id, i.user.id); p.ping = p.ping === false; savePicks(store, i.guild.id, i.user.id, p); }
   else if (member) {
     const role = what === 'p2' ? await rareRole(i.guild, store, true) : what === 'shoob' ? await shoobRole(i.guild, store, true) : i.guild.roles.cache.get(store.guild(i.guild.id).bulletins[what as keyof typeof boards]?.role ?? '');
     if (!role) problem = 'That role isn\'t there, an admin can fix it in /setup.';

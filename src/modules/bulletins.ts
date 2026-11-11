@@ -354,7 +354,7 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
   const today = new Date().toISOString().slice(0, 10);
   for (const [gid, b] of live) {
     // the server's clubs plus everyone's own picks
-    const clubs = [...b.football.favs, ...store.allPicks().filter((p) => p.club && p.ping !== false).map((p) => p.club!)];
+    const clubs = [...b.football.favs, ...store.allPicks(gid).filter((p) => p.club && p.ping !== false).map((p) => p.club!)];
     const mine = all.filter((m) => interesting(m, clubs, b.football.big));
     // the morning list, around 9 in India
     if (new Date().getUTCHours() >= 3 && store.firstTime(gid, `fb:day:${today}`)) {
@@ -373,7 +373,7 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
     for (const m of mine) {
       if (m.state === 'pre' && m.date - now < 30 * 60_000 && m.date > now && store.firstTime(gid, `fb:ko:${m.id}`)) {
         const norm = (x: string) => x.toLowerCase();
-        const picks = store.allPicks().filter((p) => p.club && p.ping !== false && [m.home.name, m.away.name].some((n) => norm(n).includes(norm(p.club!))));
+        const picks = store.allPicks(gid).filter((p) => p.club && p.ping !== false && [m.home.name, m.away.name].some((n) => norm(n).includes(norm(p.club!))));
         // fans of each side get grouped by club
         const users: string[] = [];
         const fanRoles: string[] = [];
@@ -561,7 +561,7 @@ async function goalTick(client: Client, store: Store) {
         for (const guild of client.guilds.cache.values()) {
           const b = store.guild(guild.id).bulletins.football;
           if (!b.on || !b.channel || !store.rules(guild.id, 'bulletins').enabled) continue;
-          const here = fans.filter((f) => guild.members.cache.has(f.user)).map((f) => f.user);
+          const here = [...new Set(fans.filter((f) => (!f.guild || f.guild === guild.id) && guild.members.cache.has(f.user)).map((f) => f.user))];
           if (!here.length) continue;
           const ch = client.channels.cache.get(b.channel);
           if (!ch?.isSendable()) continue;
@@ -704,7 +704,7 @@ const football: Command = {
     const all: Match[] = [];
     for (const lg of Object.keys(leagues)) all.push(...await matches(lg, new Date(now)).catch(() => []));
     // the server's clubs plus the asker's own club
-    const own = picksOf(store, ctx.userId).club;
+    const own = picksOf(store, ctx.guildId, ctx.userId).club;
     const mine = all.filter((m) => interesting(m, [...g.bulletins.football.favs, ...(own ? [own] : [])], g.bulletins.football.big)).sort((a, c) => a.date - c.date);
     const favs = g.bulletins.football.favs;
     if (!mine.length) return ctx.reply({ embeds: [card({ kind: 'fbDay', title: 'Today on the pitch', emoji: '🏟️', color: names.football.color, gif: 'off', body: 'Nothing big today. A rest day for everyone\'s nerves.' })] });

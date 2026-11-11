@@ -45,7 +45,7 @@ async function automod(store: Store, m: Message) {
   }));
 }
 
-const logOn = (store: Store, guildId: string | null) => !!guildId && store.rules(guildId, 'moderation').enabled && !!store.guild(guildId).mod.logChannel;
+const logOn = (store: Store, guildId: string | null) => !!guildId && store.rules(guildId, 'moderation').enabled && !!(store.guild(guildId).mod.logChannel ?? store.getKv(`serverlog:${guildId}`));
 
 export function wireEvents(client: Client, store: Store) {
   client.on(Events.MessageCreate, (m) => {
@@ -60,14 +60,14 @@ export function wireEvents(client: Client, store: Store) {
       void log(client, store, m.guild.id, card({
         kind: 'logs', title: 'Member joined', emoji: '📥', gif: 'off',
         fields: [{ name: '👤 Who', value: `<@${m.id}> · ${m.user.username}`, inline: true }, { name: '🎂 Account', value: `<t:${unix(m.user.createdTimestamp)}:R>`, inline: true }],
-      }));
+      }), 'server');
     }
   });
 
   client.on(Events.GuildMemberRemove, (m) => {
     if (store.rules(m.guild.id, 'welcome').enabled) void onLeave(store, m).catch((e) => report('goodbye', e));
     if (logOn(store, m.guild.id)) {
-      void log(client, store, m.guild.id, card({ kind: 'logs', title: 'Member left', emoji: '📤', gif: 'off', fields: [{ name: '👤 Who', value: `<@${m.id}> · ${m.user?.username ?? '?'}`, inline: true }] }));
+      void log(client, store, m.guild.id, card({ kind: 'logs', title: 'Member left', emoji: '📤', gif: 'off', fields: [{ name: '👤 Who', value: `<@${m.id}> · ${m.user?.username ?? '?'}`, inline: true }] }), 'server');
     }
   });
 
@@ -76,7 +76,7 @@ export function wireEvents(client: Client, store: Store) {
     void log(client, store, m.guildId!, card({
       kind: 'logs', title: 'Message deleted', emoji: '🗑️', gif: 'off',
       fields: [{ name: '👤 Author', value: `<@${m.author?.id}>`, inline: true }, { name: '📍 Where', value: `<#${m.channelId}>`, inline: true }, { name: '💬 It said', value: m.content.slice(0, 1000), inline: false }],
-    }));
+    }), 'server');
   });
 
   client.on(Events.MessageUpdate, (old, m) => {
@@ -87,7 +87,7 @@ export function wireEvents(client: Client, store: Store) {
         { name: '👤 Author', value: `<@${m.author?.id}>`, inline: true }, { name: '📍 Where', value: `[jump](${m.url})`, inline: true },
         { name: '⬅️ Before', value: old.content.slice(0, 1000), inline: false }, { name: '➡️ After', value: (m.content ?? '').slice(0, 1000) || '*empty*', inline: false },
       ],
-    }));
+    }), 'server');
   });
 
   client.on(Events.GuildBanAdd, (b) => {

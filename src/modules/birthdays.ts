@@ -5,6 +5,9 @@ import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { card, say } from '../theme.js';
 
+// a birthday is shared with the servers it was told in, nowhere else
+export const toldHere = (store: Store, guildId: string | null, userId: string) => !!guildId && !!store.getKv(`bdayin:${guildId}:${userId}`);
+
 const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
 const daysIn = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 export const fmtDate = (month: number, day: number) => `${day} ${months[month - 1][0].toUpperCase()}${months[month - 1].slice(1, 3)}`;
@@ -70,7 +73,7 @@ export function startBirthdays(client: Client, store: Store) {
       if (!store.rules(guild.id, 'birthdays').enabled || (!g.birthdays.channel && !g.birthdays.role)) continue;
       for (const b of all) {
         const today = localDate(store.settings(b.user_id).timezone);
-        if (!isBirthday(b, today) || store.birthdayDone(guild.id, b.user_id, today.year)) continue;
+        if (!toldHere(store, guild.id, b.user_id) || !isBirthday(b, today) || store.birthdayDone(guild.id, b.user_id, today.year)) continue;
         const m = await guild.members.fetch(b.user_id).catch(() => null);
         if (!m) continue;
         store.markBirthday(guild.id, b.user_id, today.year, g.birthdays.role ? now + 24 * 3_600_000 : null);
@@ -92,7 +95,6 @@ export function startBirthdays(client: Client, store: Store) {
 
 const birthday: Command = {
   name: 'birthday',
-  group: 'you',
   data: new SlashCommandBuilder().setName('birthday').setDescription('Your birthday, so Texz can make a fuss on the day')
     .addSubcommand((s) => s.setName('set').setDescription('Save your birthday, no year needed')
       .addIntegerOption((o) => o.setName('day').setDescription('Day of the month').setRequired(true).setMinValue(1).setMaxValue(31))
@@ -117,13 +119,20 @@ const birthday: Command = {
       })();
       if (!date) return ctx.reply('That date doesn\'t exist, even in my calendar. Like this: `tz bday set 14 feb`');
       store.setBirthday(ctx.userId, date.month, date.day);
+      if (ctx.guildId) store.setKv(`bdayin:${ctx.guildId}:${ctx.userId}`, '1');
       const tz = store.settings(ctx.userId).timezone;
       return ctx.reply({ content: `🎂 **${fmtDate(date.month, date.day)}**, noted. ${say('birthdaySet')}\n-# I go by your timezone (${tz}), \`tz remind\` → Settings changes it.`, temp: true });
     }
-    if (sub === 'remove') return ctx.reply(store.removeBirthday(ctx.userId) ? '🎂 Forgotten. Ageless, like me.' : 'I didn\'t have it anyway.');
+    if (sub === 'remove') {
+      const had = toldHere(store, ctx.guildId, ctx.userId);
+      if (ctx.guildId) store.setKv(`bdayin:${ctx.guildId}:${ctx.userId}`, null);
+      // gone for good once no server has it
+      if (!store.kvByPrefix('bdayin:').some(({ key }) => key.endsWith(`:${ctx.userId}`))) store.removeBirthday(ctx.userId);
+      return ctx.reply(had ? '🎂 Forgotten here. Ageless, like me.' : 'I didn\'t have it here anyway.');
+    }
     if (sub === 'check') {
       const id = who ?? ctx.userId;
-      const b = store.birthday(id);
+      const b = toldHere(store, ctx.guildId, id) ? store.birthday(id) : null;
       if (!b) return ctx.reply(id === ctx.userId ? 'You haven\'t told me. `tz bday set 14 feb`' : 'They haven\'t told me theirs. Very mysterious.');
       const n = daysUntil(b, localDate(store.settings(id).timezone));
       return ctx.reply({ content: `🎂 <@${id}>'s birthday is **${fmtDate(b.month, b.day)}**, ${n === 0 ? '**today**!' : `in ${n} day${n === 1 ? '' : 's'}.`}`, temp: true });
@@ -133,6 +142,7 @@ const birthday: Command = {
     const today = localDate('UTC');
     const list = [];
     for (const b of store.birthdays()) {
+      if (!toldHere(store, ctx.guild.id, b.user_id)) continue;
       const m = ctx.guild.members.cache.get(b.user_id) ?? await ctx.guild.members.fetch(b.user_id).catch(() => null);
       if (m) list.push({ ...b, n: daysUntil(b, today) });
     }

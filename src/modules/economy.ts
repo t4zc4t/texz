@@ -171,7 +171,7 @@ const shop: Command = {
     const w = store.wallet(ctx.guild.id, ctx.userId);
     const body = items.length
       ? items.map((x) => `\`#${x.id}\` <@&${x.role_id}> · **${fmt(x.price)}**${ctx.member?.roles.cache.has(x.role_id) ? ' · owned' : ''}`).join('\n')
-      : 'The shelves are empty. Admins stock them with `/eco view:shop`.';
+      : 'The shelves are empty. Admins stock them with `/yen view:shop`.';
     return ctx.reply({ embeds: [card({ kind: 'ecoShop', title: 'Role shop', emoji: '🛍️', gif: 'off', body, fields: [{ name: '👛 You have', value: fmt(w.yen), inline: true }] })] });
   },
 };
