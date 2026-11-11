@@ -46,6 +46,20 @@ export function hintOf(text: string): string | null {
 // Pokétwo's own forms learned from catches, like Mosslax, so hints can find them too
 const extra = new Set<string>();
 export const addExtra = (names: string[]) => names.forEach((n) => extra.add(n));
+// the region a pokémon comes from, its regional form first ("Alolan Muk" is Alola), else its dex number
+const regions: [number, string][] = [[151, 'Kanto'], [251, 'Johto'], [386, 'Hoenn'], [493, 'Sinnoh'], [649, 'Unova'], [721, 'Kalos'], [809, 'Alola'], [898, 'Galar'], [905, 'Hisui'], [1025, 'Paldea']];
+export function regionOf(name: string): string | null {
+  const form = /^(alolan|galarian|hisuian|paldean)\b/i.exec(name)?.[1].toLowerCase();
+  if (form) return { alolan: 'Alola', galarian: 'Galar', hisuian: 'Hisui', paldean: 'Paldea' }[form]!;
+  const id = idOf(name) ?? idOf(nameIn(name) ?? '');
+  return id ? regions.find(([max]) => id <= max)?.[1] ?? null : null;
+}
+
+// the event and regional forms seen here for a species, like Prof Tangrowth for Tangrowth
+export const formsOf = (species: string) => {
+  const base = plain(species);
+  return [...extra, ...all().map(([, n]) => n)].filter((n) => n !== species && (plain(n).endsWith(` ${base}`) || plain(n).startsWith(`${base} `)));
+};
 
 // names that fit a hint, underscores are unknown letters and everything else has to line up
 export function solve(pattern: string): { id: number; name: string }[] {

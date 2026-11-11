@@ -163,26 +163,26 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
   if (owner !== i.user.id) { if (i.isRepliable()) await i.reply({ content: 'That\'s someone else\'s file. `tz profile edit` opens yours.', flags: MessageFlags.Ephemeral }); return true; }
   const p = picksOf(store, owner);
   if (tag === 'pfe') {
-    if (i.isStringSelectMenu() && what === 'show') { p.show = i.values as Part[]; savePicks(store, owner, p); await i.update(await editPanel(store, owner)); return true; }
-    if (i.isStringSelectMenu() && what === 'team') { p.team = i.values[0] === '-' ? undefined : i.values[0]; if (p.team && !p.show.includes('team')) p.show.push('team'); savePicks(store, owner, p); await i.update(await editPanel(store, owner)); return true; }
+    if (i.isStringSelectMenu() && what === 'show') { p.show = i.values as Part[]; savePicks(store, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
+    if (i.isStringSelectMenu() && what === 'team') { p.team = i.values[0] === '-' ? undefined : i.values[0]; if (p.team && !p.show.includes('team')) p.show.push('team'); savePicks(store, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
     if (i.isStringSelectMenu() && what === 'league') {
       const v = i.values[0];
       if (v === '-type') { await i.showModal(modal(owner, 'club', 'Football club (empty removes it)', p.club ?? '', 40, 'Real Madrid')); return true; }
-      if (v === '-') { p.club = p.clubId = p.clubLogo = p.clubColor = undefined; savePicks(store, owner, p); await i.update(await editPanel(store, owner)); return true; }
-      await i.update(await editPanel(store, owner, v));
+      if (v === '-') { p.club = p.clubId = p.clubLogo = p.clubColor = undefined; savePicks(store, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
+      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner, v)); }
       return true;
     }
     if (i.isStringSelectMenu() && what === 'medialist') {
       const [kind, arg] = i.values[0].split(':');
       if (kind === 'type') { await i.showModal(modal(owner, arg, `${arg === 'anime' ? 'Anime' : 'Manga'} title, I'll look it up`, (arg === 'manga' ? p.manga : p.anime) ?? '', 100, arg === 'anime' ? 'Bungo Stray Dogs' : 'Chainsaw Man')); return true; }
-      if (kind === 'none') { const w = arg as 'anime' | 'manga'; p[w] = p[`${w}Cover`] = p[`${w}Color`] = undefined; savePicks(store, owner, p); await i.update(await editPanel(store, owner)); return true; }
-      await i.update(await editPanel(store, owner, undefined, i.values[0]));
+      if (kind === 'none') { const w = arg as 'anime' | 'manga'; p[w] = p[`${w}Cover`] = p[`${w}Color`] = undefined; savePicks(store, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
+      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner, undefined, i.values[0])); }
       return true;
     }
     if (i.isStringSelectMenu() && what?.startsWith('mediapick:')) {
       const v = i.values[0];
       const listKey = what.slice('mediapick:'.length);
-      if (v === '-back') { await i.update(await editPanel(store, owner)); return true; }
+      if (v === '-back') { { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
       const m = (await mediaList(listKey)).find((x) => String(x.id) === v);
       const w = listKey.startsWith('MANGA') ? 'manga' : 'anime';
       if (m) {
@@ -193,21 +193,21 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
         if (!p.show.includes(w)) p.show.push(w);
         savePicks(store, owner, p);
       }
-      await i.update(await editPanel(store, owner));
+      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); }
       return true;
     }
     if (i.isStringSelectMenu() && what === 'clubpick') {
       const v = i.values[0];
-      if (v === '-back') { await i.update(await editPanel(store, owner)); return true; }
+      if (v === '-back') { { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
       const c = v === '-' ? null : (await allClubs().catch(() => [])).find((x) => x.id === v);
       p.club = c?.name; p.clubId = c?.id; p.clubLogo = c?.logo; p.clubColor = c?.color ? `#${c.color}` : undefined;
       if (c && !p.show.includes('club')) p.show.push('club');
       savePicks(store, owner, p);
-      await i.update(await editPanel(store, owner));
+      { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); }
       return true;
     }
     if (!i.isButton()) return true;
-    if (what === 'ping') { p.ping = p.ping === false; savePicks(store, owner, p); await i.update(await editPanel(store, owner)); return true; }
+    if (what === 'ping') { p.ping = p.ping === false; savePicks(store, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); } return true; }
     if (what === 'preview') {
       await i.deferReply({ flags: MessageFlags.Ephemeral });
       const m = i.guild ? await i.guild.members.fetch(owner).catch(() => null) : null;
@@ -251,7 +251,7 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
     }
   }
   savePicks(store, owner, p);
-  if (i.isFromMessage()) await i.update(await editPanel(store, owner));
+  if (i.isFromMessage()) { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, owner)); }
   else await i.reply({ ...(await editPanel(store, owner)), flags: MessageFlags.Ephemeral });
   if (note) await i.followUp({ content: note, flags: MessageFlags.Ephemeral });
   return true;

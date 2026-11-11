@@ -3,7 +3,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Store } from '../db.js';
-import { nameIn } from './pokedex.js';
+import { formsOf, nameIn } from './pokedex.js';
 
 // Pokétwo draws each species the same way every time, so a small fingerprint of the picture is enough to know it again.
 // The bot starts knowing nothing and learns from every catch, every hint it solves and every name another helper bot gives.
@@ -116,7 +116,9 @@ export function decide(store: Store, cls: { top: { name: string; p: number }[]; 
   if (seen?.sure) return { name: seen.name, p: 1, how: 'picture', others: [] };
   const top = cls?.top[0];
   const nn = cls ? nearest(store, cls.vec) : null;
-  const others = (cls?.top ?? []).slice(1).filter((g) => g.p >= 0.1).map((g) => g.name);
+  // a species that has forms here (Alolan Muk, Prof Tangrowth) gets those offered too, the model only knows the plain one
+  const forms = top ? formsOf(top.name).filter((f) => !/^(gigantamax|mega|eternamax|primal)/i.test(f)).slice(0, 3) : [];
+  const others = [...forms, ...(cls?.top ?? []).slice(1).filter((g) => g.p >= 0.1).map((g) => g.name)].slice(0, 4);
   if (nn && top && nn.cos >= 0.85 && (nameIn(nn.name) === top.name || top.p < 0.6 || nn.votes >= 2)) {
     return { name: nn.name, p: Math.max(top.p, nn.cos), how: 'memory', others: nn.name === top.name ? others : [top.name, ...others].filter((x) => x !== nn.name).slice(0, 2) };
   }

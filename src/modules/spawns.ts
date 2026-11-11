@@ -8,7 +8,7 @@ import type { Command, Module } from '../core/module.js';
 import { bar, card } from '../theme.js';
 import { fixText } from '../core/fixes.js';
 import { picksOf, savePicks } from './profile.js';
-import { TYPES, addExtra, allSpecies, artwork, catchLine, hintOf, idOf, nameIn, rarityOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
+import { TYPES, addExtra, allSpecies, artwork, catchLine, formsOf, hintOf, idOf, nameIn, rarityOf, regionOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
 import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize, recognise, remember, type Sparse } from '../features/pokeid.js';
 import { classify, keepSpawn, seedMemory } from '../features/pokemodel.js';
 import { teamDot } from '../feeds/f1.js';
@@ -137,12 +137,16 @@ function claimText(name: string, roles: string[], guess?: { p: number; others: s
   const rare = rarityOf(base);
   const types = typesOf(base);
   const why = [rare && rareMark[rare], ...types].filter(Boolean).join(' · ');
+  const region = regionOf(name);
+  const forms = guess ? guess.others.filter((o) => formsOf(base).includes(o)) : [];
   return [
     roles.length ? `${roles.map((r) => `<@&${r}>`).join(' ')} ${why} spawn, be quick` : null,
     `## ${rare ? '🌟 ' : ''}${name}  ${types.map((t) => typeIcon(t)).join('')}`,
-    `${rare ? `**${rareMark[rare]}** · ` : ''}${types.join(' · ')}${fresh ? ' · 🆕 **not caught here yet!**' : ''}`,
+    // the type badges already say the type, so the line under them says where it's from
+    [rare ? `**${rareMark[rare]}**` : null, region ? `🗺️ ${region}` : null, fresh ? '🆕 **not caught here yet!**' : null].filter(Boolean).join(' · ') || null,
     `📋 Tap to copy: \`${catchLine(catchFor(name))}\``,
-    guess && guess.p < 0.85 ? `-# ${Math.round(guess.p * 100)}% sure${guess.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}` : null,
+    guess && guess.p < 0.85 ? `-# ${Math.round(guess.p * 100)}% sure${guess.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}`
+      : forms.length ? `-# Has a form here too: ${forms.join(', ')}, check the picture` : null,
   ].filter(Boolean).join('\n');
 }
 
