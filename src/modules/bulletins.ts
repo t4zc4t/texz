@@ -28,7 +28,7 @@ export const names: Record<Kind, { channel: string; role: string; emoji: string;
   football: { channel: '⚽┃pitch-side-reports', role: 'Pitch Informant', emoji: '⚽', topic: 'Big matches, your clubs, kick-off pings and full-time scores, filed by Texz', color: 0x2e9b4f },
   anime: { channel: '📺┃yokohama-screenings', role: 'Screening Informant', emoji: '📺', topic: 'New episodes as they air and the day\'s schedule, filed by Texz', color: 0x8e6cd8 },
 };
-const CATEGORY = '🕵️ Agency Bulletin Board';
+export const CATEGORY = '🕵️ Agency Bulletin Board';
 
 const pingRow = (kind: Kind) => row(new ButtonBuilder().setCustomId(`bul|${kind}`).setLabel(`Ping me (${names[kind].role})`).setEmoji('🔔').setStyle(ButtonStyle.Secondary));
 

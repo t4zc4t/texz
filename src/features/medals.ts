@@ -39,13 +39,14 @@ export const medalOf: Record<string, { tier: Tier; mark: Mark }> = {
   host: { tier: 'bronze', mark: 'popcorn' },
   nightowl: { tier: 'silver', mark: 'moon' },
   earlybird: { tier: 'bronze', mark: 'sun' },
+  counter: { tier: 'silver', mark: 'hash' },
   mission7: { tier: 'gold', mark: 'hat' },
   mission30: { tier: 'gold', mark: 'folder' },
 };
 export const tierOf = (id: string): Tier => medalOf[id]?.tier ?? 'bronze';
 export const tierName: Record<Tier, string> = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold', relic: 'Relic' };
 type Mark = 'ball' | 'star' | 'question' | 'cap' | 'lens' | 'quote' | 'cup' | 'podium' | 'calendar' | 'hat'
-  | 'sparkle' | 'prism' | 'bolt' | 'scroll' | 'laurel' | 'crystal' | 'flame' | 'coins' | 'gift' | 'speech' | 'shield' | 'popcorn' | 'moon' | 'sun' | 'folder';
+  | 'sparkle' | 'prism' | 'bolt' | 'scroll' | 'laurel' | 'crystal' | 'flame' | 'coins' | 'gift' | 'speech' | 'shield' | 'popcorn' | 'moon' | 'sun' | 'folder' | 'hash';
 
 function ribbon(ctx: SKRSContext2D, x: number, top: number, bottom: number, w: number, colors: [string, string], dim: boolean) {
   ctx.save();
@@ -305,6 +306,13 @@ function mark(target: SKRSContext2D, kind: Mark, x: number, y: number, s: number
         ctx.globalCompositeOperation = 'destination-out';
         ctx.lineWidth = k * 0.1; ctx.beginPath(); ctx.moveTo(-k * 0.2, k * 0.1); ctx.lineTo(-k * 0.02, k * 0.26); ctx.lineTo(k * 0.26, -k * 0.06); ctx.stroke();
         ctx.globalCompositeOperation = 'source-over';
+        break;
+      case 'hash':
+        ctx.lineWidth = k * 0.13;
+        for (const d of [-0.2, 0.2]) {
+          ctx.beginPath(); ctx.moveTo(k * (d + 0.08), -k * 0.55); ctx.lineTo(k * (d - 0.08), k * 0.55); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(-k * 0.52, k * d); ctx.lineTo(k * 0.52, k * d); ctx.stroke();
+        }
         break;
       case 'hat':
         ctx.beginPath(); ctx.ellipse(0, k * 0.22, k * 0.68, k * 0.17, 0, 0, Math.PI * 2); ctx.fill();

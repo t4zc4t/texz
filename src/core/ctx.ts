@@ -22,6 +22,8 @@ export interface Ctx {
   // the dashboard this page belongs to, so a Back button always has somewhere to go
   home?: string;
   self?: string;
+  // removes the typed command message, for things that shouldn't stay in chat
+  dropSource?: () => Promise<void>;
   viaText: boolean;
   latency(): number;
   client: Client;
@@ -159,6 +161,7 @@ export function fromText(m: Message, tokens: string[], argNames: string[], hasSu
     client: m.client,
     displayName: m.member?.displayName ?? m.author.displayName,
     replyTo: async () => (m.reference?.messageId ? m.fetchReference().catch(() => null) : null),
+    dropSource: async () => { await m.delete().catch(() => {}); },
     attachment: () => m.attachments.first()?.url ?? null,
     sub: () => sub,
     str: (n) => values.get(n) ?? null,

@@ -15,6 +15,7 @@ import { carryRankPerms, fixRankOrder, perks, rankFor, ranks, tidyRanks } from '
 import { parseLength } from '../modules/moderation.js';
 import { p2HelperOn, setP2Helper } from '../modules/spawns.js';
 import { staffRoles } from '../core/staff.js';
+import { buildCommunity } from '../modules/community.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
@@ -61,7 +62,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { label: 'Levels, xp and reward roles', value: 'levels', emoji: '🎖️' },
       { label: 'Birthday greetings and role', value: 'birthdays', emoji: '🎂' },
       { label: 'Bulletins: F1, football, anime', value: 'bulletins', emoji: '🗞️' },
-      { label: 'Quotes channel', value: 'quotes', emoji: '🖼️' },
+      { label: 'Community: quotes, archive, counting, confessions', value: 'quotes', emoji: '🖋️' },
       { label: 'Character of the day', value: 'cotd', emoji: '🎭' },
       { label: 'Tickets', value: 'tickets', emoji: '🎫' },
       { label: 'Gifs for each moment', value: 'gifs', emoji: '🎞️' },
@@ -277,10 +278,22 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
   }
 
   if (page === 'quotes') {
-    title = 'Quotes';
-    body = 'Right-click any message → Apps → **Quote** and Texz turns it into a picture with the avatar, the words and any image. With a quotes channel picked they all get hung there, otherwise the quote shows up where it was asked for.';
-    fields.push({ name: '🖼️ Quotes channel', value: ch(g.quotes.channel), inline: true });
+    title = 'Community';
+    body = 'The corner of the Agency board for everyone. **Make the channels** puts all four under the bulletin category in the same style:\n🖋️ quotes made with Make it a Quote get hung there\n📁 the archive keeps messages that get 5 ⭐\n🔢 the count goes up one number at a time, a wrong one resets it\n🕯️ the confessional posts anonymous confessions\nEvery Monday the week\'s file (top chatters, catchers, numbers) goes to the archive.';
+    const count = JSON.parse(store.getKv(`count:${guild.id}`) ?? '{}') as { channel?: string; n?: number; best?: number };
+    const conf = store.getKv(`confessch:${guild.id}`);
+    fields.push(
+      { name: '🖋️ Quotes', value: ch(g.quotes.channel), inline: true },
+      { name: '📁 Archive', value: `${ch(g.starboard.channel)} · ${g.starboard.min} ${g.starboard.emoji}`, inline: true },
+      { name: '🔢 Count', value: count.channel ? `<#${count.channel}> · at ${count.n ?? 0}, record ${count.best ?? 0}` : '*none*', inline: true },
+      { name: '🕯️ Confessional', value: conf ? `<#${conf}>` : '*none*', inline: true },
+      { name: '🗂️ Monday recap', value: store.getKv(`recap:${guild.id}`) === 'off' ? 'off' : 'on', inline: true },
+    );
     comps.push(
+      row(
+        new ButtonBuilder().setCustomId(id(owner, 'commbuild')).setLabel('Make the channels').setEmoji('🏗️').setStyle(ButtonStyle.Primary),
+        toggle(owner, 'recap', '', 'Monday recap', store.getKv(`recap:${guild.id}`) !== 'off', '🗂️'),
+      ),
       row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'qch')).setPlaceholder('🖼️ Quotes channel (empty = where it was asked)')
         .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(g.quotes.channel ? [g.quotes.channel] : [])),
       row(back(owner)),
@@ -418,7 +431,7 @@ const pageOf: Record<string, string> = {
   arole: 'autorole', logch: 'mod', staff: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
   clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
-  qch: 'quotes', bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', bultrack: 'bulletins', f1look: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
+  qch: 'quotes', commbuild: 'quotes', recap: 'quotes', bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', bultrack: 'bulletins', f1look: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
   noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
@@ -521,6 +534,13 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       ]));
       return true;
     }
+    if (action === 'commbuild') {
+      await i.deferUpdate();
+      const msg = await buildCommunity(store, i.guild).catch((e) => `Something went wrong: ${e instanceof Error ? e.message : e}`);
+      await i.editReply(setupPanel(store, i.guild, owner, 'quotes'));
+      await i.followUp({ content: msg, flags: MessageFlags.Ephemeral });
+      return true;
+    }
     if (action === 'bulbuild') {
       await i.deferUpdate();
       const msg = await buildBoard(store, i.guild).catch((e) => `Something went wrong: ${e instanceof Error ? e.message : e}`);
@@ -572,6 +592,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     }
 
     if (action === 'f1look') store.setKv(`f1theme:${i.guild.id}`, store.getKv(`f1theme:${i.guild.id}`) === 'agency' ? 'mafia' : 'agency');
+    if (action === 'recap') store.setKv(`recap:${i.guild.id}`, store.getKv(`recap:${i.guild.id}`) === 'off' ? 'on' : 'off');
     if (action === 'p2help') setP2Helper(store, i.guild.id, !p2HelperOn(store, i.guild.id));
     if (action === 'mod') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], enabled: !store.rules(i.guild.id, arg).enabled };
     if (action === 'modch') g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], channels: values };

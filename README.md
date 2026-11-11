@@ -6,19 +6,18 @@ Everything is behind a few dashboards, so nobody has to remember commands. Type 
 
 ## The dashboards
 
-Each one is a single slash command and the same word typed after `tz`. Buttons open the quick things, a menu lists the rest, and anything that needs a person, a number or some text opens a small form, so there are no arguments to remember.
+Each one is a single slash command and the same word typed after `tz`, and every page has a Back button to its dashboard and one to all of them. The old names (`tz fun`, `tz mod` and so on) still open the new ones. Every ping and reminder lives on one page, `tz pings`, linked from the OwO, Pokétwo, Shoob, Sports and Anime dashboards. Buttons open the quick things, a menu lists the rest, and anything that needs a person, a number or some text opens a small form, so there are no arguments to remember.
 
 | Dashboard | What's in it |
 |---|---|
-| `/owo` | huntbot, gems, zoo, weapons and armoury, quests, the shop, reminders and quest buddies |
+| `/owo` | huntbot, gems, zoo, weapons and armoury, quests, the shop and quest buddies |
+| `/poketwo` | claim help and the helper switch, hint solving, the server Pokédex and the weekly catch race |
+| `/shoob` | tier 5 and 6 drop pings and your character wishlist |
 | `/anime` | what's on today (schedule, trending, the season, the weekly recap), search anime, manga and characters, your list, watch parties |
-| `/fun` | today's mission, F1 quiz, crest quiz, guess the anime, on this day, make it a quote, ship, polls, Pokédex, catch race, Shoob wishlist |
-| `/eco` | your wallet (daily, balance and the richest on one page), giving, the role shop and the games that pay |
-| `/levels` | rank card with perks and the leaderboard a click away, xp tools for admins |
-| `/info` | your profile card, achievements, your pings, birthdays, user dossiers with the avatar a click away, the server, afk |
-| `/sports` | the next Grand Prix, standings, last race, predictions, F1 trivia and today's football |
-| `/mod` | warn, timeout, kick, ban, purge, lock, slowmode and the case archive |
-| `/tools` | giveaways, role pickers, planned announcements, server activity and setup backups |
+| `/sports` | the next Grand Prix, standings, last race, today's football and predictions |
+| `/games` | F1 quiz, crest quiz, guess the anime, trivia, on this day, make it a quote, ship, polls and dice |
+| `/you` | your profile card and favourites, rank, wallet, achievements, today's mission, pings and reminders, birthdays, afk, confessions |
+| `/staff` | moderation and the case archive, giveaways, role pickers, announcements, xp tools and server activity, for admins and the staff role set in `/setup` |
 
 `/setup` is the admin front desk (members never see admin commands in help or the dashboards), `/ping` checks the bot, and right clicking a message gives **Make it a Quote**. When something fails because of a missing permission or a role sitting above texz, the message says exactly which one and how to fix it.
 
@@ -62,13 +61,17 @@ AniList allows 30 requests a minute right now, so texz paces itself and keeps an
 
 ## Pings
 
-`tz pings` is one panel for every ping texz can send you: the bulletin roles, rare and type spawn pings, Shoob rare drops, your anime episode alerts, OwO quest buddies, and mentions for your own club, F1 team and show (set in `tz profile edit`). When more than three people share a pick they get a role of their own, so one ping covers everyone.
+`tz pings` is one page for every ping and reminder texz can send you, your own reminders and OwO timers included: the bulletin roles, rare and type spawn pings, Shoob rare drops, your anime episode alerts, OwO quest buddies, and mentions for your own club, F1 team and show (set in `tz profile edit`). When more than three people share a pick they get a role of their own, so one ping covers everyone.
 
 ## Levels, yen and profiles
 
 Levels are off until an admin turns them on. Ranks go from Stray up to Living Legend of Yokohama, and each one has perks: more xp, a bigger daily and extra giveaway chances (the Perks button on `tz rank`). Everyone keeps only their highest rank role, and each rank role carries the permissions of the ones below it. `/setup` makes the rank roles in order, picks where level-ups go, and handles xp rules, boosts and reward roles. `tz rank` draws a rank card.
 
-Yen comes from `tz daily` (more for every day in a row), chatting a little, and the quizzes and guess game. `tz wallet` (your balance, daily and the richest), `tz give` and a role shop (`tz shop` on `/eco`) cover the rest. `tz profile` draws a profile card with your picks and colour.
+Yen comes from `tz daily` (more for every day in a row), chatting a little, and the quizzes and guess game. `tz wallet` (your balance, daily and the richest), `tz give` and a role shop (on `/you`) cover the rest. `tz profile` draws a profile card with your colour, your medals and a favourites strip: your F1 team's logo, your club's crest and your favourite anime and manga covers, each glowing in its own colour. Pick them in `tz profile edit`, the club from a list by league.
+
+## Community
+
+`/setup` → Community makes four channels under the bulletin category, in the same style: one for quotes, the **Agency Archive** for messages that get five ⭐, **the count** (one number each, a wrong one resets it, the record is kept) and **the confessional**, where `tz confess` or the pinned button posts anonymous numbered confessions (staff can look one up with `tz confess trace 12` if it breaks the rules). Every Monday the week's file goes to the archive: top chatters, top catchers, the busiest channel and the count.
 
 ## Missions and achievements
 

@@ -16,6 +16,7 @@ import { startServerTimers } from './modules/server.js';
 import { startDailyCharacter } from './modules/anime.js';
 import { sweepQuiz } from './modules/f1quiz.js';
 import { mergeShoobRoles, watchSpawns } from './modules/spawns.js';
+import { onCount, startRecap } from './modules/community.js';
 import { carryRankPerms, fixRankOrder, tidyRanks } from './modules/levels.js';
 import { warmModel } from './features/pokemodel.js';
 import { loadTypeIcons } from './features/typeicons.js';
@@ -79,6 +80,7 @@ client.once(Events.ClientReady, (c) => {
   void loadTypeIcons(client).catch((e) => report('type icons', e)).then(() => loadLogos(client)).catch((e) => report('team logos', e));
   startQuoteOfWeek(client, store);
   startHealth(client, store);
+  startRecap(client, store);
   sweepQuiz(async (id, payload) => {
     const ch = await client.channels.fetch(id).catch(() => null);
     if (ch?.isSendable()) await ch.send(payload as never);
@@ -111,6 +113,7 @@ client.on(Events.MessageCreate, (m) => {
   if (m.guildId) store.heard(m.guildId, m.author.id, m.channelId);
   onText(store, m);
   void afkWatch(store, m);
+  void onCount(store, m).catch(() => {});
 });
 
 watch(client, store);

@@ -27,6 +27,7 @@ import { countUse, report } from '../ops.js';
 import { quoteCommand } from '../modules/quote.js';
 import { onProfileEdit } from '../modules/profile.js';
 import { onAchPick } from '../modules/missions.js';
+import { community, onConfess } from '../modules/community.js';
 import { onShip } from '../modules/ship.js';
 import { onCatchCopy, onPingsButton, onSpawnButton, spawnsModule } from '../modules/spawns.js';
 import { fromComponent, fromSlash, fromText, withTokens, type Ctx } from './ctx.js';
@@ -37,7 +38,7 @@ import { isStaff } from './staff.js';
 import { fixText, setupButton, usualPerms } from './fixes.js';
 import { askModal, entriesOf, homePage, needsInput, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
 
-export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule];
+export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule, community];
 allModules.push(...modules);
 useModules(modules);
 
@@ -337,6 +338,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onOwnerConfirm(i)) return;
     if (await onProfileEdit(store, i)) return;
     if (await onAchPick(store, i)) return;
+    if (await onConfess(store, i)) return;
     if (await onShip(i)) return;
     if (await onBulletinButton(i, store)) return;
   } catch (e) {
