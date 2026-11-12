@@ -3,6 +3,7 @@ import { defaultRules, type Store } from '../db.js';
 import { allModules } from '../modules/core.js';
 import { report } from '../ops.js';
 import { dropAnimeRoles } from '../modules/bulletins.js';
+import { botAccess } from '../features/layout.js';
 
 // the home server keeps everything on, every other server starts with everything off until an admin switches things on
 export const isHome = (guild: Guild) => /nyx\s*elysium/i.test(guild.name);
@@ -67,6 +68,7 @@ export function settleAll(client: Client, store: Store) {
     for (const guild of client.guilds.cache.values()) {
       settleGuild(store, guild);
       void dropAnimeRoles(store, guild).catch((e) => report('anime roles', e));
+      void botAccess(store, guild).then((n) => n && console.log(`${guild.name}: bots can see ${n} more rooms`)).catch((e) => report('bot access', e));
     }
   } catch (e) {
     report('settle servers', e);

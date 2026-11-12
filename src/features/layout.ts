@@ -226,6 +226,30 @@ async function gateEverything(store: Store, guild: Guild, member: Role, skip: Se
   }
 }
 
+// bots wear only their own role and the Black Lizard Unit, and the unit sees every room members see
+export async function botAccess(store: Store, guild: Guild) {
+  const unit = store.getKv(`botrole:${guild.id}`);
+  const member = store.getKv(`verifyrole:${guild.id}`);
+  if (!unit || !guild.roles.cache.has(unit)) return 0;
+  let fixed = 0;
+  if (member) {
+    for (const c of guild.channels.cache.values()) {
+      if (c.isThread() || !('permissionOverwrites' in c)) continue;
+      const allow = c.permissionOverwrites.cache.get(member)?.allow.has('ViewChannel');
+      const has = c.permissionOverwrites.cache.get(unit)?.allow.has('ViewChannel');
+      if (allow && !has) { await c.permissionOverwrites.edit(unit, { ViewChannel: true }, { reason: 'bots see what members see' }).catch(() => {}); fixed++; }
+    }
+  }
+  // rank roles, the member role and any join role come off the bots, the unit goes on
+  const rewards = new Set(Object.values(store.guild(guild.id).levels.rewards ?? {}));
+  const all = await guild.members.fetch().catch(() => null);
+  for (const b of all?.filter((m) => m.user.bot && m.id !== guild.members.me?.id).values() ?? []) {
+    if (!b.roles.cache.has(unit)) await b.roles.add(unit, 'bots join the Black Lizard').catch(() => {});
+    for (const r of b.roles.cache.values()) if ((r.id === member || rewards.has(r.id)) && r.editable) await b.roles.remove(r, 'bots keep only their own role and the unit').catch(() => {});
+  }
+  return fixed;
+}
+
 export const entranceView = () => ({
   embeds: [card({ kind: 'bulletin', title: '🚪 The entrance exam', emoji: '', gif: 'off', line: '',
     body: 'Every member of the Agency passed this once. Atsushi nearly failed it, you\'ll be fine.\n\nRead the rules above, then press the button to walk in. The rest of the building opens up the moment you do.' })],
@@ -368,14 +392,13 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
   if (unit) {
     store.setKv(`botrole:${guild.id}`, unit.id);
     if (unit.editable && (!unit.hoist || unit.color !== 0x3a3a3a)) await unit.edit({ hoist: true, colors: { primaryColor: 0x3a3a3a }, reason: 'bot role' }).catch(() => {});
-    for (const b of (await guild.members.fetch().catch(() => null))?.filter((m) => m.user.bot).values() ?? []) if (!b.roles.cache.has(unit.id)) await b.roles.add(unit, 'bots join the Black Lizard').catch(() => {});
   }
 
   // everyone already here passes the exam automatically, bots too so they can still see their rooms
   let passed = 0;
   if (member) {
     const all = await guild.members.fetch().catch(() => null);
-    for (const m of all?.values() ?? []) if (!m.roles.cache.has(member.id)) { if (await m.roles.add(member, 'already a member when the exam started').then(() => true).catch(() => false)) passed++; }
+    for (const m of all?.values() ?? []) if (!m.user.bot && !m.roles.cache.has(member.id)) { if (await m.roles.add(member, 'already a member when the exam started').then(() => true).catch(() => false)) passed++; }
     // the categories: the front door is open to all, the rest to members
     const everyone = guild.roles.everyone;
     for (const cat of [board, bar, lounge]) {
@@ -391,6 +414,7 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
     const done = new Set([front.id, board.id, bar.id, lounge.id, logs.id, ...inside, ...voices.map((v) => v.id)]);
     await gateEverything(store, guild, member, done);
   }
+  await botAccess(store, guild);
   const old = await ex.ch.messages.fetch(store.getKv(`entrancemsg:${guild.id}`) ?? '0').catch(() => null);
   const sent = old ? await old.edit(entranceView()).catch(() => null) : await ex.ch.send(entranceView()).catch(() => null);
   if (sent) store.setKv(`entrancemsg:${guild.id}`, sent.id);

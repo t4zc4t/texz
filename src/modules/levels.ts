@@ -77,6 +77,7 @@ export function rolesToKeep(rewards: Record<string, string>, level: number, stac
 
 // gives the earned reward role and takes the lower ones away, the new one is added first so nobody is left rankless
 export async function syncRewards(member: GuildMember, l: LevelRules, level: number) {
+  if (member.user.bot) return;
   const keep = rolesToKeep(l.rewards, level, l.stack);
   const all = Object.values(l.rewards).filter((id) => member.guild.roles.cache.has(id));
   for (const id of all) if (keep.has(id) && !member.roles.cache.has(id)) await member.roles.add(id, `level ${level} reward`).catch(() => {});

@@ -34,14 +34,13 @@ export function welcomeCard(store: Store, m: GuildMember) {
 
 export async function onJoin(store: Store, m: GuildMember) {
   const w = store.guild(m.guild.id).welcome;
-  if (w.autorole) await m.roles.add(w.autorole, 'autorole').catch(() => {});
+  if (w.autorole && !m.user.bot) await m.roles.add(w.autorole, 'autorole').catch(() => {});
   // a bot added later joins the Black Lizard Unit
   const unit = store.getKv(`botrole:${m.guild.id}`);
   if (m.user.bot && unit && m.guild.roles.cache.has(unit)) await m.roles.add(unit, 'bots join the Black Lizard').catch(() => {});
   // with the entrance exam on, people are greeted when they pass it, and bots walk straight in
   const exam = store.getKv(`verifyrole:${m.guild.id}`);
   if (exam && m.guild.roles.cache.has(exam)) {
-    if (m.user.bot) await m.roles.add(exam, 'bots skip the entrance exam').catch(() => {});
     return;
   }
   return greet(store, m);
