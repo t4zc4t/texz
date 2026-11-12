@@ -125,8 +125,10 @@ function run(action: string): Command['run'] {
     const target = ctx.user('user');
     const member = target && ctx.guild ? await ctx.guild.members.fetch(target).catch(() => null) : null;
     if (target && ctx.guild && !member) return ctx.reply({ content: 'They\'re not in this server. The Agency only acts locally.', temp: true });
+    // in a DM or a group chat there's no member list, the user is enough
+    const loose = target && !ctx.guild ? await ctx.client.users.fetch(target).catch(() => null) : null;
     const me = ctx.member?.displayName ?? ctx.displayName;
-    const to = member ? { id: member.id, name: member.displayName, bot: member.user.bot } : null;
+    const to = member ? { id: member.id, name: member.displayName, bot: member.user.bot } : loose ? { id: loose.id, name: loose.displayName, bot: loose.bot } : null;
     const a = acts[action];
     if (!to && !a.solo) return ctx.reply({ content: `Who? Like this: \`tz ${action} @someone\``, temp: true });
     const out = await perform(store, ctx.guildId, action, { id: ctx.userId, name: me }, to, ctx.guild?.members.me?.id ?? '');
@@ -202,10 +204,12 @@ export async function onAct(store: Store, i: Interaction): Promise<boolean> {
   if (!store.rules(i.guildId, 'actions').enabled) { await i.reply({ content: '🚫 Interactions are switched off here.', flags: MessageFlags.Ephemeral }); return true; }
   const me = i.guild ? await i.guild.members.fetch(owner).catch(() => null) : null;
   const them = i.guild ? await i.guild.members.fetch(other).catch(() => null) : null;
+  const themUser = them?.user ?? await i.client.users.fetch(other).catch(() => null);
   // one reply per button, so the original keeps its gif and loses the button
   await i.update({ components: [] }).catch(() => {});
-  const out = await perform(store, i.guildId, action, { id: owner, name: me?.displayName ?? i.user.displayName }, them ? { id: them.id, name: them.displayName, bot: them.user.bot } : null, i.client.user.id);
-  if (i.channel?.isSendable()) await i.channel.send({ ...out, content: them ? `<@${them.id}>` : undefined, allowedMentions: { users: them ? [them.id] : [] } }).catch(() => {});
+  const out = await perform(store, i.guildId, action, { id: owner, name: me?.displayName ?? i.user.displayName }, themUser ? { id: themUser.id, name: them?.displayName ?? themUser.displayName, bot: themUser.bot } : null, i.client.user.id);
+  // a follow-up works everywhere, DMs and group chats included, where Texz can't post on its own
+  await i.followUp({ ...out, content: themUser ? `<@${themUser.id}>` : undefined, allowedMentions: { users: themUser ? [themUser.id] : [] } }).catch(() => {});
   return true;
 }
 

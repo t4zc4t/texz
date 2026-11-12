@@ -10,6 +10,7 @@ import { confessIntro, countIntro, rooms } from '../modules/community.js';
 import { pickerView } from '../modules/welcome.js';
 import { liftColours } from '../modules/mycolour.js';
 import { DESK } from '../modules/predict.js';
+import { HUB } from '../modules/booth.js';
 
 // the whole Texz corner of a server in one go: a front door, the bulletin board, the bar and the archives, each with the right locks
 
@@ -54,27 +55,27 @@ function only(me: GuildMember, p: Perms): Perms {
 const locks: Record<Mode, { everyone: Perms; staff?: Perms; me: Perms }> = {
   // people read and react, Texz posts
   read: {
-    everyone: { SendMessages: false, SendMessagesInThreads: false, CreatePublicThreads: false, CreatePrivateThreads: false, AddReactions: true, ReadMessageHistory: true },
+    everyone: { SendMessages: false, SendMessagesInThreads: false, CreatePublicThreads: false, CreatePrivateThreads: false, AddReactions: true, ReadMessageHistory: true, UseApplicationCommands: false, MentionEveryone: false, SendTTSMessages: false },
     me: { ViewChannel: true, SendMessages: true, EmbedLinks: true, AttachFiles: true, AddReactions: true, ReadMessageHistory: true, ManageMessages: true, MentionEveryone: true, UseExternalEmojis: true },
   },
   // people type, no threads, files, stickers or polls getting in the way
   chat: {
-    everyone: { SendMessages: true, ReadMessageHistory: true, AddReactions: false, CreatePublicThreads: false, CreatePrivateThreads: false, SendMessagesInThreads: false, AttachFiles: false, EmbedLinks: false, UseExternalStickers: false, SendVoiceMessages: false, SendPolls: false },
+    everyone: { SendMessages: true, ReadMessageHistory: true, AddReactions: false, CreatePublicThreads: false, CreatePrivateThreads: false, SendMessagesInThreads: false, AttachFiles: false, EmbedLinks: false, UseExternalStickers: false, SendVoiceMessages: false, SendPolls: false, UseApplicationCommands: false, MentionEveryone: false, SendTTSMessages: false },
     me: { ViewChannel: true, SendMessages: true, AddReactions: true, ReadMessageHistory: true, ManageMessages: true, EmbedLinks: true },
   },
   // a room for running commands: type and react, no threads or files
   bot: {
-    everyone: { SendMessages: true, ReadMessageHistory: true, AddReactions: true, UseApplicationCommands: true, CreatePublicThreads: false, CreatePrivateThreads: false, SendMessagesInThreads: false, AttachFiles: false, SendVoiceMessages: false, SendPolls: false },
+    everyone: { SendMessages: true, ReadMessageHistory: true, AddReactions: true, UseApplicationCommands: true, CreatePublicThreads: false, CreatePrivateThreads: false, SendMessagesInThreads: false, AttachFiles: false, SendVoiceMessages: false, SendPolls: false, MentionEveryone: false, SendTTSMessages: false },
     me: { ViewChannel: true, SendMessages: true, EmbedLinks: true, AttachFiles: true, AddReactions: true, ReadMessageHistory: true, ManageMessages: true, UseExternalEmojis: true },
   },
   // ordinary chat, everything a person normally does
   open: {
-    everyone: { SendMessages: true, ReadMessageHistory: true, AddReactions: true, AttachFiles: true, EmbedLinks: true, UseExternalEmojis: true, UseExternalStickers: true, CreatePublicThreads: true, SendMessagesInThreads: true },
+    everyone: { SendMessages: true, ReadMessageHistory: true, AddReactions: true, AttachFiles: true, EmbedLinks: true, UseExternalEmojis: true, UseExternalStickers: true, CreatePublicThreads: true, SendMessagesInThreads: true, MentionEveryone: false, SendTTSMessages: false },
     me: { ViewChannel: true, SendMessages: true, EmbedLinks: true, AttachFiles: true, AddReactions: true, ReadMessageHistory: true, ManageMessages: true, UseExternalEmojis: true },
   },
   // staff read, nobody else sees it
   private: {
-    everyone: { ViewChannel: false },
+    everyone: { ViewChannel: false, SendMessages: false },
     staff: { ViewChannel: true, ReadMessageHistory: true, SendMessages: false, AddReactions: true },
     me: { ViewChannel: true, SendMessages: true, EmbedLinks: true, AttachFiles: true, ReadMessageHistory: true },
   },
@@ -194,7 +195,7 @@ async function keptRole(store: Store, guild: Guild, key: string, name: string) {
 
 // the about-you menus in the roles room, each set kept by key
 export const INFO: { key: string; title: string; about: string; style: 'menu' | 'single'; roles: [string, string][] }[] = [
-  { key: 'pronouns', title: 'Pronouns', about: 'How people should refer to you. Pick any that fit.', style: 'menu', roles: [['he', 'He/Him'], ['she', 'She/Her'], ['they', 'They/Them'], ['any', 'Any pronouns'], ['ask', 'Ask my pronouns']] },
+  { key: 'pronouns', title: 'Pronouns', about: 'How people should refer to you. One at a time, picking another swaps it.', style: 'single', roles: [['he', 'He/Him'], ['she', 'She/Her'], ['they', 'They/Them'], ['any', 'Any pronouns'], ['ask', 'Ask my pronouns']] },
   { key: 'region', title: 'Which branch', about: 'Where in the world you are, so people know your time of day.', style: 'single', roles: [['asia', 'Asia Branch'], ['europe', 'Europe Branch'], ['namerica', 'North America Branch'], ['samerica', 'South America Branch'], ['africa', 'Africa Branch'], ['oceania', 'Oceania Branch']] },
   { key: 'dms', title: 'Direct line', about: 'Whether people can message you privately.', style: 'single', roles: [['open', 'Line Open'], ['ask', 'Knock First'], ['closed', 'Line Closed']] },
 ];
@@ -300,7 +301,10 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
     await voice(guild, store, lounge, 'night', '🌙 Late Night Shift'),
     await voice(guild, store, lounge, 'mission', '🎮 Mission Room', ['Gaming', 'gaming']),
     await voice(guild, store, lounge, 'watch', '🎬 Watch Party', ['Movies', 'movie-night']),
+    // join it and Texz builds you a private room of your own
+    await voice(guild, store, lounge, 'booth', HUB),
   ];
+  store.setKv(`boothhub:${guild.id}`, voices[voices.length - 1].id);
 
   // every Texz setting points at the new rooms
   const fresh = store.guild(guild.id);

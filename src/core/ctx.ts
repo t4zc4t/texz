@@ -73,6 +73,9 @@ export function fromSlash(i: ChatInputCommandInteraction, sub?: string | null): 
     role: (n) => i.options.getRole(n)?.id ?? null,
     reply: (r) => {
       const n = normalise(r);
+      // in DMs, group chats and servers without Texz the answer is for everyone there, unless it's marked private
+      const away = !i.guild && !(typeof r === 'object' && !(r instanceof EmbedBuilder) && r.private);
+      if (away) n.public = true;
       const payload = !n.public
         ? { content: n.content, embeds: n.embeds, components: n.components, files: n.files, flags: MessageFlags.Ephemeral as const, allowedMentions: { parse: [] } }
         : { content: n.content, embeds: n.embeds, components: n.components, files: n.files, allowedMentions: { parse: [], users: n.ping } };

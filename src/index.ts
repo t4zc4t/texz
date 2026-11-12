@@ -25,6 +25,7 @@ import { startBulletins } from './modules/bulletins.js';
 import { startDesk } from './modules/predict.js';
 import { onQuote, QUOTE_MENU, startQuoteOfWeek } from './modules/quote.js';
 import { settleAll, settleGuild } from './core/settle.js';
+import { cleanBooths, watchBooths } from './modules/booth.js';
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) throw new Error('DISCORD_TOKEN is missing, copy .env.example to .env and fill it in');
@@ -41,6 +42,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildVoiceStates,
   ],
   partials: [Partials.Channel, Partials.GuildMember, Partials.Message, Partials.Reaction, Partials.User],
 });
@@ -50,6 +52,7 @@ client.once(Events.ClientReady, (c) => {
   look.avatar = c.user.displayAvatarURL();
   // new servers start switched off, the home server keeps everything
   settleAll(c, store);
+  cleanBooths(c, store);
   // rank roles drift when people add or move roles, so they're put back in order on every start and once a day
   const reorder = () => {
     for (const guild of c.guilds.cache.values()) void mergeShoobRoles(guild, store).catch((e) => report('shoob roles', e));
@@ -107,6 +110,7 @@ client.once(Events.ClientReady, (c) => {
   setInterval(mood, 10 * 60_000);
 });
 
+watchBooths(client, store);
 client.on(Events.GuildCreate, (guild) => settleGuild(store, guild));
 
 client.on(Events.InteractionCreate, (i) => {

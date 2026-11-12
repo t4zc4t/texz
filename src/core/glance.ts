@@ -27,6 +27,7 @@ export const menu: Record<string, [string, string, string?]> = {
   confess: ['🕯️', 'Confess', 'Post something anonymously in the confessional'],
   act: ['🤗', 'Hug, pat, bonk...', '25 ways to bother someone, each with an anime gif'],
   'mycolour.view': ['🎨', 'Your own role'], 'mycolour.buy': ['🎨', 'Buy your own role'], 'mycolour.colour': ['🎨', 'Recolour it'], 'mycolour.name': ['🎨', 'Rename it'], 'mycolour.icon': ['🎨', 'Give it an icon'], 'mycolour.remove': ['🎨', 'Delete it'],
+  booth: ['🎙️', 'Private voice booth'],
   bonds: ['🫂', 'Closest people', 'Who you hug, pat and bonk the most here'],
   animehome: ['📺', 'What\'s on today', 'Airing today, your list and alerts at a glance'],
   server: ['🏛️', 'Server info'], afk: ['💤', 'Go afk'], ping: ['📡', 'Bot ping'], setup: ['🛠️', 'Setup desk', 'Features, channels, roles, welcome, logs, all with buttons'],
@@ -83,7 +84,7 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
     quick: ['daily', 'wallet', 'give', 'roleshop.view', 'rich'],
   },
   misc: {
-    sections: [['🔍 Look up', ['user', 'avatar', 'server']], ['⏰ You', ['remind', 'afk']], ['📡 The bot', ['ping']]],
+    sections: [['🔍 Look up', ['user', 'avatar', 'server']], ['⏰ You', ['remind', 'afk', 'booth']], ['📡 The bot', ['ping']]],
     quick: ['user', 'server', 'remind', 'afk'],
   },
   sports: {

@@ -68,7 +68,7 @@ const place: Record<string, [string, string?]> = {
   onthisday: ['fun', 'otd'], crestquiz: ['fun', 'crest'], quote: ['fun'], confess: ['fun'],
   profile: ['profile', 'card'], achievements: ['profile', 'medals'], rank: ['profile'], levels: ['profile', 'top'], perks: ['profile'], mission: ['profile'], birthday: ['profile', 'bday'], pings: ['profile'],
   daily: ['yen'], mycolour: ['yen', 'mycolour'], wallet: ['yen', 'bal'], give: ['yen'], rich: ['yen', 'top'], roleshop: ['yen', 'shop'],
-  user: ['misc'], avatar: ['misc', 'av'], server: ['misc'], afk: ['misc'], remind: ['misc'],
+  booth: ['misc'], user: ['misc'], avatar: ['misc', 'av'], server: ['misc'], afk: ['misc'], remind: ['misc'],
 };
 for (const mod of [owo, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, community, spawnsModule, actions]) for (const cmd of mod.commands) {
   const to = place[cmd.name];
@@ -167,6 +167,9 @@ function asMember(c: Command): Opt {
   } as Opt;
 }
 
+const TOP_ACTS = ['act', 'hug', 'pat', 'cuddle', 'kiss', 'slap', 'bonk', 'poke', 'highfive', 'bite', 'tickle'];
+for (const n of TOP_ACTS) { const h = byName.get(n); if (h) bySlash.set(n, h); }
+
 // commands people can also use after adding Texz to their own account, in any server or DM
 const anywhereTop = new Set(['help', 'ping']);
 const everywhere = { integration_types: [0, 1], contexts: [InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel] };
@@ -176,6 +179,8 @@ const visible = modules.flatMap((m) => m.commands.filter((c) => !c.hidden));
 export const definitions: Json[] = [
   quoteCommand as unknown as Json,
   ...visible.filter((c) => !c.group).map((c) => ({ ...c.data, ...(anywhereTop.has(c.name) ? everywhere : c.data.contexts ? {} : serverOnly) })),
+  // the favourite interactions get their own slash command too, so they work in DMs and group chats with Texz added to your account
+  ...TOP_ACTS.map((n) => byName.get(n)?.cmd).filter((c): c is Command => !!c).map((c) => ({ ...c.data, ...everywhere })),
   ...Object.entries(groups).map(([name, g]) => ({
     name,
     description: g.description,

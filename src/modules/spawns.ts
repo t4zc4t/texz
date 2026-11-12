@@ -1,3 +1,4 @@
+import { fileSighting } from './quote.js';
 import { track } from './missions.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, StringSelectMenuBuilder,
@@ -185,6 +186,9 @@ async function showNow(store: Store, m: Message, w: Waiting, name: string, guess
   }).catch(() => null);
   // legends, mythicals and ultra beasts get pinned so nobody scrolls past them, and unpinned once it's over
   if (w.sent && !w.unsure && rarityOf(base)) {
+    // and filed in the Agency files, caught or not
+    const spawn = await (ch as import('discord.js').TextChannel).messages.fetch(w.id).catch(() => null);
+    if (spawn) void fileSighting(store, spawn, 'A rare sighting', `A wild ${name} appeared. ${rareMark[rarityOf(base)!]}${regionOf(name) ? `, from ${regionOf(name)}` : ''}.`).catch(() => {});
     w.pinned = await w.sent.pin('Rare Pokétwo spawn').then(() => true).catch(() => false);
     const sent = w.sent;
     if (w.pinned) setTimeout(() => void sent.unpin('The spawn is long gone').catch(() => {}), 3600_000).unref?.();
@@ -328,6 +332,8 @@ async function onSpawn(store: Store, m: Message) {
   const character = (e?.title ?? '').replace(/[*_`]/g, '').trim();
   const wishers = character ? wishersOf(store, m.guild, character) : [];
   const role = s.tier && SHOOB_RARE.includes(s.tier) ? await shoobRole(m.guild, store) : null;
+  // tier 6 goes in the Agency files, claimed or not
+  if (s.tier === '6') void fileSighting(store, m, 'A tier 6 drop', `${character || 'A card'} dropped, tier 6. The rarest the server sees.`).catch(() => {});
   if (!role && !wishers.length) return;
   last.set(key, Date.now());
   const lines = [

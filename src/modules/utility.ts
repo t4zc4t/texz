@@ -1,3 +1,4 @@
+import { booth } from './booth.js';
 import {
   ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder,
   type Client, type Guild, type Interaction, type Message, type MessageActionRowComponentBuilder,
@@ -341,5 +342,5 @@ export const utility: Module = {
   name: 'utility',
   label: 'Utility and fun',
   about: 'Avatars, user and server info, polls, choose, dice, coin, 8ball and AFK',
-  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk, guess, f1Quiz, f1Trivia, f1Today, crestQuiz, quote, mission, achievements],
+  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk, guess, f1Quiz, f1Trivia, f1Today, crestQuiz, quote, mission, achievements, booth],
 };

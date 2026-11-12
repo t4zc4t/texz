@@ -70,6 +70,24 @@ export async function framed(store: Store, m: Message, by: string) {
   return { payload, copy, hall: ch?.isSendable() ? ch : null, author: m.author.id };
 }
 
+// a rare spawn framed like a quote and filed in the Agency files, caught or not
+export async function fileSighting(store: Store, spawn: Message, title: string, line: string) {
+  if (!spawn.guildId || store.getKv(`filed:${spawn.id}`)) return;
+  const chId = store.guild(spawn.guildId).starboard.channel;
+  const ch = chId ? await spawn.client.channels.fetch(chId).catch(() => null) : null;
+  if (!ch?.isSendable()) return;
+  store.setKv(`filed:${spawn.id}`, '1');
+  const media = mediaOf(spawn);
+  const avatar = await fetchAvatar(spawn.author.displayAvatarURL({ extension: 'png', forceStatic: true, size: 512 }));
+  const png = await quoteCard({
+    name: title, text: line, at: spawn.createdTimestamp, where: `#${'name' in spawn.channel ? spawn.channel.name : 'spawns'}`,
+    avatar, image: await grab(media.still),
+  });
+  const e = new EmbedBuilder().setColor(COLOR).setImage('attachment://sighting.png').setFooter({ text: 'filed by Texz' }).setTimestamp(spawn.createdTimestamp);
+  const jump = new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(spawn.url).setLabel('Jump to the spawn'));
+  await ch.send({ embeds: [e], files: [new AttachmentBuilder(png, { name: 'sighting.png' })], components: [jump], allowedMentions: { parse: [] } }).catch(() => {});
+}
+
 export async function onQuote(store: Store, i: MessageContextMenuCommandInteraction) {
   if (i.guildId && !store.rules(i.guildId, 'utility').enabled) return i.reply({ content: '🚫 Quotes are switched off here. An admin can turn them on in `/setup` → Features.', flags: MessageFlags.Ephemeral });
   await i.deferReply({ flags: MessageFlags.Ephemeral });

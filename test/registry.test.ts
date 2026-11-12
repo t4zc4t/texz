@@ -160,7 +160,7 @@ test('per reminder routes and auto delete', async () => {
 const store0 = () => new Store(':memory:');
 
 test('grouped commands keep the slash list short and work typed too', async () => {
-  assert.ok(definitions.length <= 20, `${definitions.length} top-level slash commands`);
+  assert.ok(definitions.length <= 30, `${definitions.length} top-level slash commands`);
   const owo = definitions.find((d) => d.name === 'owo')!;
   const view = (owo.options ?? []).find((o) => o.name === 'view') as { choices: { value: string }[] };
   const subs = view.choices.map((c) => c.value);
