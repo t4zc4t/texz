@@ -34,11 +34,11 @@ export const rankFor = (level: number) => [...ranks].reverse().find((r) => level
 
 // what each rank earns: a bit more xp, a bigger daily, extra giveaway chances, and a spot of its own in the member list
 export const perks: Record<string, { xp: number; yen: number; tickets: number; hoist: boolean }> = {
-  'Stray': { xp: 1, yen: 0, tickets: 1, hoist: false },
-  'Agency Visitor': { xp: 1, yen: 10, tickets: 1, hoist: false },
-  'Errand Runner': { xp: 1.05, yen: 20, tickets: 1, hoist: false },
-  'Junior Detective': { xp: 1.05, yen: 30, tickets: 1, hoist: false },
-  'Field Investigator': { xp: 1.1, yen: 40, tickets: 1, hoist: false },
+  'Stray': { xp: 1, yen: 0, tickets: 1, hoist: true },
+  'Agency Visitor': { xp: 1, yen: 10, tickets: 1, hoist: true },
+  'Errand Runner': { xp: 1.05, yen: 20, tickets: 1, hoist: true },
+  'Junior Detective': { xp: 1.05, yen: 30, tickets: 1, hoist: true },
+  'Field Investigator': { xp: 1.1, yen: 40, tickets: 1, hoist: true },
   'Senior Detective': { xp: 1.1, yen: 60, tickets: 1, hoist: true },
   'Ability User': { xp: 1.15, yen: 80, tickets: 2, hoist: true },
   'Agency Elite': { xp: 1.2, yen: 100, tickets: 2, hoist: true },
@@ -48,7 +48,7 @@ export const perks: Record<string, { xp: number; yen: number; tickets: number; h
 export const perksFor = (level: number) => perks[rankFor(level).name];
 export const perkLine = (name: string) => {
   const p = perks[name];
-  const bits = [p.xp > 1 && `+${Math.round((p.xp - 1) * 100)}% xp`, p.yen && `+¥${p.yen} daily`, p.tickets > 1 && `${p.tickets}x giveaway chance`, p.hoist && 'own spot in the member list'].filter(Boolean);
+  const bits = [p.xp > 1 && `+${Math.round((p.xp - 1) * 100)}% xp`, p.yen && `+¥${p.yen} daily`, p.tickets > 1 && `${p.tickets}x giveaway chance`].filter(Boolean);
   return bits.join(' · ') || 'nothing yet, everyone starts somewhere';
 };
 

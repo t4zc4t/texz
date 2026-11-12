@@ -354,9 +354,22 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
   await guild.channels.setPositions([...ours, ...rest, logs.id].map((id, n) => ({ channel: id, position: n }))).catch(() => {});
 
   await tidyRoles(store, guild);
+  // every rank shows as its own group in the member list
+  for (const id of Object.values(store.guild(guild.id).levels.rewards ?? {})) {
+    const r = typeof id === 'string' ? guild.roles.cache.get(id) : undefined;
+    if (r?.editable && !r.hoist) await r.setHoist(true, 'every rank gets its own spot in the member list').catch(() => {});
+  }
   const colours = await colourRoles(store, guild, me);
   const info = await infoRoles(store, guild);
   await rolePanels(store, guild, ro.ch, colours, info);
+
+  // the bots get a unit of their own, shown apart in the member list
+  const unit = await keptRole(store, guild, 'bots', 'Black Lizard Unit');
+  if (unit) {
+    store.setKv(`botrole:${guild.id}`, unit.id);
+    if (unit.editable && (!unit.hoist || unit.color !== 0x3a3a3a)) await unit.edit({ hoist: true, colors: { primaryColor: 0x3a3a3a }, reason: 'bot role' }).catch(() => {});
+    for (const b of (await guild.members.fetch().catch(() => null))?.filter((m) => m.user.bot).values() ?? []) if (!b.roles.cache.has(unit.id)) await b.roles.add(unit, 'bots join the Black Lizard').catch(() => {});
+  }
 
   // everyone already here passes the exam automatically, bots too so they can still see their rooms
   let passed = 0;

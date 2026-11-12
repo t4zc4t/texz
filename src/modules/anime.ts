@@ -1,4 +1,5 @@
 import { track } from './missions.js';
+import { movie } from './movies.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, StringSelectMenuBuilder,
   type MessageActionRowComponentBuilder,
@@ -406,7 +407,7 @@ export const anime: Module = {
   name: 'anime',
   label: 'Anime and manga',
   about: 'Search anime, manga and characters, seasons, trending picks, new-episode alerts and your own watch list',
-  commands: [home, lookup('ANIME'), lookup('MANGA'), character, airing, daily, season, watchparty, trend, random, alerts, watchlist],
+  commands: [home, lookup('ANIME'), lookup('MANGA'), character, airing, daily, season, watchparty, trend, random, alerts, watchlist, movie],
 };
 
 // ---------- buttons and menus ----------

@@ -29,6 +29,7 @@ import { onProfileEdit } from '../modules/profile.js';
 import { onAchPick } from '../modules/missions.js';
 import { community, onConfess } from '../modules/community.js';
 import { actions, onAct } from '../modules/actions.js';
+import { onMovie } from '../modules/movies.js';
 import { onShip } from '../modules/ship.js';
 import { onCatchCopy, onPingsButton, onSpawnButton, spawnsModule } from '../modules/spawns.js';
 import { fromComponent, fromSlash, fromText, withTokens, type Ctx } from './ctx.js';
@@ -50,7 +51,7 @@ const groups: Record<string, Group> = {
   owo: { label: 'Stray Dogs Den', emoji: '🐾', about: '', description: 'OwO: huntbot, gems, zoo, weapons, quests, timers and the shop', anywhere: true, old: [] },
   poketwo: { label: 'Pokédex Bureau', emoji: '🔴', about: '*Every creature on file, every catch accounted for.*\nClaim help, hints, the server Pokédex and the weekly race.', description: 'Pokétwo: claim help, hints, the Pokédex and the catch race', old: ['p2', 'pokétwo'], extra: ['pings'] },
   shoob: { label: 'Card Vault', emoji: '🃏', about: '*Some cards are worth waiting for.*\nRare drop pings and a wishlist for the characters you want.', description: 'Shoob: rare drop pings and your character wishlist', old: [], extra: ['spawns', 'pings'] },
-  anime: { label: 'Literary Annex', emoji: '📚', about: '', description: 'Anime and manga: what\'s airing, search, your list, watch parties', anywhere: true, old: ['annex'], extra: ['animehome'] },
+  anime: { label: 'Literary Annex', emoji: '📚', about: '', description: 'Anime, manga and movies: what\'s airing, search, your list, movie night, watch parties', anywhere: true, old: ['annex'], extra: ['animehome'] },
   sports: { label: 'Paddock & Pitch', emoji: '🏁', about: '*Odds, engines and ninety minutes of chaos.*\nFormula 1, football from the big leagues, and predictions that pay.', description: 'F1, football, international games and predictions', anywhere: true, old: ['sport'], extra: ['pings'] },
   fun: { label: 'Bar Lupin', emoji: '🥃', about: '*Three glasses on the counter. Pull up a stool.*\nQuizzes that pay yen, games for the channel, confessions and dice.', description: 'Quizzes, guess the anime, ship, polls, quotes, confessions, dice', anywhere: true, old: ['games', 'game'] },
   profile: { label: 'Personnel File', emoji: '🪪', about: '*Everything the Agency knows about you. Mostly flattering.*\nYour card, favourites, rank, medals, closest people, birthday and every ping you get.', description: 'Your profile card, favourites, rank, medals, bonds, birthday and pings', anywhere: true, old: ['you', 'me', 'file'] },
@@ -61,7 +62,7 @@ const groups: Record<string, Group> = {
 // where each command sits and the short name it goes by inside its dashboard, "/admin view:mute" or "tz admin mute"
 const place: Record<string, [string, string?]> = {
   warn: ['admin'], case: ['admin'], timeout: ['admin', 'mute'], kick: ['admin'], ban: ['admin'], unban: ['admin'], purge: ['admin'], lock: ['admin'], slowmode: ['admin', 'slow'],
-  act: ['fun'], bonds: ['profile'],
+  act: ['fun'], bonds: ['profile'], movie: ['anime'],
   rolepicker: ['admin', 'roles'], xp: ['admin'], giveaway: ['admin', 'gaw'], announce: ['admin', 'post'], serverstats: ['admin', 'stats'], backup: ['admin'],
   reminders: ['owo', 'timers'],
   poll: ['fun'], choose: ['fun', 'pick'], roll: ['fun'], coin: ['fun', 'flip'], ship: ['fun'], '8ball': ['fun'], guess: ['fun'], quiz: ['fun'], trivia: ['fun'],
@@ -70,7 +71,7 @@ const place: Record<string, [string, string?]> = {
   daily: ['yen'], mycolour: ['yen', 'mycolour'], wallet: ['yen', 'bal'], give: ['yen'], rich: ['yen', 'top'], roleshop: ['yen', 'shop'],
   booth: ['misc'], user: ['misc'], avatar: ['misc', 'av'], server: ['misc'], afk: ['misc'], remind: ['misc'],
 };
-for (const mod of [owo, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, community, spawnsModule, actions]) for (const cmd of mod.commands) {
+for (const mod of [owo, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, community, spawnsModule, actions, anime]) for (const cmd of mod.commands) {
   const to = place[cmd.name];
   if (!to) continue;
   cmd.group = to[0];
@@ -390,6 +391,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onConfess(store, i)) return;
     if (await onShip(i)) return;
     if (await onAct(store, i)) return;
+    if (await onMovie(store, i)) return;
     if (await onBulletinButton(i, store)) return;
   } catch (e) {
     report('component', e);
