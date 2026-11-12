@@ -43,6 +43,10 @@ function rulesText(store: Store, guildId: string) {
 import { examples, argsOf } from '../core/examples.js';
 import { entriesOf } from '../core/dashboards.js';
 
+// set by the registry: opens a group's command list at the page with this command on it
+let openGroup: ((ctx: Ctx, store: Store, group: string, focus: string) => Promise<unknown>) | null = null;
+export const setGroupOpener = (f: typeof openGroup) => { openGroup = f; };
+
 const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '🎖️', utility: '🧰', anime: '📺', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴', bulletins: '🗞️', spawns: '🎯' };
 
 // who may see a command in help: staff things only for admins and the staff role
@@ -104,6 +108,11 @@ const help: Command = {
         return ctx.reply({ embeds: [card({ kind: 'missing', title: `Nothing on "${want}"`, emoji: '🔍', gif: 'off', body: `${near ? `Did you mean \`${prefix} help ${near}\`?\n` : ''}Try other words, like \`${prefix} help money\` or \`${prefix} help ping me\`, or open a dashboard below.` })], components: [dashMenu] });
       }
       const { m, c } = pick;
+      // a command that lives in a group shows up on that group's list, marked, with the ones around it
+      if (openGroup && c.group && c.group !== 'admin' && dashList.some((d) => d.name === c.group)) {
+        const focus = c.hidden ? m.commands.find((x) => !x.hidden && x.group === c.group)?.name ?? c.name : c.name;
+        return openGroup(ctx, store, c.group, focus);
+      }
       const ex = examples(c, prefix);
       const others = found.filter((x) => x.id !== c.name).map((x) => all.find(({ c: o }) => o.name === x.id)!).filter(Boolean).slice(0, 5);
       const rows = [];
@@ -140,11 +149,11 @@ const help: Command = {
     return ctx.reply({ embeds: [card({
       kind: 'help', title: 'The Agency directory', emoji: '', gif,
       body: [
-        '*Ten doors, one building. Each one has buttons for what works with a click, and examples for what you type.*',
+        '*Ten doors, one building. Open one to see its commands, typed or slash, with what goes after each.*',
         '',
         ...dashes.map((d) => `${d.emoji} **${d.label}** · \`${prefix} ${d.name}\`\n-# ${blurb[d.name] ?? ''}`),
         '',
-        `Lost? Ask in plain words: \`${prefix} help money\` · \`${prefix} help hug\``,
+        `Looking for one thing? \`${prefix} help hug\` opens the right page with it marked. Plain words work too: \`${prefix} help money\``,
       ].join('\n'),
     })], components: rows });
   },

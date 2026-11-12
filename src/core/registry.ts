@@ -5,7 +5,7 @@ import {
 import { armouryPage, parseArmId, filters, sorts, type Filter, type Sort } from '../features/armoury-pages.js';
 import { apply, modalFor, panel, parseRp } from '../features/panel.js';
 import type { Store } from '../db.js';
-import { core, allModules, dashList } from '../modules/core.js';
+import { core, allModules, dashList, setGroupOpener } from '../modules/core.js';
 import { owo } from '../modules/owo.js';
 import { anime, onAnimeComponent, onGuess } from '../modules/anime.js';
 import { onF1Quiz } from '../modules/f1quiz.js';
@@ -37,7 +37,7 @@ import { glance, layout } from './glance.js';
 import { closest } from './fuzzy.js';
 import { isStaff } from './staff.js';
 import { fixText, setupButton, usualPerms } from './fixes.js';
-import { askModal, entriesOf, homePage, needsInput, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
+import { askModal, entriesOf, homePage, needsInput, refPage, refPageOf, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
 
 export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule, community, actions];
 allModules.push(...modules);
@@ -47,10 +47,10 @@ useModules(modules);
 type Group = GroupInfo & { description: string; perms?: bigint; anywhere?: boolean; dashboard?: string; staff?: boolean; old: string[] };
 const groups: Record<string, Group> = {
   admin: { label: 'Port Mafia HQ', emoji: '🖤', about: '*The executives\' floor. Discipline, rewards and the building itself.*\nAdmins and the staff role only.', description: 'Admins only: moderation, giveaways, role pickers, posts, xp and setup', staff: true, perms: PermissionFlagsBits.ManageMessages, old: ['staff', 'mod', 'tools', 'hq', 'mafia'], extra: ['setup'] },
-  owo: { label: 'Stray Dogs Den', emoji: '🐾', about: '', description: 'OwO: huntbot, gems, zoo, weapons, quests, timers and the shop', anywhere: true, dashboard: 'status', old: [] },
+  owo: { label: 'Stray Dogs Den', emoji: '🐾', about: '', description: 'OwO: huntbot, gems, zoo, weapons, quests, timers and the shop', anywhere: true, old: [] },
   poketwo: { label: 'Pokédex Bureau', emoji: '🔴', about: '*Every creature on file, every catch accounted for.*\nClaim help, hints, the server Pokédex and the weekly race.', description: 'Pokétwo: claim help, hints, the Pokédex and the catch race', old: ['p2', 'pokétwo'], extra: ['pings'] },
   shoob: { label: 'Card Vault', emoji: '🃏', about: '*Some cards are worth waiting for.*\nRare drop pings and a wishlist for the characters you want.', description: 'Shoob: rare drop pings and your character wishlist', old: [], extra: ['spawns', 'pings'] },
-  anime: { label: 'Literary Annex', emoji: '📚', about: '', description: 'Anime and manga: what\'s airing, search, your list, watch parties', anywhere: true, dashboard: 'animehome', old: ['annex'] },
+  anime: { label: 'Literary Annex', emoji: '📚', about: '', description: 'Anime and manga: what\'s airing, search, your list, watch parties', anywhere: true, old: ['annex'], extra: ['animehome'] },
   sports: { label: 'Paddock & Pitch', emoji: '🏁', about: '*Odds, engines and ninety minutes of chaos.*\nFormula 1, football from the big leagues, and predictions that pay.', description: 'F1, football and predictions', anywhere: true, old: ['sport'], extra: ['pings'] },
   fun: { label: 'Bar Lupin', emoji: '🥃', about: '*Three glasses on the counter. Pull up a stool.*\nQuizzes that pay yen, games for the channel, confessions and dice.', description: 'Quizzes, guess the anime, ship, polls, quotes, confessions, dice', anywhere: true, old: ['games', 'game'] },
   profile: { label: 'Personnel File', emoji: '🪪', about: '*Everything the Agency knows about you. Mostly flattering.*\nYour card, favourites, rank, medals, birthday and every ping you get.', description: 'Your profile card, favourites, rank, medals, birthday and pings', anywhere: true, old: ['you', 'me', 'file'] },
@@ -127,12 +127,30 @@ for (const [name, g] of Object.entries(groups)) {
       const all = groupEntries(name);
       const on = (h: Hit) => h.mod.locked || store.rules(ctx.guildId, h.mod.name).enabled;
       const off = [...new Set(all.filter(({ hit }) => !on(hit)).map(({ hit }) => hit.mod.label))];
-      return ctx.reply(homePage(ctx, g.dashboard!, g, all.filter(({ hit }) => on(hit)).map(({ e }) => e), { layout: layout[name], glance: all.some(({ hit }) => on(hit)) ? glance(name, ctx, store) : null, off, prefix: ctx.guildId ? store.guild(ctx.guildId).prefix : 'tz' }));
+      // in the order the group's sections give, so related commands sit together
+      const order = (layout[name]?.sections ?? []).flatMap(([, keys]) => keys);
+      const rank = (e: Entry) => { const i = order.findIndex((k) => k === e.key || k.split(/[.~]/)[0] === e.cmd.name); return i < 0 ? order.length : i; };
+      const live = all.filter(({ hit }) => on(hit)).map(({ e }) => e).sort((a, b) => rank(a) - rank(b));
+      const prefix = ctx.guildId ? store.guild(ctx.guildId).prefix : 'tz';
+      const look = all.some(({ hit }) => on(hit)) ? glance(name, ctx, store) : null;
+      // the admin floor stays a dashboard with buttons, every other group is a list of commands to type
+      if (name === 'admin') return ctx.reply(homePage(ctx, g.dashboard!, g, live, { layout: layout[name], glance: look, off, prefix }));
+      const focus = ctx.str('focus') ?? undefined;
+      const page = ctx.int('page') ?? (focus ? refPageOf(live, name, prefix, focus) : 0);
+      return ctx.reply(refPage(ctx, g.dashboard!, g, live, { group: name, prefix, page, focus, glance: page === 0 ? look : null, off }));
     },
   };
   core.commands.push(cmd);
   byName.set(cmd.name, { mod: core, cmd });
 }
+
+// help for one command opens its group's list at the right page
+setGroupOpener((ctx, store, group, focus) => {
+  const hit = byName.get(groups[group].dashboard!);
+  if (!hit) return Promise.resolve();
+  const at: Ctx = { ...ctx, str: (n) => (n === 'focus' ? focus : n === 'page' ? null : ctx.str(n)), int: (n) => (n === 'page' ? null : ctx.int(n)) };
+  return hit.cmd.run(at, store);
+});
 
 type Json = RESTPostAPIChatInputApplicationCommandsJSONBody;
 type Opt = NonNullable<Json['options']>[number];

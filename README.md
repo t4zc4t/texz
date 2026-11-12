@@ -6,7 +6,7 @@ Everything is behind a few dashboards, so nobody has to remember commands. Type 
 
 ## The dashboards
 
-Ten dashboards, each a single slash command and the same word typed after `tz`. Each one is split in two: things that work with a click sit on buttons and a menu, and things you type (like `tz hug @someone` or `tz afk eating`) are listed with an example and what each part means, plus a How do I use menu that opens the full page for one of them. Every page has a Back button, and old names (`tz games`, `tz you`, `tz staff`, `tz mod`) still open the new ones. Everything also has a short form: `tz owo hb`, `tz fun crest`, `tz yen bal`, `tz admin mute`.
+Ten dashboards, each a single slash command and the same word typed after `tz`. Each one is a short list of its commands, a few per page: the typed form, the slash form and what goes after it, with `?` on the parts you can leave out. `tz help hug` or `/help feature:hug` opens the page that has it, marked. Port Mafia HQ stays a real dashboard with buttons, since it's where admins change things, and so do `/setup` and the pings and reminders panel. Old names (`tz games`, `tz you`, `tz staff`, `tz mod`) still open the new ones.
 
 | Dashboard | Command | What's in it |
 |---|---|---|

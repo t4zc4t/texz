@@ -163,13 +163,80 @@ export function homePage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry
       click.slice(n, n + 25).map((e) => ({ label: short(e.label, 100), value: e.key, description: short(e.about, 100) })),
     )));
   }
-  // the typed ones each have a page with every detail and a form for people who'd rather not type
-  if (typed.length) rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|help|as=feature,owner=${ctx.userId}`).setPlaceholder('How do I use...').addOptions(
-    [...new Map(typed.map((e) => [e.cmd.name, e])).values()].slice(0, 25).map((e) => ({ label: short(`${prefix} ${e.cmd.call ?? e.cmd.name}`, 100), value: e.cmd.name, description: short(e.cmd.data.description, 100) })),
-  )));
   if (!show.length) notes.push('Nothing to open here yet.');
   return {
     embeds: [card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: `${notes.join('\n')}${typed.length ? '\n-# ? means you can leave it out' : ''}`, fields })],
     components: rows,
+  };
+}
+
+// the command list of a group, the way people use it: the typed command, the slash one, and what goes after
+interface RefItem { key: string; name: string; text: string }
+function refItems(entries: Entry[], group: string, prefix: string): RefItem[] {
+  const seen = new Set<string>();
+  const out: RefItem[] = [];
+  const cap = (x: string) => x.replace(/^./, (c) => c.toUpperCase());
+  for (const e of entries) {
+    // a command with a few fixed choices, like on this day f1, football or anime, is one line
+    if (e.fixed) {
+      if (seen.has(e.cmd.name)) continue;
+      seen.add(e.cmd.name);
+      const word = e.cmd.call ?? e.cmd.name;
+      const vals = entries.filter((x) => x.cmd.name === e.cmd.name && x.fixed).map((x) => Object.values(x.fixed!)[0]);
+      const label = menu[e.cmd.name]?.[1] ?? cap(e.cmd.as ?? e.cmd.name);
+      out.push({ key: e.key, name: e.cmd.name, text: `**${label}**\n\`${prefix} ${word} ${vals[0]}\`${e.cmd.hidden ? '' : ` · \`/${group} view:${e.cmd.as ?? e.cmd.name} input:${vals[0]}\``}\n-# ${vals.join(', ')}` });
+      continue;
+    }
+    if (e.cmd.hint) {
+      if (seen.has(e.cmd.name)) continue;
+      seen.add(e.cmd.name);
+      out.push({ key: e.key, name: e.cmd.name, text: `**${e.label}**\n${e.cmd.hint.replaceAll('{p}', prefix)}` });
+      continue;
+    }
+    const all = examples(e.cmd, prefix);
+    const ex = (e.sub ? all.find((x) => x.label === e.sub) : all[0]) ?? all[0];
+    const word = e.cmd.call ?? e.cmd.name;
+    const typed = ex?.typed ?? `${prefix} ${word}`;
+    const slash = e.cmd.hidden ? null : ex?.slash ?? `/${group} view:${e.cmd.as ?? e.cmd.name}`;
+    const args = argsOf(e.cmd, e.sub);
+    const what = args.length ? args.slice(0, 3).map((a) => `${a.shown}${a.required ? '' : '?'} ${a.about.toLowerCase()}`).join(' · ') : e.about.toLowerCase() === e.label.toLowerCase() ? '' : e.about;
+    out.push({ key: e.key, name: e.cmd.name, text: `**${cap(e.label)}**\n\`${typed}\`${slash ? ` · \`${slash}\`` : ''}${what ? `\n-# ${what}` : ''}` });
+  }
+  return out;
+}
+
+// pages by length, so a page never gets long enough to scroll past
+function paginate(items: RefItem[], max = 1000) {
+  const pages: RefItem[][] = [[]];
+  let len = 0;
+  for (const it of items) {
+    if (len + it.text.length > max && pages[pages.length - 1].length) { pages.push([]); len = 0; }
+    pages[pages.length - 1].push(it);
+    len += it.text.length + 2;
+  }
+  return pages;
+}
+
+export function refPageOf(entries: Entry[], group: string, prefix: string, name: string) {
+  const pages = paginate(refItems(entries, group, prefix));
+  return Math.max(0, pages.findIndex((p) => p.some((x) => x.name === name)));
+}
+
+// the reference page of a group: every command with both ways to run it, a few per page
+export function refPage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry[], o: { group: string; prefix: string; page?: number; focus?: string; glance?: string | null; off?: string[] }) {
+  const pages = paginate(refItems(entries.filter((e) => !e.cmd.admin || ctx.isAdmin), o.group, o.prefix));
+  const n = Math.min(Math.max(0, o.page ?? 0), pages.length - 1);
+  const list = pages[n].map((x) => (x.name === o.focus ? `▸ ${x.text}` : x.text)).join('\n\n');
+  const head = n === 0 ? [o.glance, info.about, o.off?.length ? `-# ${o.off.join(', ')} ${o.off.length === 1 ? 'is' : 'are'} switched off here${ctx.isAdmin ? ', turn it on in \`/setup\` → Features' : ''}.` : null].filter(Boolean).join('\n') : null;
+  const owner = `owner=${ctx.userId}`;
+  const nav = row(
+    new ButtonBuilder().setCustomId(`nav|${home}|${owner},page=${n - 1}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(n === 0),
+    new ButtonBuilder().setCustomId(`nav|${home}|${owner},page=${n},x=1`).setLabel(`${n + 1} / ${pages.length}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
+    new ButtonBuilder().setCustomId(`nav|${home}|${owner},page=${n + 1}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(n >= pages.length - 1),
+    new ButtonBuilder().setCustomId(`nav|help|${owner}`).setLabel('Home').setStyle(ButtonStyle.Primary),
+  );
+  return {
+    embeds: [card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: `${head ? `${head}\n\n` : ''}${list || 'Nothing here yet.'}\n\n-# ? means you can leave it out · slash replies only show to you` })],
+    components: [nav],
   };
 }

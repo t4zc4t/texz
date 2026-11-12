@@ -237,7 +237,9 @@ const alerts: Command = {
 const home: Command = {
   name: 'animehome',
   hidden: true,
-  data: new SlashCommandBuilder().setName('animehome').setDescription('Anime dashboard').toJSON(),
+  call: 'whatson',
+  data: new SlashCommandBuilder().setName('animehome').setDescription('What\'s airing today, your list and alerts at a glance').toJSON(),
+  text: { aliases: ['whatson', 'onair'] },
   run: async (ctx, store) => {
     const tz = store.settings(ctx.userId).timezone;
     const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(new Date()).map((x) => [x.type, x.value]));
