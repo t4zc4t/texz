@@ -1,6 +1,6 @@
 // football scores from ESPN's public scoreboard, no key needed, polled gently
 import { clubEmoji } from '../features/logos.js';
-export const leagues: Record<string, { name: string; all: boolean }> = {
+export const leagues: Record<string, { name: string; all: boolean; intl?: boolean }> = {
   'eng.1': { name: 'Premier League', all: false },
   'esp.1': { name: 'LaLiga', all: false },
   'ita.1': { name: 'Serie A', all: false },
@@ -27,8 +27,18 @@ export const leagues: Record<string, { name: string; all: boolean }> = {
   'concacaf.champions': { name: 'CONCACAF Champions Cup', all: false },
   'conmebol.libertadores': { name: 'Libertadores', all: false },
   'fifa.cwc': { name: 'Club World Cup', all: true },
-  'uefa.nations': { name: 'Nations League', all: false },
-  'fifa.friendly': { name: 'Friendlies', all: false },
+  // international breaks: national teams, the big ones and the server's own get posted
+  'uefa.nations': { name: 'Nations League', all: false, intl: true },
+  'fifa.friendly': { name: 'Friendlies', all: false, intl: true },
+  'concacaf.nations.league': { name: 'CONCACAF Nations League', all: false, intl: true },
+  'fifa.worldq.uefa': { name: 'World Cup qualifiers', all: false, intl: true },
+  'fifa.worldq.conmebol': { name: 'World Cup qualifiers', all: false, intl: true },
+  'fifa.worldq.afc': { name: 'World Cup qualifiers', all: false, intl: true },
+  'fifa.worldq.caf': { name: 'World Cup qualifiers', all: false, intl: true },
+  'fifa.worldq.concacaf': { name: 'World Cup qualifiers', all: false, intl: true },
+  'conmebol.america': { name: 'Copa América', all: true, intl: true },
+  'afc.asian.cup': { name: 'Asian Cup', all: true, intl: true },
+  'caf.nations': { name: 'Africa Cup of Nations', all: true, intl: true },
 };
 
 // the clubs whose matches are always worth a mention
@@ -80,11 +90,16 @@ const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 export const isFav = (m: Match, favs: string[]) => favs.some((f) => [m.home.name, m.away.name].some((n) => norm(n).includes(norm(f))));
 const isBigClub = (name: string) => bigClubs.some((b) => norm(b) === norm(name));
 
+// the national teams whose games are worth a post during an international break
+export const bigNations = ['Argentina', 'Brazil', 'France', 'England', 'Spain', 'Germany', 'Portugal', 'Netherlands', 'Italy', 'Belgium', 'Croatia', 'Uruguay', 'Colombia', 'Morocco', 'Japan', 'United States', 'Mexico', 'India'];
+const isBigNation = (name: string) => bigNations.some((b) => norm(b) === norm(name));
+
 // worth posting: a favourite plays, a tournament game, or two big clubs, or a big club in Europe
 export function interesting(m: Match, favs: string[], big: boolean) {
   if (isFav(m, favs)) return true;
   if (!big) return false;
   if (leagues[m.league]?.all) return true;
+  if (leagues[m.league]?.intl) return [m.home.name, m.away.name].some(isBigNation);
   const bigs = [m.home.name, m.away.name].filter(isBigClub).length;
   return bigs === 2 || (bigs === 1 && m.league.startsWith('uefa.'));
 }

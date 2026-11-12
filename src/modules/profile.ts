@@ -10,6 +10,7 @@ import { card } from '../theme.js';
 import { fetchAvatar, profileCard, type Fav } from '../features/rankcard.js';
 import { levelOf, rankFor } from './levels.js';
 import { toldHere, fmtDate } from './birthdays.js';
+import { bondsOf } from './actions.js';
 import { currentSeason, searchMedia, titleOf, topMedia, type Media } from '../anime/anilist.js';
 
 // the lists to pick a favourite anime or manga from
@@ -287,6 +288,8 @@ export const profile: Command = {
     const id = who ?? ctx.userId;
     const m = ctx.guild ? await ctx.guild.members.fetch(id).catch(() => null) : null;
     const png = await drawProfile(store, id, ctx.guildId, m);
-    return ctx.reply({ files: [new AttachmentBuilder(png, { name: 'profile.png' })] });
+    // the three people they trade the most hugs and bonks with, as a line under the picture
+    const close = ctx.guildId ? bondsOf(store, ctx.guildId, id).slice(0, 3) : [];
+    return ctx.reply({ content: close.length ? `-# Closest here: ${close.map((b) => `<@${b.id}> (${b.n})`).join(' · ')} · \`tz bonds\`` : undefined, files: [new AttachmentBuilder(png, { name: 'profile.png' })] });
   },
 };

@@ -61,13 +61,13 @@ const groups: Record<string, Group> = {
 // where each command sits and the short name it goes by inside its dashboard, "/admin view:mute" or "tz admin mute"
 const place: Record<string, [string, string?]> = {
   warn: ['admin'], case: ['admin'], timeout: ['admin', 'mute'], kick: ['admin'], ban: ['admin'], unban: ['admin'], purge: ['admin'], lock: ['admin'], slowmode: ['admin', 'slow'],
-  act: ['fun'],
+  act: ['fun'], bonds: ['profile'],
   rolepicker: ['admin', 'roles'], xp: ['admin'], giveaway: ['admin', 'gaw'], announce: ['admin', 'post'], serverstats: ['admin', 'stats'], backup: ['admin'],
   reminders: ['owo', 'timers'],
   poll: ['fun'], choose: ['fun', 'pick'], roll: ['fun'], coin: ['fun', 'flip'], ship: ['fun'], '8ball': ['fun'], guess: ['fun'], quiz: ['fun'], trivia: ['fun'],
   onthisday: ['fun', 'otd'], crestquiz: ['fun', 'crest'], quote: ['fun'], confess: ['fun'],
   profile: ['profile', 'card'], achievements: ['profile', 'medals'], rank: ['profile'], levels: ['profile', 'top'], perks: ['profile'], mission: ['profile'], birthday: ['profile', 'bday'], pings: ['profile'],
-  daily: ['yen'], wallet: ['yen', 'bal'], give: ['yen'], rich: ['yen', 'top'], roleshop: ['yen', 'shop'],
+  daily: ['yen'], mycolour: ['yen', 'mycolour'], wallet: ['yen', 'bal'], give: ['yen'], rich: ['yen', 'top'], roleshop: ['yen', 'shop'],
   user: ['misc'], avatar: ['misc', 'av'], server: ['misc'], afk: ['misc'], remind: ['misc'],
 };
 for (const mod of [owo, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, community, spawnsModule, actions]) for (const cmd of mod.commands) {

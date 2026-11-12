@@ -26,6 +26,8 @@ export const menu: Record<string, [string, string, string?]> = {
   achievements: ['🎖️', 'Achievements', 'Every medal, and which ones show on your profile'],
   confess: ['🕯️', 'Confess', 'Post something anonymously in the confessional'],
   act: ['🤗', 'Hug, pat, bonk...', '25 ways to bother someone, each with an anime gif'],
+  'mycolour.view': ['🎨', 'Your own role'], 'mycolour.buy': ['🎨', 'Buy your own role'], 'mycolour.colour': ['🎨', 'Recolour it'], 'mycolour.name': ['🎨', 'Rename it'], 'mycolour.icon': ['🎨', 'Give it an icon'], 'mycolour.remove': ['🎨', 'Delete it'],
+  bonds: ['🫂', 'Closest people', 'Who you hug, pat and bonk the most here'],
   animehome: ['📺', 'What\'s on today', 'Airing today, your list and alerts at a glance'],
   server: ['🏛️', 'Server info'], afk: ['💤', 'Go afk'], ping: ['📡', 'Bot ping'], setup: ['🛠️', 'Setup desk', 'Features, channels, roles, welcome, logs, all with buttons'],
   'birthday.set': ['🎂', 'Set my birthday'], 'birthday.remove': ['🗑️', 'Forget my birthday'], 'birthday.list': ['📆', 'Upcoming birthdays'], 'birthday.check': ['🔍', 'Someone\'s birthday'],
@@ -71,12 +73,13 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
     sections: [
       ['🪪 Your file', ['profile.view', 'profile.edit', 'achievements', 'mission']],
       ['🎖️ Rank', ['rank', 'levels', 'perks']],
+      ['🫂 Bonds', ['bonds']],
       ['🔔 Pings and birthdays', ['pings', 'birthday.set', 'birthday.list', 'birthday.check']],
     ],
     quick: ['profile.view', 'profile.edit', 'rank', 'achievements', 'pings'],
   },
   yen: {
-    sections: [['💴 Your money', ['daily', 'wallet', 'give']], ['🛍️ Spend it', ['roleshop.view', 'roleshop.buy']], ['🏆 Rich list', ['rich']], ['🔧 Shop keeping', ['roleshop.add', 'roleshop.remove']]],
+    sections: [['💴 Your money', ['daily', 'wallet', 'give']], ['🛍️ Spend it', ['mycolour.view', 'mycolour.buy', 'mycolour.colour', 'mycolour.name', 'mycolour.icon', 'mycolour.remove', 'roleshop.view', 'roleshop.buy']], ['🏆 Rich list', ['rich']], ['🔧 Shop keeping', ['roleshop.add', 'roleshop.remove']]],
     quick: ['daily', 'wallet', 'give', 'roleshop.view', 'rich'],
   },
   misc: {

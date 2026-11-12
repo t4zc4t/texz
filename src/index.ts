@@ -22,6 +22,7 @@ import { warmModel } from './features/pokemodel.js';
 import { loadTypeIcons } from './features/typeicons.js';
 import { loadLogos } from './features/logos.js';
 import { startBulletins } from './modules/bulletins.js';
+import { startDesk } from './modules/predict.js';
 import { onQuote, QUOTE_MENU, startQuoteOfWeek } from './modules/quote.js';
 import { settleAll, settleGuild } from './core/settle.js';
 
@@ -89,6 +90,7 @@ client.once(Events.ClientReady, (c) => {
     if (ch?.isSendable()) await ch.send(payload as never);
   });
   startBulletins(client, store);
+  startDesk(client, store);
   // knowing the owner lets /setup offer the error channel to them only
   void c.application.fetch().catch(() => {});
   // rotating status, so the profile looks alive

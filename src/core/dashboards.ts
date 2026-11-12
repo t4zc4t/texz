@@ -200,7 +200,10 @@ function refItems(entries: Entry[], group: string, prefix: string): RefItem[] {
     const slash = e.cmd.hidden ? null : ex?.slash ?? `/${group} view:${e.cmd.as ?? e.cmd.name}`;
     const args = argsOf(e.cmd, e.sub);
     const what = args.length ? args.slice(0, 3).map((a) => `${a.shown}${a.required ? '' : '?'} ${a.about.toLowerCase()}`).join(' · ') : e.about.toLowerCase() === e.label.toLowerCase() ? '' : e.about;
-    out.push({ key: e.key, name: e.cmd.name, text: `**${cap(e.label)}**\n\`${typed}\`${slash ? ` · \`${slash}\`` : ''}${what ? `\n-# ${what}` : ''}` });
+    // the short names, only for the plain command so subcommands don't repeat them
+    const short = !e.sub ? (e.cmd.text?.aliases ?? []).filter((a) => !a.includes(' ') && a.length < (e.cmd.call ?? e.cmd.name).length).slice(0, 3) : [];
+    const also = short.length ? ` · also ${short.map((a) => `\`${prefix} ${a}\``).join(' ')}` : '';
+    out.push({ key: e.key, name: e.cmd.name, text: `**${cap(e.label)}**${also}\n\`${typed}\`${slash ? ` · \`${slash}\`` : ''}${what ? `\n-# ${what}` : ''}` });
   }
   return out;
 }

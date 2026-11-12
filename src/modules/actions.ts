@@ -41,6 +41,28 @@ const acts: Record<string, Act> = {
   tableflip: { emoji: '🙃', past: 'flips a table', lines: ['{a} flips a table at {b}. The Agency\'s furniture budget weeps.'], solo: ['{a} flips a table. (╯°□°)╯︵ ┻━┻'] },
   sip: { emoji: '🍵', past: 'sips tea', lines: ['{a} sips tea while watching {b}. Drama noted.'], solo: ['{a} sips their tea. Watching. Always watching.'] },
   nope: { emoji: '🙅', past: 'says nope', lines: ['{a} says nope to {b}. Firmly.'], solo: ['{a}: nope.'] },
+  peck: { emoji: '😙', past: 'pecks', back: 'Peck back', lines: ['{a} gives {b} a little peck on the cheek. Kunikida looks away, scandalised.', '{a} pecks {b}. Quick, before anyone notices.'], self: '{a} pecks the air. Practice.' },
+  wink: { emoji: '😉', past: 'winks at', back: 'Wink back', lines: ['{a} winks at {b}. Dazai would be proud of that one.', '{a} winks at {b}. Suspicious.'], solo: ['{a} winks at nobody in particular.'] },
+  blowkiss: { emoji: '😘', past: 'blows a kiss to', back: 'Blow one back', lines: ['{a} blows {b} a kiss across the bar.', '{a} sends {b} a kiss. Catch it.'], solo: ['{a} blows a kiss to the whole Agency.'] },
+  lappillow: { emoji: '😌', past: 'naps on', back: 'Return the favour', lines: ['{a} uses {b}\'s lap as a pillow. Comfortable, apparently.', '{a} lies down on {b}\'s lap. Do not move.'], self: '{a} has no lap pillow. A tragedy.' },
+  kabedon: { emoji: '🧱', past: 'kabedons', back: 'Kabedon back', lines: ['{a} pins {b} to the wall. Very shoujo.', '{a} kabedons {b}. The Agency gasps.'], self: '{a} kabedons a wall. The wall is flustered.' },
+  handshake: { emoji: '🤝', past: 'shakes hands with', back: 'Shake back', lines: ['{a} shakes {b}\'s hand. A deal is made.', '{a} and {b} shake on it. Kunikida writes the terms down.'], self: '{a} shakes their own hand. Deal.' },
+  nom: { emoji: '😋', past: 'noms', back: 'Nom back', lines: ['{a} noms on {b}. Snack time.', '{a} takes a bite out of {b}\'s food.'], solo: ['{a} is eating. Crab, hopefully.'] },
+  clap: { emoji: '👏', past: 'claps', lines: ['{a} claps for {b}. Well deserved.'], solo: ['{a} claps. Bravo.'] },
+  thumbsup: { emoji: '👍', past: 'gives a thumbs up', lines: ['{a} gives {b} a thumbs up. Approved.'], solo: ['{a} gives a thumbs up.'] },
+  happy: { emoji: '😄', past: 'is happy', lines: ['{a} is happy because of {b}.'], solo: ['{a} is happy. Rare, cherish it.'] },
+  angry: { emoji: '😠', past: 'is angry', lines: ['{a} is angry at {b}. Run.'], solo: ['{a} is angry. Chuuya energy.'] },
+  shocked: { emoji: '😱', past: 'is shocked', lines: ['{a} is shocked by {b}.'], solo: ['{a} is shocked. Plot twist.'] },
+  confused: { emoji: '😵‍💫', past: 'is confused', lines: ['{a} is confused by {b}. Same.'], solo: ['{a} is confused. Ranpo would have solved it by now.'] },
+  think: { emoji: '🤔', past: 'thinks', lines: ['{a} thinks about {b}. Hmm.'], solo: ['{a} is thinking. Do not disturb the genius.'] },
+  teehee: { emoji: '🤭', past: 'teehees', lines: ['{a} teehees at {b}.'], solo: ['{a}: teehee.'] },
+  bleh: { emoji: '😛', past: 'sticks their tongue out', lines: ['{a} sticks their tongue out at {b}. Mature.'], solo: ['{a}: bleh.'] },
+  yawn: { emoji: '🥱', past: 'yawns', lines: ['{a} yawns at {b}. Boring.'], solo: ['{a} yawns. Dazai\'s nap hour has begun.'] },
+  nya: { emoji: '🐱', past: 'nyas', lines: ['{a} nyas at {b}. Atsushi approves.'], solo: ['{a}: nya~'] },
+  spin: { emoji: '🌀', past: 'spins', lines: ['{a} spins around {b}.'], solo: ['{a} spins. Wheee.'] },
+  nod: { emoji: '🙂‍↕️', past: 'nods', lines: ['{a} nods at {b}. Understood.'], solo: ['{a} nods.'] },
+  lurk: { emoji: '🫣', past: 'lurks', lines: ['{a} lurks behind {b}.'], solo: ['{a} is lurking. Black Lizard training.'] },
+  run: { emoji: '🏃', past: 'runs from', lines: ['{a} runs away from {b}. Fast.'], solo: ['{a} runs. From responsibility, probably.'] },
   salute: { emoji: '🫡', past: 'salutes', lines: ['{a} salutes {b}. Yes, boss.'], solo: ['{a} salutes. Reporting for duty.'] },
 };
 
@@ -132,11 +154,44 @@ const act: Command = {
     .addUserOption((o) => o.setName('user').setDescription('Who, leave empty for the ones that work alone')).toJSON(),
   text: { aliases: ['action', 'interact'], args: ['action', 'user'] },
   example: 'hug @someone',
-  hint: '`{p} hug @someone` · `/fun view:act input:hug @someone`\n-# swap hug for pat, cuddle, poke, bonk, slap, punch, bite, tickle, highfive, handhold, kiss, yeet, wave, carry, feed, stare or baka\n`{p} cry`\n-# works alone too: cry, blush, dance, laugh, smug, sleep, pout, shrug, facepalm, tableflip, sip, nope, salute',
+  hint: '`{p} hug @someone` · `/fun view:act input:hug @someone`\n-# swap hug for pat, cuddle, poke, bonk, slap, punch, bite, tickle, highfive, handhold, kiss, peck, wink, blowkiss, lappillow, kabedon, handshake, nom, yeet, wave, carry, feed, stare or baka\n`{p} cry`\n-# works alone too: cry, blush, dance, laugh, smug, sleep, pout, shrug, facepalm, tableflip, sip, nope, salute, clap, happy, angry, shocked, confused, think, yawn, nya, spin, lurk, run\n`{p} bonds` · `{p} bonds @someone`\n-# who you hug, pat and bonk the most here',
   run: async (ctx, store) => {
     const action = (ctx.str('action') ?? '').toLowerCase();
     if (!acts[action]) return ctx.reply({ content: `Pick one of: ${Object.keys(acts).map((x) => `\`${x}\``).join(' ')}`, temp: true });
     return run(action)(ctx, store);
+  },
+};
+
+// who someone trades the most hugs and bonks with in this server, both ways
+export function bondsOf(store: Store, guild: string, user: string) {
+  const per = new Map<string, { n: number; acts: Map<string, number> }>();
+  for (const { key, value } of store.kvByPrefix(`act:${guild}:`)) {
+    const [, , action, from, to] = key.split(':');
+    const other = from === user ? to : to === user ? from : null;
+    if (!other) continue;
+    const p = per.get(other) ?? { n: 0, acts: new Map() };
+    p.n += Number(value);
+    p.acts.set(action, (p.acts.get(action) ?? 0) + Number(value));
+    per.set(other, p);
+  }
+  return [...per.entries()].map(([id, p]) => ({ id, n: p.n, top: [...p.acts.entries()].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => b.n - a.n);
+}
+
+const bonds: Command = {
+  name: 'bonds',
+  data: new SlashCommandBuilder().setName('bonds').setDescription('Who you hug, pat and bonk the most in this server')
+    .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
+  text: { aliases: ['besties', 'closest'], args: ['user'] },
+  run: async (ctx, store) => {
+    if (!ctx.guildId) return ctx.reply('Bonds live inside a server.');
+    const id = ctx.user('user') ?? ctx.userId;
+    const list = bondsOf(store, ctx.guildId, id).slice(0, 8);
+    const name = id === ctx.userId ? 'Your' : `<@${id}>'s`;
+    if (!list.length) return ctx.reply({ content: `${id === ctx.userId ? 'You haven\'t' : 'They haven\'t'} hugged or bonked anyone here yet. Start with \`tz hug @someone\`.`, temp: true });
+    const medal = ['🥇', '🥈', '🥉'];
+    const e = new EmbedBuilder().setColor(0xc8283c).setTitle(`${id === ctx.userId ? 'Your' : 'Their'} closest people here`)
+      .setDescription(`${name} file, by every hug, pat and bonk both ways.\n\n${list.map((b, n) => `${medal[n] ?? `\`${n + 1}.\``} <@${b.id}> · **${b.n}** · mostly ${acts[b.top]?.emoji ?? ''} ${b.top}`).join('\n')}`);
+    return ctx.reply({ embeds: [e], public: true });
   },
 };
 
@@ -157,6 +212,6 @@ export async function onAct(store: Store, i: Interaction): Promise<boolean> {
 export const actions: Module = {
   name: 'actions',
   label: 'Interactions',
-  about: 'Hug, pat, bonk, slap and 25 more with anime gifs, a counter for each pair and a button to send one back',
-  commands: [act, ...each],
+  about: 'Hug, pat, bonk, slap and 50 more with anime gifs, a counter for each pair and a button to send one back',
+  commands: [act, bonds, ...each],
 };

@@ -11,7 +11,7 @@ import { animeThisDay, footballThisDay } from '../feeds/thisday.js';
 import { picksOf } from './profile.js';
 import { f1Card, fixturesCard, matchCard, standingsCard, weekCard } from '../features/matchcard.js';
 import { report } from '../ops.js';
-import { SITE, bigSession, facts, flagOf, home, nextRound, onThisDay, questions, schedule, siteLink, teamDot, type Round } from '../feeds/f1.js';
+import { extrasLines, poleTime, raceExtras, SITE, bigSession, facts, flagOf, home, nextRound, onThisDay, questions, schedule, siteLink, teamDot, type Round } from '../feeds/f1.js';
 import { quizButton, quizRound } from './f1quiz.js';
 import { clubDot, interesting, leagues, matches, scoreLine, type Match } from '../feeds/football.js';
 import { airingOn, searchMedia, titleOf, type Media } from '../anime/anilist.js';
@@ -242,7 +242,9 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
           if (s.type === 'R') {
             const h = await home().catch(() => null);
             if (h && h.lastRace.round === r.round) {
-              rows = h.lastRace.results.slice(0, 10).map((d) => ({ pos: d.pos, driver: d.driver, team: d.team, extra: d.pos === '1' ? undefined : d.gap }));
+              rows = h.lastRace.results.slice(0, 10).map((d) => ({ pos: d.pos, driver: d.driver, team: d.team, extra: d.gap }));
+              const more = extrasLines(await raceExtras(h.season, r.round), teamDot);
+              if (more.length) body += `\n\n${more.join('\n')}`;
               const champ = h.standings.slice(0, 3).map((d) => `${d.pos}. ${teamDot(d.team)} ${d.driver} **${d.points}**`).join(' · ');
               body += `\n\n**Championship** · ${champ}`;
             }
@@ -260,9 +262,13 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
               await thread.setArchived(true).catch(() => {});
             }
           }
+          if (s.type === 'Q' || s.type === 'SQ') {
+            const pole = await poleTime(new Date(s.start).getUTCFullYear(), r.round, s.type === 'SQ');
+            if (pole) body += `\n\n⏱️ Pole lap **${pole}**`;
+          }
           const win = s.type === 'Q' || s.type === 'SQ' ? `${s.top3[0].driver} takes pole` : `${s.top3[0].driver} wins`;
           const look = f1Look(store, gid);
-          const image = await drawOnce(`f1:${r.round}:${s.type}:${rows.length}:${look}`, () => f1Card({ title: r.name, subtitle: `${sessionWord[s.type] ?? s.label} · round ${r.round} · ${r.circuit.name}`, rows }, look));
+          const image = await drawOnce(`f1r2:${r.round}:${s.type}:${rows.length}:${look}`, () => f1Card({ title: r.name, subtitle: `${sessionWord[s.type] ?? s.label} · round ${r.round} · ${r.circuit.name}`, rows }, look));
           await post(client, b.f1, {
             ping: s.type === 'R', text: s.type === 'R' ? `${win}!` : undefined, react: [flag, s.type === 'R' ? '🏆' : '⏱️'], image,
             embed: card({ kind: s.type === 'R' ? 'f1Win' : 'f1Result', title: `${flag} ${r.name} · ${sessionWord[s.type] ?? s.label}`, emoji: '', color: names.f1.color, gif: image ? 'off' : gifIn(store, gid, s.type === 'R' ? 'f1win' : s.type === 'Q' || s.type === 'SQ' ? 'f1quali' : 'f1result'), body }),
@@ -436,10 +442,16 @@ async function animeTick(client: Client, store: Store, guilds: [string, Bulletin
       schedule ??= await airingOn(unix(now), unix(now) + 24 * 3600).catch(() => []);
       const list = schedule.filter((a) => wanted(a.media));
       if (list.length) {
-        await post(client, b.anime, {
-          embed: card({ kind: 'anDay', title: 'Today\'s screenings', emoji: '🍿', color: names.anime.color, gif: gifIn(store, gid, 'screening'),
-            body: list.slice(0, 20).map((a) => `<t:${a.airingAt}:t> ${b.anime.shows.some((x) => x.id === a.media.id) ? '⭐' : '📺'} **${titleOf(a.media)}** · ep ${a.episode}${a.media.episodes && a.episode === a.media.episodes ? ' · 🎬 finale' : a.episode === 1 ? ' · 🆕 premiere' : ''}`).join('\n') }),
-        });
+        // the day's biggest show sets the picture, a server's own pick of gif still wins if it set one
+        const lead = [...list].sort((x, y) => (y.media.popularity ?? 0) - (x.media.popularity ?? 0))[0];
+        const own = store.guild(gid).gifs.screening;
+        const e = card({ kind: 'anDay', title: 'Today\'s screenings', emoji: '🍿', color: names.anime.color, gif: own && own !== 'off' ? own : 'off', line: '',
+          body: list.slice(0, 20).map((a) => `<t:${a.airingAt}:t> · **[${titleOf(a.media)}](${a.media.siteUrl})** ep ${a.episode}${a.media.episodes && a.episode === a.media.episodes ? ' · finale' : a.episode === 1 ? ' · premiere' : ''}${b.anime.shows.some((x) => x.id === a.media.id) ? ' ⭐' : ''}`).join('\n') + `\n\n-# ${list.length} episode${list.length === 1 ? '' : 's'} today · ⭐ the server follows it · your own list reaches you in DMs` });
+        if (!own || own === 'off') {
+          if (lead?.media.bannerImage) e.setImage(lead.media.bannerImage);
+          if (lead?.media.coverImage.large) e.setThumbnail(lead.media.coverImage.large);
+        }
+        await post(client, b.anime, { embed: e });
       }
     }
     for (const a of aired) {
@@ -448,7 +460,12 @@ async function animeTick(client: Client, store: Store, guilds: [string, Bulletin
       const e = card({ kind: 'anEp', title: `${titleOf(a.media)} · episode ${a.episode}`, emoji: last ? '🎬' : a.episode === 1 ? '🆕' : '📺', color: names.anime.color,
         // the show's own banner beats any gif, the gif only fills in when there isn't one
         gif: a.media.bannerImage ? 'off' : gifIn(store, gid, 'episode'),
-        body: `${last ? '🎬 **The finale is out.**' : a.episode === 1 ? '🆕 **Premiere, a new show starts today.**' : '▶️ Out now'}${a.media.episodes ? `\n${bar(a.episode, a.media.episodes)} ${a.episode}/${a.media.episodes}` : ''}` }).setURL(a.media.siteUrl);
+        line: '',
+        body: [
+          last ? '**The finale is out.**' : a.episode === 1 ? '**Premiere, a new show starts today.**' : '**Out now.**',
+          a.media.episodes ? `${bar(a.episode, a.media.episodes)} ${a.episode}/${a.media.episodes}` : null,
+          `-# ${[a.media.genres.slice(0, 3).join(' · '), a.media.averageScore ? `⭐ ${a.media.averageScore}` : null, a.media.studios.nodes[0]?.name].filter(Boolean).join(' · ')}`,
+        ].filter(Boolean).join('\n') }).setURL(a.media.siteUrl);
       if (a.media.coverImage.large) e.setThumbnail(a.media.coverImage.large);
       if (a.media.bannerImage) e.setImage(a.media.bannerImage);
       const watch = (a.media.externalLinks ?? []).filter((l) => l.type === 'STREAMING' && !l.isDisabled && l.url.startsWith('https://')).slice(0, 3);
@@ -635,10 +652,11 @@ const f1: Command = {
       }
       if (view.startsWith('last')) {
         const h = await home();
-        const rows = h.lastRace.results.slice(0, 10).map((d) => ({ pos: d.pos, driver: d.driver, team: d.team, extra: d.pos === '1' ? undefined : d.gap }));
+        const rows = h.lastRace.results.slice(0, 10).map((d) => ({ pos: d.pos, driver: d.driver, team: d.team, extra: d.gap }));
         const look = f1Look(store, ctx.guildId);
-        const image = await drawOnce(`f1last:${h.lastRace.round}:${look}`, () => f1Card({ title: h.lastRace.name, subtitle: `Race result · ${h.lastRace.dateLabel}`, rows }, look));
-        const e = card({ kind: 'f1Win', title: `${h.lastRace.name}`, emoji: '🏁', color: names.f1.color, gif: 'off', line: '', body: `${rows[0] ? `${teamDot(rows[0].team)} ` : ''}**${rows[0]?.driver}** won for ${rows[0]?.team} · ${h.lastRace.dateLabel}` });
+        const image = await drawOnce(`f1last2:${h.lastRace.round}:${look}`, () => f1Card({ title: h.lastRace.name, subtitle: `Race result · ${h.lastRace.dateLabel}`, rows }, look));
+        const more = extrasLines(await raceExtras(h.season, h.lastRace.round), teamDot);
+        const e = card({ kind: 'f1Win', title: `${h.lastRace.name}`, emoji: '🏁', color: names.f1.color, gif: 'off', line: '', body: `${rows[0] ? `${teamDot(rows[0].team)} ` : ''}**${rows[0]?.driver}** won for ${rows[0]?.team} · ${h.lastRace.dateLabel}${more.length ? `\n\n${more.join('\n')}` : ''}` });
         return ctx.reply(withImage(e, image, [site]));
       }
       const { rounds } = await schedule();

@@ -1,5 +1,5 @@
 import {
-  ChannelType, PermissionFlagsBits, type CategoryChannel, type Guild, type GuildBasedChannel, type GuildMember, type PermissionsString, type Role, type TextChannel, type VoiceChannel,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits, type MessageActionRowComponentBuilder, type CategoryChannel, type Guild, type GuildBasedChannel, type GuildMember, type PermissionsString, type Role, type TextChannel, type VoiceChannel,
 } from 'discord.js';
 import { defaultRules, type Store } from '../db.js';
 import { card } from '../theme.js';
@@ -8,6 +8,8 @@ import { staffRoles } from '../core/staff.js';
 import { buildBoard, CATEGORY } from '../modules/bulletins.js';
 import { confessIntro, countIntro, rooms } from '../modules/community.js';
 import { pickerView } from '../modules/welcome.js';
+import { liftColours } from '../modules/mycolour.js';
+import { DESK } from '../modules/predict.js';
 
 // the whole Texz corner of a server in one go: a front door, the bulletin board, the bar and the archives, each with the right locks
 
@@ -21,6 +23,7 @@ export const FLOORS = {
 
 export const extraRooms = {
   arrivals: { name: '🌸┃new-recruits', topic: 'Newcomers walk in here. Dazai greets them, Kunikida writes their name down.' },
+  entrance: { name: '🚪┃the-entrance-exam', topic: 'Every Agency member passed it once. Press the button to walk in.' },
   rules: { name: '📜┃agency-rules', topic: 'The Agency\'s rules. Short, fair, and Kunikida will enforce every one of them.' },
   roles: { name: '🎭┃pick-your-roles', topic: 'Ping roles and name colours. Pick from the menus, unpick to drop.' },
   promotions: { name: '🎖️┃promotions', topic: 'Rank ups, posted by Texz. Every level is a step closer to Agency president.' },
@@ -77,11 +80,21 @@ const locks: Record<Mode, { everyone: Perms; staff?: Perms; me: Perms }> = {
   },
 };
 
-async function lock(store: Store, ch: CategoryChannel | TextChannel, me: GuildMember, mode: Mode) {
+// who sees a room once the entrance exam is on: members only, newcomers only, or everyone
+type Who = 'members' | 'guests' | 'all';
+
+async function lock(store: Store, ch: CategoryChannel | TextChannel | VoiceChannel, me: GuildMember, mode: Mode, who: Who = 'members') {
   const l = locks[mode];
   const everyone = ch.guild.roles.everyone;
+  const member = store.getKv(`verifyrole:${ch.guild.id}`);
+  const gated = !!member && mode !== 'private';
+  const view: Perms = gated ? { ViewChannel: who !== 'members' } : {};
   await ch.permissionOverwrites.edit(me.id, only(me, l.me)).catch(() => {});
-  await ch.permissionOverwrites.edit(everyone, only(me, l.everyone)).catch(() => {});
+  await ch.permissionOverwrites.edit(everyone, only(me, { ...l.everyone, ...view })).catch(() => {});
+  if (gated && member && ch.guild.roles.cache.has(member)) {
+    if (who === 'all') await ch.permissionOverwrites.delete(member).catch(() => {});
+    else await ch.permissionOverwrites.edit(member, { ViewChannel: who === 'members' }).catch(() => {});
+  }
   if (l.staff) for (const id of staffRoles(store, ch.guild.id)) if (ch.guild.roles.cache.has(id)) await ch.permissionOverwrites.edit(id, only(me, l.staff)).catch(() => {});
 }
 
@@ -97,7 +110,7 @@ async function floor(guild: Guild, store: Store, key: keyof typeof FLOORS, me: G
   return cat;
 }
 
-async function room(guild: Guild, store: Store, cat: CategoryChannel, saved: string | null | undefined, spec: { name: string; topic: string }, mode: Mode, me: GuildMember, olds: string[] = []) {
+async function room(guild: Guild, store: Store, cat: CategoryChannel, saved: string | null | undefined, spec: { name: string; topic: string }, mode: Mode, me: GuildMember, olds: string[] = [], who: Who = 'members') {
   let ch = (saved ? await guild.channels.fetch(saved).catch(() => null) : null) as GuildBasedChannel | null;
   if (ch && (ch.type !== ChannelType.GuildText || !ours(ch, olds))) ch = null;
   ch ??= guild.channels.cache.find((c) => c.type === ChannelType.GuildText && (c.name === spec.name || olds.includes(c.name))) ?? null;
@@ -109,7 +122,7 @@ async function room(guild: Guild, store: Store, cat: CategoryChannel, saved: str
     if (text.topic !== spec.topic) await text.setTopic(spec.topic).catch(() => {});
   }
   text ??= await guild.channels.create({ name: spec.name, type: ChannelType.GuildText, parent: cat.id, topic: spec.topic, reason: 'Agency layout from /setup' });
-  await lock(store, text, me, mode);
+  await lock(store, text, me, mode, who);
   return { ch: text, fresh };
 }
 
@@ -143,14 +156,15 @@ async function colourRoles(store: Store, guild: Guild, me: GuildMember) {
     store.setKv(`colour:${guild.id}:${name}`, r.id);
     out.push(r);
   }
-  // right under Texz, so the colour wins over plainer roles
-  const top = me.roles.highest.position - 1;
-  await guild.roles.setPositions(out.filter((r) => r.editable).map((r, n) => ({ role: r.id, position: Math.max(1, top - n) }))).catch(() => {});
+  // right under Texz and above the rank roles, so the colour actually shows; personal roles go above the palette
+  void me;
+  const personal = store.kvByPrefix(`myrole:${guild.id}:`).map((x) => guild.roles.cache.get(x.value)).filter((r): r is Role => !!r);
+  await liftColours(guild, store, [...personal, ...out]);
   return out;
 }
 
 // the two menus in the roles room, edited in place on every build so there's never a pile of old ones
-async function rolePanels(store: Store, guild: Guild, ch: TextChannel, colours: Role[]) {
+async function rolePanels(store: Store, guild: Guild, ch: TextChannel, colours: Role[], info: { key: string; title: string; about: string; style: 'menu' | 'single'; roles: Role[] }[]) {
   const g = store.guild(guild.id);
   const pings = [
     g.bulletins.f1.role, g.bulletins.football.role,
@@ -158,7 +172,8 @@ async function rolePanels(store: Store, guild: Guild, ch: TextChannel, colours: 
   ].map((id) => (id ? guild.roles.cache.get(id) : undefined)).filter((r): r is Role => !!r && r.editable);
   const panels: [string, ReturnType<typeof pickerView>][] = [];
   if (pings.length) panels.push(['pings', pickerView('Informant roles', 'Pick the pings you want. Race days, big matches, rare spawns and rare drops. Unpick to drop one.', 'menu', pings)]);
-  if (colours.length) panels.push(['colours', pickerView('Agency colours', 'One colour for your name. Pick another to swap, clear the menu to go plain.', 'single', colours)]);
+  for (const set of info) panels.push([set.key, pickerView(set.title, set.about, set.style, set.roles)]);
+  if (colours.length) panels.push(['colours', pickerView('Agency colours', 'One colour for your name. Pick another to swap, clear the menu to go plain.\n-# Want one nobody else has? `tz mycolour` sells you your own.', 'single', colours)]);
   for (const [key, view] of panels) {
     const kv = `rolepanel:${guild.id}:${key}`;
     const old = store.getKv(kv) ? await ch.messages.fetch(store.getKv(kv)!).catch(() => null) : null;
@@ -166,6 +181,52 @@ async function rolePanels(store: Store, guild: Guild, ch: TextChannel, colours: 
     if (msg) store.setKv(kv, msg.id);
   }
 }
+
+// a plain role Texz keeps track of by key, made when missing
+async function keptRole(store: Store, guild: Guild, key: string, name: string) {
+  const kv = `infor:${guild.id}:${key}`;
+  const saved = store.getKv(kv);
+  let r = (saved ? guild.roles.cache.get(saved) : undefined) ?? guild.roles.cache.find((x) => x.name === name);
+  r ??= await guild.roles.create({ name, permissions: [], hoist: false, mentionable: false, reason: 'Agency layout roles' }).catch(() => undefined);
+  if (r) store.setKv(kv, r.id);
+  return r ?? null;
+}
+
+// the about-you menus in the roles room, each set kept by key
+export const INFO: { key: string; title: string; about: string; style: 'menu' | 'single'; roles: [string, string][] }[] = [
+  { key: 'pronouns', title: 'Pronouns', about: 'How people should refer to you. Pick any that fit.', style: 'menu', roles: [['he', 'He/Him'], ['she', 'She/Her'], ['they', 'They/Them'], ['any', 'Any pronouns'], ['ask', 'Ask my pronouns']] },
+  { key: 'region', title: 'Which branch', about: 'Where in the world you are, so people know your time of day.', style: 'single', roles: [['asia', 'Asia Branch'], ['europe', 'Europe Branch'], ['namerica', 'North America Branch'], ['samerica', 'South America Branch'], ['africa', 'Africa Branch'], ['oceania', 'Oceania Branch']] },
+  { key: 'dms', title: 'Direct line', about: 'Whether people can message you privately.', style: 'single', roles: [['open', 'Line Open'], ['ask', 'Knock First'], ['closed', 'Line Closed']] },
+];
+
+async function infoRoles(store: Store, guild: Guild) {
+  const out: { key: string; title: string; about: string; style: 'menu' | 'single'; roles: Role[] }[] = [];
+  for (const set of INFO) {
+    const roles: Role[] = [];
+    for (const [k, name] of set.roles) { const r = await keptRole(store, guild, `${set.key}:${k}`, name); if (r) roles.push(r); }
+    if (roles.length) out.push({ ...set, roles });
+  }
+  return out;
+}
+
+// existing channels people could see stay visible to members only, private ones are left as they are
+async function gateEverything(store: Store, guild: Guild, member: Role, skip: Set<string>) {
+  const everyone = guild.roles.everyone;
+  for (const c of guild.channels.cache.values()) {
+    if (skip.has(c.id) || c.isThread() || !('permissionOverwrites' in c)) continue;
+    // a channel that follows its category gets the category's lock
+    if (c.parentId && 'permissionsLocked' in c && c.permissionsLocked && !skip.has(c.parentId)) continue;
+    if (!c.permissionsFor(everyone)?.has('ViewChannel')) continue;
+    await c.permissionOverwrites.edit(everyone, { ViewChannel: false }, { reason: 'members only after the entrance exam' }).catch(() => {});
+    await c.permissionOverwrites.edit(member, { ViewChannel: true }, { reason: 'members only after the entrance exam' }).catch(() => {});
+  }
+}
+
+export const entranceView = () => ({
+  embeds: [card({ kind: 'bulletin', title: '🚪 The entrance exam', emoji: '', gif: 'off', line: '',
+    body: 'Every member of the Agency passed this once. Atsushi nearly failed it, you\'ll be fine.\n\nRead the rules above, then press the button to walk in. The rest of the building opens up the moment you do.' })],
+  components: [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(new ButtonBuilder().setCustomId('verify').setLabel('I passed the exam').setEmoji('🕵️').setStyle(ButtonStyle.Success))],
+});
 
 const RULES = [
   ['Respect everyone', 'No harassment, slurs, hate or personal attacks. Even the Port Mafia has a code.'],
@@ -209,12 +270,17 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
   const lounge = await floor(guild, store, 'lounge', me);
   const logs = await floor(guild, store, 'logs', me);
 
+  // the entrance exam: newcomers see only the exam and the rules until they press the button
+  const member = await keptRole(store, guild, 'member', 'Agency Member');
+  if (member) store.setKv(`verifyrole:${guild.id}`, member.id);
   const g = store.guild(guild.id);
+  const ex = await room(guild, store, front, store.getKv(`entrancech:${guild.id}`), extraRooms.entrance, 'read', me, ['verify', 'verification', 'entrance'], 'guests');
   const door = await room(guild, store, front, g.welcome.channel, extraRooms.arrivals, 'read', me, ['welcome', 'arrivals', 'new-recruits']);
-  const ru = await room(guild, store, front, store.getKv(`rulesch:${guild.id}`), extraRooms.rules, 'read', me, ['rules', 'server-rules']);
+  const ru = await room(guild, store, front, store.getKv(`rulesch:${guild.id}`), extraRooms.rules, 'read', me, ['rules', 'server-rules'], 'all');
   const ro = await room(guild, store, front, store.getKv(`rolesch:${guild.id}`), extraRooms.roles, 'read', me, ['roles', 'self-roles', 'reaction-roles', 'get-roles']);
   const p = await room(guild, store, front, store.getKv(`boostch:${guild.id}`), extraRooms.patrons, 'read', me, ['boosts', 'boosters']);
   const pr = await room(guild, store, board, g.levels.channel, extraRooms.promotions, 'read', me, ['level-ups', 'levels', 'rank-ups']);
+  const dk = await room(guild, store, board, store.getKv(`deskch:${guild.id}`), DESK, 'read', me, ['predictions', 'predict']);
   const q = await room(guild, store, board, g.quotes.channel, rooms.quotes, 'read', me, ['quotes', 'make-it-a-quote', 'quote-wall']);
   const a = await room(guild, store, board, g.starboard.channel, rooms.archive, 'read', me, ['starboard']);
   const gen = await room(guild, store, bar, store.getKv(`generalch:${guild.id}`), extraRooms.office, 'open', me, ['general', 'chat', 'general-chat']);
@@ -248,7 +314,11 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
   // yen commands only answer in their own room, admins can still use them anywhere
   fresh.modules.economy = { ...defaultRules('economy'), ...fresh.modules.economy, channels: [y.ch.id] };
   store.saveGuild(guild.id, fresh);
+  // the old join role is replaced by the exam
+  if (member) { const w = store.guild(guild.id); w.welcome.autorole = null; store.saveGuild(guild.id, w); }
   const kvs: [string, string][] = [
+    [`entrancech:${guild.id}`, ex.ch.id],
+    [`deskch:${guild.id}`, dk.ch.id],
     [`boostch:${guild.id}`, p.ch.id], [`rulesch:${guild.id}`, ru.ch.id], [`rolesch:${guild.id}`, ro.ch.id], [`generalch:${guild.id}`, gen.ch.id], [`mediach:${guild.id}`, ev.ch.id],
     [`dench:${guild.id}:p2`, pk.ch.id], [`dench:${guild.id}:shoob`, sh.ch.id], [`dench:${guild.id}:owo`, ow.ch.id],
     [`confessch:${guild.id}`, f.ch.id], [`serverlog:${guild.id}`, w.ch.id], [`botlog:${guild.id}`, l.ch.id],
@@ -260,7 +330,7 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
 
   // inside each floor in reading order
   const feeds = [g.bulletins.f1.channel, g.bulletins.football.channel, g.bulletins.anime.channel].filter((x): x is string => !!x);
-  const inside = [door.ch.id, ru.ch.id, ro.ch.id, p.ch.id, ...feeds, pr.ch.id, q.ch.id, a.ch.id, gen.ch.id, ev.ch.id, pk.ch.id, sh.ch.id, ow.ch.id, k.ch.id, y.ch.id, f.ch.id, o.ch.id, w.ch.id, l.ch.id];
+  const inside = [ex.ch.id, ru.ch.id, door.ch.id, ro.ch.id, p.ch.id, ...feeds, dk.ch.id, pr.ch.id, q.ch.id, a.ch.id, gen.ch.id, ev.ch.id, pk.ch.id, sh.ch.id, ow.ch.id, k.ch.id, y.ch.id, f.ch.id, o.ch.id, w.ch.id, l.ch.id];
   await guild.channels.setPositions([...inside, ...voices.map((v) => v.id)].map((id, n) => ({ channel: id, position: n }))).catch(() => {});
 
   // the front door at the very top, the bulletin board second, the archives at the very bottom
@@ -278,10 +348,36 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
 
   await tidyRoles(store, guild);
   const colours = await colourRoles(store, guild, me);
-  await rolePanels(store, guild, ro.ch, colours);
+  const info = await infoRoles(store, guild);
+  await rolePanels(store, guild, ro.ch, colours, info);
+
+  // everyone already here passes the exam automatically, bots too so they can still see their rooms
+  let passed = 0;
+  if (member) {
+    const all = await guild.members.fetch().catch(() => null);
+    for (const m of all?.values() ?? []) if (!m.roles.cache.has(member.id)) { if (await m.roles.add(member, 'already a member when the exam started').then(() => true).catch(() => false)) passed++; }
+    // the categories: the front door is open to all, the rest to members
+    const everyone = guild.roles.everyone;
+    for (const cat of [board, bar, lounge]) {
+      await cat.permissionOverwrites.edit(everyone, { ViewChannel: false }).catch(() => {});
+      await cat.permissionOverwrites.edit(member, { ViewChannel: true }).catch(() => {});
+    }
+    for (const id of feeds) {
+      const c = guild.channels.cache.get(id) as TextChannel | undefined;
+      await c?.permissionOverwrites.edit(everyone, { ViewChannel: false }).catch(() => {});
+      await c?.permissionOverwrites.edit(member, { ViewChannel: true }).catch(() => {});
+    }
+    for (const v of voices) await v.lockPermissions().catch(() => {});
+    const done = new Set([front.id, board.id, bar.id, lounge.id, logs.id, ...inside, ...voices.map((v) => v.id)]);
+    await gateEverything(store, guild, member, done);
+  }
+  const old = await ex.ch.messages.fetch(store.getKv(`entrancemsg:${guild.id}`) ?? '0').catch(() => null);
+  const sent = old ? await old.edit(entranceView()).catch(() => null) : await ex.ch.send(entranceView()).catch(() => null);
+  if (sent) store.setKv(`entrancemsg:${guild.id}`, sent.id);
 
   if (door.fresh) await door.ch.send({ embeds: [card({ kind: 'bulletin', title: '🌸 The Agency front door', emoji: '', gif: 'off', body: `Everyone who walks in gets greeted here.\nRead <#${ru.ch.id}>, pick your roles in <#${ro.ch.id}>, then come say hi in <#${gen.ch.id}>.` })] }).catch(() => {});
   if (ru.fresh) await ru.ch.send({ embeds: [rulesCard(guild)] }).catch(() => {});
+  if (dk.fresh) await dk.ch.send({ embeds: [card({ kind: 'bulletin', title: '🔮 Ranpo\'s deductions', emoji: '', gif: 'off', line: '', body: 'Every morning the day\'s big matches land here with buttons, and on race week the podium does too. Call it before kick-off or lights out.\nRight calls pay yen. `tz predict top` has the season\'s best.' })] }).catch(() => {});
   if (pr.fresh) await pr.ch.send({ embeds: [card({ kind: 'bulletin', title: '🎖️ Promotions', emoji: '', gif: 'off', body: 'Every rank up gets announced here. Chat, catch, quiz, and climb.\n`tz rank` shows where you stand.' })] }).catch(() => {});
   if (k.fresh) await k.ch.send(countIntro()).then((m) => m.pin().catch(() => {})).catch(() => {});
   if (f.fresh) await f.ch.send(confessIntro()).then((m) => m.pin().catch(() => {})).catch(() => {});
@@ -290,14 +386,14 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
   if (l.fresh) await l.ch.send({ embeds: [card({ kind: 'bulletin', title: '📓 Texz ledger', emoji: '', gif: 'off', body: 'Every settings change and every building job gets a line here, so staff can see who changed what.' })] }).catch(() => {});
 
   const lines = [
-    `**${FLOORS.front}** · <#${door.ch.id}> <#${ru.ch.id}> <#${ro.ch.id}> <#${p.ch.id}>`,
-    `**${FLOORS.board}** · ${feeds.map((x) => `<#${x}>`).join(' ')} <#${pr.ch.id}> <#${q.ch.id}> <#${a.ch.id}>`,
+    `**${FLOORS.front}** · <#${ex.ch.id}> <#${ru.ch.id}> <#${door.ch.id}> <#${ro.ch.id}> <#${p.ch.id}>`,
+    `**${FLOORS.board}** · ${feeds.map((x) => `<#${x}>`).join(' ')} <#${dk.ch.id}> <#${pr.ch.id}> <#${q.ch.id}> <#${a.ch.id}>`,
     `**${FLOORS.bar}** · <#${gen.ch.id}> <#${ev.ch.id}> <#${pk.ch.id}> <#${sh.ch.id}> <#${ow.ch.id}> <#${k.ch.id}> <#${y.ch.id}> <#${f.ch.id}>`,
     `**${FLOORS.lounge}** · ${voices.map((v) => `<#${v.id}>`).join(' ')}`,
     `**${FLOORS.logs}** · <#${o.ch.id}> <#${w.ch.id}> <#${l.ch.id}>, staff only`,
   ];
   void botLog(guild, store, `🏗️ The Agency layout was built or refreshed.\n${lines.join('\n')}`);
-  return `${boardNote.startsWith('🕵️') ? '' : `${boardNote}\n`}🏗️ The building is in order:\n${lines.join('\n')}\n-# Notice rooms are read-only with reactions, chat rooms are open, bot rooms take commands but no threads or files, the archives are staff only. Ping and colour roles carry no permissions. Run \`@Pokétwo redirect #${pk.ch.name}\` once so spawns land in the bureau.`;
+  return `${boardNote.startsWith('🕵️') ? '' : `${boardNote}\n`}🏗️ The building is in order:\n${lines.join('\n')}\n-# Notice rooms are read-only with reactions, chat rooms are open, bot rooms take commands but no threads or files, the archives are staff only. Ping and colour roles carry no permissions. Run \`@Pokétwo redirect #${pk.ch.name}\` once so spawns land in the bureau.${member ? `\n-# The entrance exam is on: newcomers see only <#${ex.ch.id}> and the rules until they press the button. ${passed} people already here got <@&${member.id}>.` : ''}`;
 }
 
 // a line in the Texz ledger, quietly skipped when there isn't one

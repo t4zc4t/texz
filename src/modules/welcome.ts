@@ -35,6 +35,17 @@ export function welcomeCard(store: Store, m: GuildMember) {
 export async function onJoin(store: Store, m: GuildMember) {
   const w = store.guild(m.guild.id).welcome;
   if (w.autorole) await m.roles.add(w.autorole, 'autorole').catch(() => {});
+  // with the entrance exam on, people are greeted when they pass it, and bots walk straight in
+  const exam = store.getKv(`verifyrole:${m.guild.id}`);
+  if (exam && m.guild.roles.cache.has(exam)) {
+    if (m.user.bot) await m.roles.add(exam, 'bots skip the entrance exam').catch(() => {});
+    return;
+  }
+  return greet(store, m);
+}
+
+async function greet(store: Store, m: GuildMember) {
+  const w = store.guild(m.guild.id).welcome;
   if (!w.channel) return;
   const ch = await m.guild.channels.fetch(w.channel).catch(() => null);
   if (ch?.isSendable()) await ch.send({ content: `<@${m.id}>`, embeds: [welcomeCard(store, m)], allowedMentions: { users: [m.id] } }).catch(() => {});
@@ -115,6 +126,19 @@ export function pickerView(title: string, about: string | null, style: string, r
 
 export async function onRoleButton(store: Store, i: Interaction) {
   if (!i.guild) return false;
+  // the entrance exam button
+  if (i.isButton() && i.customId === 'verify') {
+    const role = store.getKv(`verifyrole:${i.guild.id}`);
+    const m = await i.guild.members.fetch(i.user.id).catch(() => null);
+    if (!role || !m) { await i.reply({ content: 'The exam is closed right now, ask staff.', flags: 64 }); return true; }
+    if (m.roles.cache.has(role)) { await i.reply({ content: 'You already passed. The whole building is open to you.', flags: 64 }); return true; }
+    const ok = await m.roles.add(role, 'passed the entrance exam').then(() => true).catch(() => false);
+    if (!ok) { await i.reply({ content: 'I couldn\'t let you in, my role might be below the member role. Staff can fix that.', flags: 64 }); return true; }
+    const roles = store.getKv(`rolesch:${i.guild.id}`);
+    await i.reply({ content: `🕵️ Welcome to the Agency, ${m.displayName}. The building is open.${roles ? ` Pick your roles in <#${roles}>.` : ''}`, flags: 64 });
+    await greet(store, m);
+    return true;
+  }
   if (i.isRoleSelectMenu() && i.customId.startsWith('rpk|')) {
     if (i.customId.split('|')[1] !== i.user.id) { await i.reply({ content: 'Start your own with `/admin view:roles`.', flags: 64 }); return true; }
     const draft = JSON.parse(store.getKv(`rpk:${i.user.id}`) ?? 'null') as { title: string; about: string | null; style: string } | null;

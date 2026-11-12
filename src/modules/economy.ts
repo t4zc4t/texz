@@ -1,3 +1,4 @@
+import { mycolour } from './mycolour.js';
 import { track } from './missions.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, SlashCommandBuilder, type Message, type MessageActionRowComponentBuilder } from 'discord.js';
 import type { Store } from '../db.js';
@@ -180,5 +181,5 @@ export const economy: Module = {
   name: 'economy',
   label: 'Economy',
   about: 'Yen from a daily claim, chatting and games, and a shop where admins sell roles',
-  commands: [daily, balance, give, rich, shop],
+  commands: [daily, balance, give, rich, shop, mycolour],
 };

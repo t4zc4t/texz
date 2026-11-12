@@ -112,7 +112,16 @@ export async function onPredict(store: Store, i: Interaction) {
     mine[Number(slot)] = pick;
     store.setKv(key, JSON.stringify(mine));
   } else if (kind === 'fb') {
+    const ko = Number(store.getKv(`predko:${id}`) ?? 0);
+    if (ko && Date.now() > ko) { await i.reply({ content: 'That one has kicked off, calls are closed.', flags: MessageFlags.Ephemeral }); return true; }
     store.setKv(fbKey(id, i.guildId, i.user.id), slot);
+  }
+  // on the desk channel a quiet confirmation is enough
+  if (i.channelId === store.getKv(`deskch:${i.guildId}`)) {
+    track(store, i.guildId, i.user.id, 'predict');
+    const said = kind === 'f1' ? `${['🥇', '🥈', '🥉'][Number(slot)]} ${(i as import('discord.js').StringSelectMenuInteraction).values[0]}` : slot === 'draw' ? 'a draw' : (i.component as { label?: string | null }).label ?? slot;
+    await i.reply({ content: `🔮 Noted: **${said}**. \`tz predict\` shows all your calls.`, flags: MessageFlags.Ephemeral });
+    return true;
   }
   track(store, i.guildId, i.user.id, 'predict');
   const p = await page(store, i.guildId, i.user.id);
@@ -161,4 +170,55 @@ export function scoreMatch(store: Store, guild: string, m: Match): string[] {
     right.push(user);
   }
   return right.length ? [`🔮 Called it: ${right.slice(0, 10).map((u) => `<@${u}>`).join(' ')} +¥${MATCH_PAY}`] : [];
+}
+
+// ---------- the desk: a channel where the day's calls are posted for everyone ----------
+
+export const DESK = { name: '🔮┃ranpos-deductions', topic: 'Call the day\'s big matches and the next podium before they start. Right calls pay yen, the best get a spot on tz predict top.' };
+
+// the early morning football post, and an F1 one once per race week
+export function startDesk(client: import('discord.js').Client, store: Store) {
+  const tick = async () => {
+    const now = new Date();
+    const day = now.toISOString().slice(0, 10);
+    for (const guild of client.guilds.cache.values()) {
+      const id = store.getKv(`deskch:${guild.id}`);
+      if (!id || !store.rules(guild.id, 'bulletins').enabled) continue;
+      const ch = await guild.channels.fetch(id).catch(() => null);
+      if (!ch?.isSendable()) continue;
+      // around 6 in the morning in India
+      if (now.getUTCHours() * 60 + now.getUTCMinutes() >= 30 && store.firstTime(guild.id, `desk:fb:${day}`)) {
+        const big = (await todaysBig(store, guild.id).catch(() => [] as Match[])).slice(0, 4);
+        if (big.length) {
+          for (const m of big) store.setKv(`predko:${m.id}`, String(m.date));
+          await ch.send({
+            embeds: [card({ kind: 'help', title: `Today's matches · ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`, emoji: '⚽', gif: 'off', line: '',
+              body: `${big.map((m) => `${clubDot(m.home)} **${m.home.name}** vs **${m.away.name}** ${clubDot(m.away)}\n-# ${leagues[m.league]?.name ?? ''} · kick-off <t:${unix(m.date)}:t>, calls close then`).join('\n\n')}\n\n-# A right call pays ¥${MATCH_PAY}. Press again to change your mind before kick-off.` })],
+            components: big.map((m) => row(
+              new ButtonBuilder().setCustomId(`prd|fb|${m.id}|home`).setLabel(m.home.name.slice(0, 40)).setEmoji(asEmoji(clubDot(m.home))!).setStyle(ButtonStyle.Secondary),
+              new ButtonBuilder().setCustomId(`prd|fb|${m.id}|draw`).setLabel('Draw').setStyle(ButtonStyle.Secondary),
+              new ButtonBuilder().setCustomId(`prd|fb|${m.id}|away`).setLabel(m.away.name.slice(0, 40)).setEmoji(asEmoji(clubDot(m.away))!).setStyle(ButtonStyle.Secondary),
+            )),
+          }).catch(() => {});
+        }
+      }
+      // F1: once a race week, four days before the race
+      const r = await nextRound().catch(() => null);
+      const start = r ? Date.parse(r.sessions.find((s) => s.type === 'R')?.start ?? '') : NaN;
+      if (r && start > now.getTime() && start - now.getTime() < 4 * 86_400_000 && store.firstTime(guild.id, `desk:f1:${r.round}`)) {
+        const h = await home().catch(() => null);
+        const drivers = (h?.standings ?? []).slice(0, 25);
+        if (drivers.length) {
+          await ch.send({
+            embeds: [card({ kind: 'help', title: `${flagOf[r.circuit.country] ?? '🏁'} ${r.name} · call the podium`, emoji: '', gif: 'off', line: '',
+              body: `Pick the top three before lights out <t:${unix(start)}:R>.\n\n-# ¥${PODIUM.exact} for each driver in the right spot, ¥${PODIUM.onPodium} on the podium but the wrong spot. Picking again changes it.` })],
+            components: [0, 1, 2].map((n) => row(new StringSelectMenuBuilder().setCustomId(`prd|f1|${r.round}|${n}`).setPlaceholder(['🥇 Winner', '🥈 Second', '🥉 Third'][n])
+              .addOptions(drivers.map((d) => ({ label: d.driver, value: d.driver, emoji: asEmoji(teamDot(d.team)) }))))),
+          }).catch(() => {});
+        }
+      }
+    }
+  };
+  setTimeout(() => void tick(), 90_000);
+  setInterval(() => void tick(), 10 * 60_000);
 }

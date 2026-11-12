@@ -33,38 +33,41 @@ function verdict(score: number | null, type: string) {
   return `Even Chuuya has better taste than this. Skip it~`;
 }
 
+const short = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
+
+// one tidy card: who made it and when up top, a short synopsis, one stat line, then only what's useful
 export function mediaCard(m: Media) {
   const isAnime = m.type === 'ANIME';
-  const fields = [
-    { name: '⭐ Score', value: m.averageScore ? `**${m.averageScore}**/100` : 'not rated', inline: true },
-    { name: '📺 Format', value: nice(m.format), inline: true },
-    { name: '📡 Status', value: nice(m.status), inline: true },
-    isAnime
-      ? { name: '🎞️ Episodes', value: `${m.episodes ?? '?'}${m.duration ? ` × ${m.duration}m` : ''}`, inline: true }
-      : { name: '📚 Chapters', value: `${m.chapters ?? '?'}${m.volumes ? ` · ${m.volumes} vol` : ''}`, inline: true },
-    { name: '🗓️ Started', value: m.season ? `${nice(m.season)} ${m.seasonYear}` : m.startDate.year ? String(m.startDate.year) : '?', inline: true },
-    { name: '❤️ Popularity', value: m.popularity ? m.popularity.toLocaleString() : '?', inline: true },
-  ];
-  if (m.studios.nodes.length) fields.push({ name: '🏢 Studio', value: m.studios.nodes.map((s) => s.name).join(', '), inline: true });
-  if (m.genres.length) fields.push({ name: '🏷️ Genres', value: m.genres.slice(0, 6).join(' · '), inline: false });
-  fields.push({ name: '🕵️ Texz\'s verdict', value: verdict(m.averageScore, m.type), inline: false });
-  // sequels, prequels and the source, so the next thing to watch is one click away
-  const rel = (m.relations?.edges ?? []).filter((e) => ['SEQUEL', 'PREQUEL', 'ADAPTATION', 'SOURCE', 'PARENT', 'SIDE_STORY'].includes(e.relationType)).slice(0, 5);
-  if (rel.length) {
-    fields.push({ name: '🔗 Related', value: rel.map((e) => `${nice(e.relationType)}: [${e.node.title.english ?? e.node.title.romaji}](https://anilist.co/${e.node.type.toLowerCase()}/${e.node.id})`).join('\n'), inline: false });
-  }
-  if (m.nextAiringEpisode) {
-    fields.push({ name: '⏰ Next episode', value: `Episode **${m.nextAiringEpisode.episode}** <t:${m.nextAiringEpisode.airingAt}:R> (<t:${m.nextAiringEpisode.airingAt}:f>)`, inline: false });
-  }
+  const when = m.season ? `${nice(m.season)} ${m.seasonYear}` : m.startDate.year ? String(m.startDate.year) : null;
+  const top = [nice(m.format), when, m.studios.nodes[0]?.name].filter((x) => x && x !== '?').join(' · ');
+  const story = plain(m.description);
+  const synopsis = story.length > 320 ? `${story.slice(0, 320).replace(/\s+\S*$/, '')}…` : story;
+  const stats = [
+    m.averageScore ? `⭐ **${m.averageScore}**` : '⭐ new',
+    isAnime ? `🎞️ ${m.episodes ?? '?'} ep${m.duration ? ` · ${m.duration}m` : ''}` : `📚 ${m.chapters ?? '?'} ch${m.volumes ? ` · ${m.volumes} vol` : ''}`,
+    `📡 ${nice(m.status)}`,
+    m.popularity ? `❤️ ${short(m.popularity)}` : null,
+  ].filter(Boolean).join('  ·  ');
+  const lines = [
+    m.title.native ? `-# ${m.title.native}` : null,
+    synopsis || null,
+    '',
+    stats,
+    m.genres.length ? `-# ${m.genres.slice(0, 5).join(' · ')}` : null,
+    m.nextAiringEpisode ? `\n⏰ Episode **${m.nextAiringEpisode.episode}** <t:${m.nextAiringEpisode.airingAt}:R>` : null,
+  ].filter((x) => x !== null);
+  const rel = (m.relations?.edges ?? []).filter((e) => ['SEQUEL', 'PREQUEL', 'ADAPTATION', 'SOURCE', 'PARENT'].includes(e.relationType)).slice(0, 3);
+  const fields = rel.length ? [{ name: 'Related', value: rel.map((e) => `${nice(e.relationType)} · [${e.node.title.english ?? e.node.title.romaji}](https://anilist.co/${e.node.type.toLowerCase()}/${e.node.id})`).join('\n'), inline: false }] : [];
   const e = card({
     kind: isAnime ? 'anime' : 'manga',
     title: titleOf(m),
-    emoji: isAnime ? '📺' : '📖',
     color: hex(m.coverImage.color),
-    body: [m.title.native ? `*${m.title.native}*` : '', plain(m.description)].filter(Boolean).join('\n\n'),
+    body: lines.join('\n'),
     fields,
     gif: 'off',
+    line: verdict(m.averageScore, m.type),
   }).setURL(m.siteUrl);
+  if (top) e.setAuthor({ name: top.slice(0, 256) });
   if (m.coverImage.large) e.setThumbnail(m.coverImage.large);
   if (m.bannerImage) e.setImage(m.bannerImage);
   return e;
@@ -102,10 +105,17 @@ export function mediaView(store: Store, userId: string, m: Media, others: Media[
   return { embeds: [mediaCard(m)], components: mediaRows(userId, m, others, store.follows(userId).some((f) => f.media_id === m.id)), private: false };
 }
 
-const listCard = (title: string, emoji: string, kind: 'season' | 'trending', list: Media[]) => card({
-  kind, title, emoji, gif: 'off',
-  body: list.map((m, i) => `\`${String(i + 1).padStart(2)}\` **[${titleOf(m)}](${m.siteUrl})** · ${m.averageScore ? `⭐ ${m.averageScore}` : 'new'} · ${nice(m.format)}${m.nextAiringEpisode ? ` · ep ${m.nextAiringEpisode.episode} <t:${m.nextAiringEpisode.airingAt}:R>` : ''}`).join('\n'),
-});
+// the top show's banner on top, then a numbered list, two short lines each
+const listCard = (title: string, emoji: string, kind: 'season' | 'trending', list: Media[]) => {
+  const e = card({
+    kind, title, emoji, gif: 'off', line: '',
+    body: list.map((m, i) => `**${i + 1}. [${titleOf(m)}](${m.siteUrl})**\n-# ${[m.averageScore ? `⭐ ${m.averageScore}` : 'new', nice(m.format), m.genres.slice(0, 2).join(', '), m.nextAiringEpisode ? `ep ${m.nextAiringEpisode.episode} <t:${m.nextAiringEpisode.airingAt}:R>` : null].filter(Boolean).join(' · ')}`).join('\n'),
+  });
+  const lead = list.find((m) => m.bannerImage) ?? list[0];
+  if (lead?.bannerImage) e.setImage(lead.bannerImage);
+  if (list[0]?.coverImage.large) e.setThumbnail(list[0].coverImage.large);
+  return e;
+};
 
 const oops = (e: unknown) => card({ kind: 'error', title: 'AniList didn\'t answer', emoji: '📡', color: RED, gif: 'off', body: e instanceof AniListError ? e.message : 'Try again in a moment.' });
 
