@@ -7,6 +7,7 @@ import type { Command } from './module.js';
 import type { Ctx } from './ctx.js';
 import { card } from '../theme.js';
 import { menu } from './glance.js';
+import { argsOf, examples } from './examples.js';
 
 // option types from discord
 const SUB = 1, GROUP = 2, STR = 3, INT = 4, BOOL = 5, USER = 6, CHANNEL = 7, ROLE = 8, NUM = 10, FILE = 11;
@@ -105,43 +106,70 @@ export interface GroupInfo { label: string; emoji: string; about: string; extra?
 export interface Layout { sections: [string, string[]][]; quick: string[] }
 
 const row = <T extends MessageActionRowComponentBuilder>(...c: T[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
-// just the name, the menu below carries the descriptions, so the page stays short
-const line = (e: Entry) => `${e.emoji ?? '▫️'} ${e.label}${needsInput(e) ? ' 📝' : ''}`;
 
-// the front page of a group: a line about you, everything sorted into sections, buttons for the quick ones and a menu for all of it
-export function homePage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry[], o: { layout?: Layout; glance?: string | null; off?: string[] } = {}) {
+// things that only make sense typed, a click can't say who to hug or why you're away
+const typedOnly = new Set(['afk', 'quote', 'act', 'remind', 'roll', 'choose', '8ball', 'give', 'warn', 'kick', 'ban', 'unban', 'timeout', 'purge', 'slowmode']);
+export const isTyped = (e: Entry) => needsInput(e) || typedOnly.has(e.cmd.name);
+
+// one line for a typed command: the example, then what each part means
+function typedLine(e: Entry, prefix: string) {
+  if (e.cmd.hint) return e.cmd.hint.replaceAll('{p}', prefix);
+  const ex = examples(e.cmd, prefix).find((x) => !e.sub || x.label === e.sub) ?? examples(e.cmd, prefix)[0];
+  const parts = argsOf(e.cmd, e.sub).slice(0, 3).map((a) => `${a.shown}${a.required ? '' : '?'} ${a.about.toLowerCase()}`);
+  return `\`${ex?.typed ?? `${prefix} ${e.cmd.call ?? e.cmd.name}`}\`${parts.length ? `\n-# ${parts.join(' · ')}` : ''}`;
+}
+
+// fields hold 1024 characters, a long list is split over a few
+function chunks(title: string, lines: string[]) {
+  const out: { name: string; value: string; inline: boolean }[] = [];
+  let cur: string[] = [];
+  for (const l of lines) {
+    if ([...cur, l].join('\n').length > 1000) { out.push({ name: out.length ? '\u200b' : title, value: cur.join('\n'), inline: false }); cur = []; }
+    cur.push(l);
+  }
+  if (cur.length) out.push({ name: out.length ? '\u200b' : title, value: cur.join('\n'), inline: false });
+  return out;
+}
+
+// the front page of a group: things that work with a click up top, things you type below with an example each
+export function homePage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry[], o: { layout?: Layout; glance?: string | null; off?: string[]; prefix?: string } = {}) {
+  const prefix = o.prefix ?? 'tz';
   const show = entries.filter((e) => !e.cmd.admin || ctx.isAdmin);
-  const byKey = new Map(show.map((e) => [e.key, e]));
+  const click = show.filter((e) => !isTyped(e));
+  const typed = show.filter(isTyped);
+  const byKey = new Map(click.map((e) => [e.key, e]));
   const used = new Set<string>();
   const fields: { name: string; value: string; inline: boolean }[] = [];
   for (const [title, keys] of o.layout?.sections ?? []) {
     const list = keys.map((k) => byKey.get(k)).filter((e): e is Entry => !!e);
     list.forEach((e) => used.add(e.key));
-    if (list.length) fields.push({ name: title, value: list.map(line).join('\n'), inline: true });
+    if (list.length) fields.push({ name: title.replace(/^\S+\s/, ''), value: list.map((e) => e.label).join('\n'), inline: true });
   }
-  const rest = show.filter((e) => !used.has(e.key));
-  if (rest.length) fields.push({ name: fields.length ? '📂 More' : '📂 Everything', value: rest.map(line).join('\n').slice(0, 1024), inline: true });
-  const quickKeys = o.layout?.quick ?? show.filter((e) => !needsInput(e)).map((e) => e.key);
-  const quick = quickKeys.map((k) => byKey.get(k)).filter((e): e is Entry => !!e).slice(0, 5);
+  const rest = click.filter((e) => !used.has(e.key));
+  if (rest.length) fields.push({ name: fields.length ? 'More' : 'Click to open', value: rest.map((e) => e.label).join('\n').slice(0, 1024), inline: true });
+  if (typed.length) fields.push(...chunks('Type these', typed.map((e) => typedLine(e, prefix))));
+  const quickKeys = (o.layout?.quick ?? click.map((e) => e.key)).filter((k) => byKey.has(k));
+  const quick = quickKeys.map((k) => byKey.get(k)!).slice(0, 5);
   const notes = [
     o.glance,
     info.about,
-    o.off?.length ? `-# ${o.off.join(', ')} ${o.off.length === 1 ? 'is' : 'are'} switched off here${ctx.isAdmin ? ', turn it on in `/setup` → Features' : ''}.` : null,
+    o.off?.length ? `-# ${o.off.join(', ')} ${o.off.length === 1 ? 'is' : 'are'} switched off here${ctx.isAdmin ? ', turn it on in \`/setup\` → Features' : ''}.` : null,
   ].filter(Boolean);
   const owner = `owner=${ctx.userId},back=${home}`;
   const rows = [];
-  if (quick.length) rows.push(row(...quick.map((e) => {
-    const b = new ButtonBuilder().setCustomId(`nav|pick|${owner},key=${e.key}`).setLabel(short(e.label, 80)).setStyle(ButtonStyle.Secondary);
-    return e.emoji ? b.setEmoji(e.emoji) : b;
-  })));
-  for (let n = 0; n < show.length && rows.length < 5; n += 25) {
-    rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|pick|${owner},m=${n}`).setPlaceholder(n ? '📂 More' : '📂 Open anything').addOptions(
-      show.slice(n, n + 25).map((e) => ({ label: short(e.label, 100), value: e.key, description: short(`${needsInput(e) ? 'asks first · ' : ''}${e.about}`, 100), ...(e.emoji ? { emoji: e.emoji } : {}) })),
+  if (quick.length) rows.push(row(...quick.map((e) => new ButtonBuilder().setCustomId(`nav|pick|${owner},key=${e.key}`).setLabel(short(e.label, 80)).setStyle(ButtonStyle.Secondary))));
+  for (let n = 0; n < click.length && rows.length < 3; n += 25) {
+    rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|pick|${owner},m=${n}`).setPlaceholder(n ? 'More' : 'Open something').addOptions(
+      click.slice(n, n + 25).map((e) => ({ label: short(e.label, 100), value: e.key, description: short(e.about, 100) })),
     )));
   }
+  // the typed ones each have a page with every detail and a form for people who'd rather not type
+  if (typed.length) rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|help|as=feature,owner=${ctx.userId}`).setPlaceholder('How do I use...').addOptions(
+    [...new Map(typed.map((e) => [e.cmd.name, e])).values()].slice(0, 25).map((e) => ({ label: short(`${prefix} ${e.cmd.call ?? e.cmd.name}`, 100), value: e.cmd.name, description: short(e.cmd.data.description, 100) })),
+  )));
   if (!show.length) notes.push('Nothing to open here yet.');
   return {
-    embeds: [card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: `${notes.join('\n')}\n-# 📝 asks first · use the buttons or the menu`, fields })],
+    embeds: [card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: `${notes.join('\n')}${typed.length ? '\n-# ? means you can leave it out' : ''}`, fields })],
     components: rows,
   };
 }

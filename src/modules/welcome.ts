@@ -101,7 +101,7 @@ const rolepicker: Command = {
   },
 };
 
-function pickerView(title: string, about: string | null, style: string, roles: Role[]) {
+export function pickerView(title: string, about: string | null, style: string, roles: Role[]) {
   const e = card({ kind: 'roles', title, emoji: '🎭', gif: 'off', body: [about ?? '', roles.map((r) => `<@&${r.id}>`).join(' · ')].filter(Boolean).join('\n\n') });
   const rows = style === 'buttons'
     ? [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(

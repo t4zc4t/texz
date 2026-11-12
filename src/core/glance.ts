@@ -9,6 +9,7 @@ export const menu: Record<string, [string, string, string?]> = {
   poll: ['📊', 'Start a poll'], choose: ['🎯', 'Pick for me'], roll: ['🎲', 'Roll dice'], coin: ['🪙', 'Flip a coin'],
   ship: ['💞', 'Ship test'], '8ball': ['🎱', 'Magic 8ball'], guess: ['🔎', 'Guess the anime', 'A picture, four names, first right answer wins yen'],
   quiz: ['🏁', 'F1 quiz', '20 seconds, one try each, harder questions pay more'], trivia: ['🗞️', 'F1 trivia'], onthisday: ['📅', 'On this day', 'F1, football and anime history for today'],
+  'onthisday~topic=f1': ['📅', 'On this day in F1'], 'onthisday~topic=football': ['📅', 'On this day in football'], 'onthisday~topic=anime': ['📅', 'On this day in anime'],
   mission: ['🕵️', 'Today\'s mission', 'A daily challenge for bonus yen'],
   spawns: ['🔎', 'Claim help status', 'What Texz reads, the helper switch and your rare and type pings'], pokemon: ['🧩', 'Solve a hint', 'Type the hint, get the names that fit'],
   pings: ['🔔', 'Pings and reminders', 'Every ping and reminder Texz can send you, in one place'], remind: ['⏰', 'Remind me', 'A one-off reminder, like 2h drink water'], reminders: ['🎛️', 'OwO reminders', 'Which OwO timers ping you, where and when'],

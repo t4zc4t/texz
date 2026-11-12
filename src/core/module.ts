@@ -20,6 +20,8 @@ export interface Command {
   call?: string;
   // what to type after the command in the help example, like "2h drink water"
   example?: string;
+  // a ready line for the dashboard's typed list, when the plain example doesn't say enough
+  hint?: string;
   run(ctx: Ctx, store: Store): Promise<unknown>;
 }
 

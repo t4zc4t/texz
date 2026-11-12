@@ -40,45 +40,10 @@ function rulesText(store: Store, guildId: string) {
   return out.join('\n');
 }
 
+import { examples, argsOf } from '../core/examples.js';
+import { entriesOf } from '../core/dashboards.js';
+
 const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '🎖️', utility: '🧰', anime: '📺', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴', bulletins: '🗞️', spawns: '🎯' };
-
-// believable things to type after a command, so every help page shows a real example
-const sample: Record<string, string> = {
-  user: '@someone', other: '@friend', amount: '100', minutes: '30', note: 'drink water', title: 'Frieren', name: 'Gojo', day: 'tomorrow',
-  season: 'fall', year: '2026', when: '9pm', show: 'Frieren', type: 'manga', question: 'will it rain tomorrow?', options: 'pizza, burger, ramen',
-  dice: '2d6', reason: 'spamming links', length: '10m', id: '123456789012345678', hint: 'p_k_ch_', filter: 'best', topic: 'f1', feature: 'birthday',
-  what: 'cookie', days: '7', on: 'on', all: 'Best opening? | Unravel | Gurenge', level: '10', date: '14 march', role: '@Gamers', channel: '#general',
-  view: 'standings', club: 'Inter Miami', link: '(reply to a message)',
-};
-const subSample: Record<string, string> = { 'remind': '2h drink water', 'giveaway start': '1d 1 Nitro', 'birthday set': '14 march', 'football fav': 'Inter Miami', 'wish add': 'Gojo', 'xp give': '@someone 500', 'xp level': '@someone 10', 'roleshop buy': '@Gamers', 'announce add': '#news 9pm Movie night tonight' };
-
-// a typed example and the matching slash one, no <x> or [x] to decode
-function examples(c: Command, prefix: string): { label: string; typed: string; slash: string; about?: string }[] {
-  const t = c.text ?? {};
-  const call = c.call ?? c.name;
-  const opts = (c.data.options ?? []) as { name: string; description: string; type: number; options?: { name: string; type: number }[] }[];
-  const subs = opts.filter((o) => o.type === 1);
-  const fill = (args: string[]) => args.map((a) => sample[a] ?? a).join(' ');
-  const slashOf = (sub: string | null, args: string[]) => {
-    const base = c.group ? `/${c.group} view:${c.as ?? c.name}` : `/${c.name}${sub ? ` ${sub}` : ''}`;
-    if (!args.length) return c.group && sub ? `${base} input:${sub}` : base;
-    if (c.group) return `${base} input:${sub ? `${sub} ` : ''}${fill(args)}`;
-    return `${base} ${args.map((a) => `${a}:${sample[a] ?? a}`).join(' ')}`;
-  };
-  if (subs.length) {
-    return subs.slice(0, 5).map((sc) => {
-      const args = t.subArgs?.[sc.name] ?? [];
-      const ex = subSample[`${call} ${sc.name}`] ?? fill(args);
-      return { label: sc.name, about: sc.description, typed: `${prefix} ${call} ${sc.name}${ex ? ` ${ex}` : ''}`, slash: slashOf(sc.name, args) };
-    });
-  }
-  const args = t.args ?? [];
-  // the required bits, or the first optional one so the example shows what it takes
-  const needed = args.filter((a) => (opts.find((o) => o.name === a) as { required?: boolean } | undefined)?.required);
-  const ex = c.example ?? subSample[call] ?? fill(needed.length ? needed : args.slice(0, 1));
-  const shown = needed.length ? needed : args.slice(0, 1);
-  return [{ label: call, typed: `${prefix} ${call}${ex ? ` ${ex}` : ''}`, slash: c.group && ex ? `/${c.group} view:${c.as ?? c.name} input:${ex}` : slashOf(null, shown) }];
-}
 
 // who may see a command in help: staff things only for admins and the staff role
 let staffNow = false;
@@ -119,7 +84,7 @@ const help: Command = {
     const staff = (d: { name: string }) => (d.name === 'admin' ? ctx.isAdmin || staffNow : true);
     const dashes = dashList.filter((d) => (ctx.guildId || d.anywhere) && staff(d));
     const dashMenu = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      new StringSelectMenuBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=help`).setPlaceholder('🚪 Open a dashboard')
+      new StringSelectMenuBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=help`).setPlaceholder('Open a dashboard')
         .addOptions(dashes.map((d) => ({ label: d.label, value: d.home, emoji: d.emoji, description: `/${d.name} · ${prefix} ${d.name}` }))),
     );
 
@@ -143,20 +108,26 @@ const help: Command = {
       const others = found.filter((x) => x.id !== c.name).map((x) => all.find(({ c: o }) => o.name === x.id)!).filter(Boolean).slice(0, 5);
       const rows = [];
       if (others.length) rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-        new StringSelectMenuBuilder().setCustomId(`nav|help|as=feature,owner=${ctx.userId}`).setPlaceholder('🔎 Not it? Other matches')
+        new StringSelectMenuBuilder().setCustomId(`nav|help|as=feature,owner=${ctx.userId}`).setPlaceholder('Not it? Other matches')
           .addOptions(others.map(({ c: o }) => ({ label: `${prefix} ${o.call ?? o.name}`, value: o.name, description: o.data.description.slice(0, 100) }))),
       ));
       rows.push(dashMenu);
       const group = dashList.find((d) => d.name === c.group);
+      const parts = argsOf(c);
+      const form = entriesOf(c)[0];
+      if (form && (c.data.options ?? []).length) rows.unshift(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+        new ButtonBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=${group?.home ?? 'help'},key=${form.key}`).setLabel('Fill in a form instead').setStyle(ButtonStyle.Secondary),
+      ));
       return ctx.reply({ embeds: [card({
-        kind: 'help', title: `${prefix} ${c.call ?? c.name}`, emoji: group?.emoji ?? icons[m.name] ?? '📁', gif,
+        kind: 'help', title: `${prefix} ${c.call ?? c.name}`, emoji: '', gif,
         body: `${c.data.description}.`,
         fields: [
-          ...ex.map((e) => ({ name: ex.length > 1 ? `▸ ${e.label}${e.about ? ` · ${e.about}`.slice(0, 200) : ''}` : '⌨️ Try it', value: `\`${e.typed}\`\n\`${e.slash}\``, inline: false })),
-          ...(c.text?.aliases?.length ? [{ name: '✂️ Shorter', value: c.text.aliases.filter((a) => !a.includes(' ')).slice(0, 4).map((a) => `\`${prefix} ${a}\``).join(' · ') || '—', inline: true }] : []),
-          ...(group ? [{ name: '🚪 Lives in', value: `${group.emoji} ${group.label} · \`${prefix} ${group.name}\``, inline: true }] : []),
-          ...(c.admin ? [{ name: '🔐 Who', value: 'Admins with Manage Server', inline: true }] : []),
-          ...(!exact && found.length ? [{ name: '​', value: `-# Closest match for "${want}". Leave anything you're not sure about out and I'll ask.`, inline: false }] : [{ name: '​', value: '-# Leave anything out and I\'ll ask. Slash replies only show to you, typed ones to everyone.', inline: false }]),
+          ...ex.map((e) => ({ name: ex.length > 1 ? `${e.label}${e.about ? ` · ${e.about}`.slice(0, 200) : ''}` : 'Try it', value: `\`${e.typed}\`${c.hidden ? '' : `\n\`${e.slash}\``}`, inline: false })),
+          ...(parts.length ? [{ name: 'What goes after it', value: parts.map((a) => `\`${a.shown}\` ${a.about}${a.required ? '' : ' · optional'}`).join('\n').slice(0, 1024), inline: false }] : []),
+          ...(c.text?.aliases?.length ? [{ name: 'Shorter', value: c.text.aliases.filter((a) => !a.includes(' ')).slice(0, 4).map((a) => `\`${prefix} ${a}\``).join(' · ') || '—', inline: true }] : []),
+          ...(group ? [{ name: 'Lives in', value: `${group.label} · \`${prefix} ${group.name}\``, inline: true }] : []),
+          ...(c.admin ? [{ name: 'Who', value: 'Admins and the staff role', inline: true }] : []),
+          { name: '\u200b', value: !exact && found.length ? `-# Closest match for "${want}". Leave anything you're not sure about out and I'll ask.` : '-# Leave anything out and I\'ll ask. Slash replies only show to you, typed ones to everyone.', inline: false },
         ],
       })], components: rows });
     }
@@ -164,17 +135,16 @@ const help: Command = {
     // the front page is the dashboards, the same map as /owo, /fun and the rest
     const rows = [dashMenu];
     if (ctx.isAdmin && ctx.guildId) rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      new ButtonBuilder().setCustomId(`nav|setup|owner=${ctx.userId}`).setLabel('Admin desk').setEmoji('🛠️').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`nav|setup|owner=${ctx.userId}`).setLabel('Setup desk').setStyle(ButtonStyle.Secondary),
     ));
     return ctx.reply({ embeds: [card({
-      kind: 'help', title: 'The Agency directory', emoji: '🕵️', gif,
+      kind: 'help', title: 'The Agency directory', emoji: '', gif,
       body: [
-        '*Ten doors, one building. Pick one and click around, nothing to memorise.*',
+        '*Ten doors, one building. Each one has buttons for what works with a click, and examples for what you type.*',
         '',
-        ...dashes.map((d) => `${d.emoji} **${d.label}** · \`${prefix} ${d.name}\` · ${blurb[d.name] ?? ''}`),
+        ...dashes.map((d) => `${d.emoji} **${d.label}** · \`${prefix} ${d.name}\`\n-# ${blurb[d.name] ?? ''}`),
         '',
-        `🔎 Lost? Ask in plain words: \`${prefix} help money\` · \`${prefix} help ping me\``,
-        `✂️ Short forms work everywhere: \`${prefix} owo hb\` · \`${prefix} fun crest\` · \`${prefix} yen bal\``,
+        `Lost? Ask in plain words: \`${prefix} help money\` · \`${prefix} help hug\``,
       ].join('\n'),
     })], components: rows });
   },

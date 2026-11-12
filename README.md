@@ -6,7 +6,7 @@ Everything is behind a few dashboards, so nobody has to remember commands. Type 
 
 ## The dashboards
 
-Ten dashboards, each a single slash command and the same word typed after `tz`. Every page has a Back button to its dashboard and one to all of them, and old names (`tz games`, `tz you`, `tz staff`, `tz mod`) still open the new ones. Buttons open the quick things, a menu lists the rest, and anything that needs a person, a number or some text opens a small form. Everything also has a short form: `tz owo hb`, `tz fun crest`, `tz yen bal`, `tz admin mute`.
+Ten dashboards, each a single slash command and the same word typed after `tz`. Each one is split in two: things that work with a click sit on buttons and a menu, and things you type (like `tz hug @someone` or `tz afk eating`) are listed with an example and what each part means, plus a How do I use menu that opens the full page for one of them. Every page has a Back button, and old names (`tz games`, `tz you`, `tz staff`, `tz mod`) still open the new ones. Everything also has a short form: `tz owo hb`, `tz fun crest`, `tz yen bal`, `tz admin mute`.
 
 | Dashboard | Command | What's in it |
 |---|---|---|
@@ -73,11 +73,14 @@ Yen comes from `tz daily` (more for every day in a row), chatting a little, and 
 
 ## Community and the server layout
 
-`/setup` → **Build the Agency** lays out the whole Texz corner of a server in one click, with the right locks on every room:
+`/setup` → **Build the Agency** lays out the whole server in one click, with the right locks on every room:
 
-- 🚪 **Agency Front Door**, at the very top: `🌸┃new-recruits`, where welcomes and goodbyes go, and `💎┃agency-patrons` for booster thank-yous (off until switched on in `/setup` → Welcome). Both read-only.
-- 🕵️ **Agency Bulletin Board**: the F1, football and anime feeds, `🖋️┃ink-and-regret` for quotes and `⭐┃the-agency-files` for messages that get five ⭐. Read-only, people react.
-- 🥃 **Bar Lupin**: `🔢┃kunikidas-ledger` (one number each, a wrong one resets it, no files, stickers or threads), `💴┃the-yen-counter` (yen commands only answer there, so they don't spam the rest of the server) and `🕯️┃midnight-confessions`, where `tz confess` or the pinned button posts anonymous numbered confessions (staff can look one up with `tz confess trace 12`).
+- 🚪 **Agency Front Door**, at the very top: `🌸┃new-recruits` for welcomes and goodbyes, `📜┃agency-rules`, `🎭┃pick-your-roles` with menus for the F1, football, rare spawn and rare drop pings and ten name colours in the Agency's palette, and `💎┃agency-patrons` for booster thank-yous (off until switched on in `/setup` → Welcome). All read-only.
+- 🕵️ **Agency Bulletin Board**: the F1, football and anime feeds, `🎖️┃promotions` for rank ups, `🖋️┃ink-and-regret` for quotes and `⭐┃the-agency-files` for messages that get five stars. Read-only, people react. Anime episodes don't ping the server, everyone's own shows reach them in DMs.
+- ☕ **The Agency Office**: `💬┃agency-office`, the general chat, and `📸┃evidence-board` for pictures and memes.
+- 🥃 **Bar Lupin**: `🔢┃kunikidas-ledger` (one number each, a wrong one resets it, no files, stickers or threads), `💴┃the-yen-counter` (yen commands only answer there) and `🕯️┃midnight-confessions`, where `tz confess` or the pinned button posts anonymous numbered confessions.
+- 🎲 **Ability Grounds**: `🔴┃pokedex-bureau`, `🃏┃card-vault` and `🐾┃stray-dogs-den` for Pokétwo, Shoob and OwO. Commands and chat, no threads or files.
+- 🎙️ **Lupin Lounge**: voice channels Bar Lupin, Late Night Shift, Mission Room and Watch Party.
 - 🗄️ **Port Mafia Archives**, at the very bottom and hidden from everyone but staff: `⚖️┃executive-orders` for moderation and automod, `👁️┃black-lizard-watch` for joins, leaves, edits and deletes, and `📓┃texz-ledger` for settings changes.
 
 Channels Texz made before are moved and renamed instead of duplicated, and the ping roles it hands out carry no permissions. Every Monday the week's file goes to the archive: top chatters, top catchers, the busiest channel and the count.

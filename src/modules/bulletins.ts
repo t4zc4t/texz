@@ -32,6 +32,20 @@ export const CATEGORY = '🕵️ Agency Bulletin Board';
 
 const pingRow = (kind: Kind) => row(new ButtonBuilder().setCustomId(`bul|${kind}`).setLabel(`Ping me (${names[kind].role})`).setEmoji('🔔').setStyle(ButtonStyle.Secondary));
 
+// the anime role and the per-show watcher roles are gone, the episodes reach people in DMs
+export async function dropAnimeRoles(store: Store, guild: Guild) {
+  if (store.getKv(`animeroles:gone:${guild.id}`)) return;
+  const g = store.guild(guild.id);
+  const ids = [g.bulletins.anime.role, guild.roles.cache.find((r) => r.name === names.anime.role)?.id];
+  let gone = 0;
+  for (const { key, value } of store.kvByPrefix(`fanrole:${guild.id}:show:`)) { ids.push(value); store.setKv(key, null); gone++; }
+  for (const id of new Set(ids.filter((x): x is string => !!x))) await guild.roles.cache.get(id)?.delete('anime pings now go by DM').catch(() => {});
+  if (gone) store.setKv(`fanroles:${guild.id}`, String(Math.max(0, Number(store.getKv(`fanroles:${guild.id}`) ?? 0) - gone)));
+  g.bulletins.anime.role = null;
+  store.saveGuild(guild.id, g);
+  store.setKv(`animeroles:gone:${guild.id}`, '1');
+}
+
 // makes the category, three channels and three roles, reusing any that already exist
 export async function buildBoard(store: Store, guild: Guild): Promise<string> {
   const me = await guild.members.fetchMe();
@@ -45,9 +59,12 @@ export async function buildBoard(store: Store, guild: Guild): Promise<string> {
   for (const kind of ['f1', 'football', 'anime'] as const) {
     const feed = b[kind];
     const n = names[kind];
-    let role = feed.role ? guild.roles.cache.get(feed.role) ?? null : null;
-    role ??= guild.roles.cache.find((r) => r.name === n.role) ?? await guild.roles.create({ name: n.role, colors: { primaryColor: n.color }, mentionable: false, reason: 'bulletin pings from /setup' });
-    feed.role = role.id;
+    // anime has no server ping, everyone's own shows reach them in DMs
+    if (kind !== 'anime') {
+      let role = feed.role ? guild.roles.cache.get(feed.role) ?? null : null;
+      role ??= guild.roles.cache.find((r) => r.name === n.role) ?? await guild.roles.create({ name: n.role, colors: { primaryColor: n.color }, mentionable: false, reason: 'bulletin pings from /setup' });
+      feed.role = role.id;
+    }
     // saved id first, so renames and moves don't matter, then the name, then a fresh one
     let ch = feed.channel ? await guild.channels.fetch(feed.channel).catch(() => null) : null;
     ch ??= guild.channels.cache.find((c) => c.type === ChannelType.GuildText && c.name === n.channel) ?? null;
@@ -60,8 +77,8 @@ export async function buildBoard(store: Store, guild: Guild): Promise<string> {
     }
     if (fresh && ch.isSendable()) {
       await ch.send({
-        embeds: [card({ kind: 'bulletin', title: `${n.emoji} ${n.channel.split('┃')[1].replace(/-/g, ' ')}`, emoji: '', gif: 'off', body: `${n.topic}.\nPress the button to get the **${n.role}** role and a ping when it matters. Press again to drop it.` })],
-        components: [pingRow(kind)],
+        embeds: [card({ kind: 'bulletin', title: `${n.emoji} ${n.channel.split('┃')[1].replace(/-/g, ' ')}`, emoji: '', gif: 'off', body: kind === 'anime' ? `${n.topic}.\nYour own shows reach you in DMs, add them with \`tz anime list add\`.` : `${n.topic}.\nPress the button to get the **${n.role}** role and a ping when it matters. Press again to drop it.` })],
+        components: kind === 'anime' ? [] : [pingRow(kind)],
       }).then((m) => m.pin().catch(() => {})).catch(() => {});
     }
     feed.channel = ch.id;
@@ -435,8 +452,8 @@ async function animeTick(client: Client, store: Store, guilds: [string, Bulletin
       if (a.media.coverImage.large) e.setThumbnail(a.media.coverImage.large);
       if (a.media.bannerImage) e.setImage(a.media.bannerImage);
       const watch = (a.media.externalLinks ?? []).filter((l) => l.type === 'STREAMING' && !l.isDisabled && l.url.startsWith('https://')).slice(0, 3);
-      const fans = await fanPing(client, store, gid, `show:${a.media.id}`, `${titleOf(a.media).slice(0, 80)} Watchers`, await membersAmong(client, gid, store.watchersOf(a.media.id)));
-      await post(client, b.anime, { users: fans.users, fanRoles: fans.role ? [fans.role] : [], ping: true, react: last ? ['🎬', '😭'] : ['📺', '🔥'], embed: e, buttons: watch.map((l) => link(l.url, `Watch on ${l.site}`.slice(0, 80))) });
+      // no pings here, watchers already get their own DM
+      await post(client, b.anime, { react: last ? ['🎬', '😭'] : ['📺', '🔥'], embed: e, buttons: watch.map((l) => link(l.url, `Watch on ${l.site}`.slice(0, 80))) });
     }
   }
 }

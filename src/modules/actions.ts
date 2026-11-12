@@ -117,7 +117,7 @@ const each: Command[] = Object.keys(acts).map((name) => ({
   name,
   hidden: true,
   cooldown: 4,
-  data: new SlashCommandBuilder().setName(name).setDescription(`${acts[name].emoji} ${name} someone`)
+  data: new SlashCommandBuilder().setName(name).setDescription(`${name[0].toUpperCase()}${name.slice(1)} someone, with an anime gif`)
     .addUserOption((o) => o.setName('user').setDescription('Who')).toJSON(),
   text: { args: ['user'] },
   run: run(name),
@@ -131,6 +131,7 @@ const act: Command = {
     .addUserOption((o) => o.setName('user').setDescription('Who, leave empty for the ones that work alone')).toJSON(),
   text: { aliases: ['action', 'interact'], args: ['action', 'user'] },
   example: 'hug @someone',
+  hint: '`{p} hug @someone`\n-# swap hug for pat, cuddle, poke, bonk, slap, punch, bite, tickle, highfive, handhold, kiss, yeet, wave, carry, feed, stare or baka\n`{p} cry`\n-# works alone too: cry, blush, dance, laugh, smug, sleep, pout, shrug, facepalm, tableflip, sip, nope, salute',
   run: async (ctx, store) => {
     const action = (ctx.str('action') ?? '').toLowerCase();
     if (!acts[action]) return ctx.reply({ content: `Pick one of: ${Object.keys(acts).map((x) => `\`${x}\``).join(' ')}`, temp: true });

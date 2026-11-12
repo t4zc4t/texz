@@ -127,7 +127,7 @@ for (const [name, g] of Object.entries(groups)) {
       const all = groupEntries(name);
       const on = (h: Hit) => h.mod.locked || store.rules(ctx.guildId, h.mod.name).enabled;
       const off = [...new Set(all.filter(({ hit }) => !on(hit)).map(({ hit }) => hit.mod.label))];
-      return ctx.reply(homePage(ctx, g.dashboard!, g, all.filter(({ hit }) => on(hit)).map(({ e }) => e), { layout: layout[name], glance: all.some(({ hit }) => on(hit)) ? glance(name, ctx, store) : null, off }));
+      return ctx.reply(homePage(ctx, g.dashboard!, g, all.filter(({ hit }) => on(hit)).map(({ e }) => e), { layout: layout[name], glance: all.some(({ hit }) => on(hit)) ? glance(name, ctx, store) : null, off, prefix: ctx.guildId ? store.guild(ctx.guildId).prefix : 'tz' }));
     },
   };
   core.commands.push(cmd);
