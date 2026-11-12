@@ -1,4 +1,5 @@
 import { mycolour } from './mycolour.js';
+import { casinoCommands, money } from './casino.js';
 import { track } from './missions.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, SlashCommandBuilder, type Message, type MessageActionRowComponentBuilder } from 'discord.js';
 import type { Store } from '../db.js';
@@ -67,7 +68,7 @@ const daily: Command = {
 const balance: Command = {
   name: 'wallet',
   group: 'you',
-  data: new SlashCommandBuilder().setName('wallet').setDescription('Your yen, your daily and the richest people here')
+  data: new SlashCommandBuilder().setName('wallet').setDescription('Your yen (money), your daily and the richest people here')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
   text: { aliases: ['bal', 'balance'], args: ['user'] },
   run: (ctx, store) => {
@@ -181,5 +182,5 @@ export const economy: Module = {
   name: 'economy',
   label: 'Economy',
   about: 'Yen from a daily claim, chatting and games, and a shop where admins sell roles',
-  commands: [daily, balance, give, rich, shop, mycolour],
+  commands: [daily, balance, give, rich, shop, mycolour, ...casinoCommands, money],
 };

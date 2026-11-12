@@ -65,6 +65,9 @@ export function settleAll(client: Client, store: Store) {
   try {
     const home = client.guilds.cache.find(isHome);
     if (home) splitOld(store, home);
+    // the owner's error reports belong in the home server's Texz ledger, not wherever they were first pointed
+    const ledger = home ? store.getKv(`botlog:${home.id}`) : null;
+    if (ledger && store.getKv('errorChannel') !== ledger) store.setKv('errorChannel', ledger);
     for (const guild of client.guilds.cache.values()) {
       settleGuild(store, guild);
       void dropAnimeRoles(store, guild).catch((e) => report('anime roles', e));

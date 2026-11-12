@@ -1,6 +1,7 @@
+import { verdictCard, type VerdictRow } from '../features/predcard.js';
 import { track } from './missions.js';
 import {
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder,
+  ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder,
   type Interaction, type MessageActionRowComponentBuilder,
 } from 'discord.js';
 import type { Store } from '../db.js';
@@ -174,6 +175,30 @@ export function scoreMatch(store: Store, guild: string, m: Match): string[] {
 
 // ---------- the desk: a channel where the day's calls are posted for everyone ----------
 
+// yesterday's desk matches, how they ended and who called them, drawn like the F1 results
+async function postVerdict(store: Store, guild: import('discord.js').Guild, ch: import('discord.js').SendableChannels, day: string) {
+  const list = JSON.parse(store.getKv(`desk:list:${day}:${guild.id}`) ?? '[]') as { id: string; league: string; date: number }[];
+  if (!list.length) return;
+  const rows: VerdictRow[] = [];
+  const tally = new Map<string, number>();
+  for (const x of list) {
+    const m = (await matches(x.league, new Date(x.date), 0).catch(() => [] as Match[])).find((y) => y.id === x.id);
+    if (!m || m.state !== 'post') continue;
+    // the feed may have missed it, scoring twice is safe
+    scoreMatch(store, guild.id, m);
+    const result = m.home.winner ? 'home' : m.away.winner ? 'away' : 'draw';
+    const calls = store.kvByPrefix(`pred:fb:${m.id}:${guild.id}:`).filter(({ key }) => !key.endsWith(':paid'));
+    const right = calls.filter(({ value }) => value === result);
+    for (const { key } of right) { const u = key.split(':').at(-1)!; tally.set(u, (tally.get(u) ?? 0) + 1); }
+    rows.push({ home: m.home.name, away: m.away.name, score: `${m.home.score ?? 0} – ${m.away.score ?? 0}`, result, right: right.length, total: calls.length });
+  }
+  if (!rows.length) return;
+  const best = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const top = await Promise.all(best.map(async ([u, n]) => ({ name: (await guild.members.fetch(u).catch(() => null))?.displayName ?? 'someone', right: n, yen: n * MATCH_PAY })));
+  const png = await verdictCard({ title: 'The verdict', subtitle: `${new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} · ${rows.length} match${rows.length === 1 ? '' : 'es'}`, rows, top }, store.getKv(`f1theme:${guild.id}`));
+  await ch.send({ content: best.length ? `🔮 Yesterday's calls are settled. Sharpest: ${best.slice(0, 3).map(([u]) => `<@${u}>`).join(' ')}` : '🔮 Yesterday\'s calls are settled.', files: [new AttachmentBuilder(png, { name: 'verdict.png' })], allowedMentions: { users: best.slice(0, 3).map(([u]) => u) } }).catch(() => {});
+}
+
 export const DESK = { name: '🔮┃ranpos-deductions', topic: 'Call the day\'s big matches and the next podium before they start. Right calls pay yen, the best get a spot on tz predict top.' };
 
 // the early morning football post, and an F1 one once per race week
@@ -186,11 +211,13 @@ export function startDesk(client: import('discord.js').Client, store: Store) {
       if (!id || !store.rules(guild.id, 'bulletins').enabled) continue;
       const ch = await guild.channels.fetch(id).catch(() => null);
       if (!ch?.isSendable()) continue;
-      // around 6 in the morning in India
+      // around 6 in the morning in India: first yesterday's verdict as a picture, then today's calls
       if (now.getUTCHours() * 60 + now.getUTCMinutes() >= 30 && store.firstTime(guild.id, `desk:fb:${day}`)) {
+        await postVerdict(store, guild, ch, new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10)).catch((e) => console.error('verdict', e));
         const big = (await todaysBig(store, guild.id).catch(() => [] as Match[])).slice(0, 4);
         if (big.length) {
           for (const m of big) store.setKv(`predko:${m.id}`, String(m.date));
+          store.setKv(`desk:list:${day}:${guild.id}`, JSON.stringify(big.map((m) => ({ id: m.id, league: m.league, date: m.date }))));
           const ping = store.getKv(`predrole:${guild.id}`);
           await ch.send({
             content: ping && guild.roles.cache.has(ping) ? `<@&${ping}> today's calls are open` : undefined,

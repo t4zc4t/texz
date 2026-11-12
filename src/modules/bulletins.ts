@@ -458,16 +458,18 @@ async function animeTick(client: Client, store: Store, guilds: [string, Bulletin
       if (!wanted(a.media) || !store.firstTime(gid, `an:ep:${a.media.id}:${a.episode}`)) continue;
       const last = !!a.media.episodes && a.episode === a.media.episodes;
       const e = card({ kind: 'anEp', title: `${titleOf(a.media)} · episode ${a.episode}`, emoji: last ? '🎬' : a.episode === 1 ? '🆕' : '📺', color: names.anime.color,
-        // the show's own banner beats any gif, the gif only fills in when there isn't one
-        gif: a.media.bannerImage ? 'off' : gifIn(store, gid, 'episode'),
+        // always the show's own art, its banner or else its cover, never a gif
+        gif: 'off',
         line: '',
         body: [
           last ? '**The finale is out.**' : a.episode === 1 ? '**Premiere, a new show starts today.**' : '**Out now.**',
           a.media.episodes ? `${bar(a.episode, a.media.episodes)} ${a.episode}/${a.media.episodes}` : null,
           `-# ${[a.media.genres.slice(0, 3).join(' · '), a.media.averageScore ? `⭐ ${a.media.averageScore}` : null, a.media.studios.nodes[0]?.name].filter(Boolean).join(' · ')}`,
         ].filter(Boolean).join('\n') }).setURL(a.media.siteUrl);
-      if (a.media.coverImage.large) e.setThumbnail(a.media.coverImage.large);
-      if (a.media.bannerImage) e.setImage(a.media.bannerImage);
+      if (a.media.bannerImage) {
+        e.setImage(a.media.bannerImage);
+        if (a.media.coverImage.large) e.setThumbnail(a.media.coverImage.large);
+      } else if (a.media.coverImage.large) e.setImage(a.media.coverImage.large);
       const watch = (a.media.externalLinks ?? []).filter((l) => l.type === 'STREAMING' && !l.isDisabled && l.url.startsWith('https://')).slice(0, 3);
       // no pings here, watchers already get their own DM
       await post(client, b.anime, { react: last ? ['🎬', '😭'] : ['📺', '🔥'], embed: e, buttons: watch.map((l) => link(l.url, `Watch on ${l.site}`.slice(0, 80))) });

@@ -14,7 +14,7 @@ import { setupPanel } from '../features/setup.js';
 const blurb: Record<string, string> = {
   admin: 'mod, cases, giveaways, posts, setup', owo: 'huntbot, gems, zoo, weapons, timers', poketwo: 'claim help, hints, dex, race', shoob: 'rare drops, wishlist',
   anime: 'airing, search, your list, movie night, watch parties', sports: 'F1, football, international games, predictions', fun: 'hug, bonk, quizzes, ship, quotes',
-  profile: 'card, favourites, rank, medals, bonds, pings', yen: 'daily, wallet, give, your own colour role, role shop', misc: 'user, server, afk, reminders, private voice booth',
+  profile: 'card, favourites, rank, medals, bonds, pings', yen: 'daily, wallet, give, slots, blackjack, your own colour role, role shop', misc: 'user, server, afk, reminders, private voice booth',
 };
 
 // the dashboards, filled in by the registry, so help can list them
@@ -99,7 +99,10 @@ const help: Command = {
     if (want) {
       // an admin command asked for by name gets a straight answer instead of a near miss
       const locked = allModules.flatMap((m) => m.commands).find((c) => (c.name === want || c.call === want || c.text?.aliases?.includes(want)) && !allowed(ctx, c));
-      if (locked) return ctx.reply({ embeds: [card({ kind: 'help', title: `${prefix} ${locked.call ?? locked.name}`, emoji: '🔐', gif: 'off', body: `${locked.data.description}.\nThat one is for staff, so it stays out of your menus.` })], components: [dashMenu] });
+      // a plain word like "money" that also names a staff command still finds the things anyone can use
+      const word = new RegExp(`\\b${want.replace(/[^a-z0-9 ]/gi, '')}\\b`, 'i');
+      const open = all.some(({ c }) => word.test(c.data.description));
+      if (locked && !open) return ctx.reply({ embeds: [card({ kind: 'help', title: `${prefix} ${locked.call ?? locked.name}`, emoji: '🔐', gif: 'off', body: `${locked.data.description}.\nThat one is for staff, so it stays out of your menus.` })], components: [dashMenu] });
       const exact = all.find(({ c }) => c.name === want || c.call === want || c.text?.aliases?.includes(want));
       const found = search(want, all.map(({ m, c }) => ({ id: c.name, names: [c.name, c.call ?? '', ...(c.text?.aliases ?? []), c.as ?? ''].filter(Boolean), text: `${c.data.description} ${m.label} ${m.about} ${c.group ?? ''}` })));
       const pick = exact ?? all.find(({ c }) => c.name === found[0]?.id);

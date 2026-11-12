@@ -182,7 +182,10 @@ export function fromText(m: Message, tokens: string[], argNames: string[], hasSu
     role: (n) => id(n, /^<@&(\d+)>$/) ?? values.get(n)?.match(/^(\d{15,})$/)?.[1] ?? null,
     reply: (r) => {
       const n = normalise(r);
-      return m.reply({ content: n.content, embeds: n.embeds, components: n.components, files: n.files, allowedMentions: { repliedUser: false, parse: [], users: n.ping } })
+      const body = { content: n.content, embeds: n.embeds, components: n.components, files: n.files, allowedMentions: { repliedUser: false, parse: [], users: n.ping } };
+      // the typed message may be gone already (a purge takes it too), then the answer just goes in the channel
+      return (m.reply(body) as Promise<Message>)
+        .catch((e: { code?: number }): Promise<Message> => (e?.code === 50035 || e?.code === 10008) && m.channel.isSendable() ? m.channel.send(body) as Promise<Message> : Promise.reject(e))
         .then((sent) => { afterSend?.(sent, n.temp); return sent; });
     },
   };

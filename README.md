@@ -18,7 +18,7 @@ Everything sits behind ten dashboards, each one a slash command and the same wor
 | 🏁 Paddock & Pitch | `/sports` | F1, football, international games and predictions |
 | 🥃 Bar Lupin | `/fun` | interactions, F1 quiz, crest quiz, guess the anime, trivia, quotes, ship, polls, confessions and dice |
 | 🪪 Personnel File | `/profile` | your profile card and favourites, rank, medals, closest people, mission, birthday and every ping you get |
-| 💴 Yen Ledger | `/yen` | daily, wallet, give, the rich list, a colour role of your own and the role shop |
+| 💴 Yen Ledger | `/yen` | daily, wallet, give, the rich list, coin flips, slots, blackjack, a colour role of your own and the role shop |
 | 🧰 Odds & Ends | `/misc` | user and server info, avatar, afk, one-off reminders, private voice booths and the bot ping |
 
 Each dashboard is a short list of its commands, a few per page, with the typed form, the slash form, the short names and what goes after it (`?` marks the parts you can leave out). `tz help hug` or `/help feature:hug` opens the right page with that command marked. Port Mafia HQ, `/setup` and the pings panel stay proper dashboards with buttons, since that's where things get switched on and off.
@@ -30,6 +30,7 @@ Each dashboard is a short list of its commands, a few per page, with the typed f
 - 🚪 **Agency Front Door**, at the very top
   - `🚪┃the-entrance-exam`: newcomers only see this and the rules until they press the button, which gives them **Agency Member** and opens the rest of the server. Everyone already in gets it automatically and bots skip it.
   - `📜┃agency-rules`, `🌸┃new-recruits` for welcomes and goodbyes, `💎┃agency-patrons` for booster thank-yous (off until it's switched on in `/setup` → Welcome)
+  - `📈┃ranks-and-perks`: every rank with its level, role and perks, plus the special roles and how to get them
   - `🎭┃pick-your-roles`: the informant pings (F1, football, prediction calls, rare spawns, rare drops), pronouns, region (Asia Branch, Europe Branch and so on), DMs (Line Open, Knock First, Line Closed) and ten name colours in the Agency's palette. Everything except the pings is one at a time.
 - 🕵️ **Agency Bulletin Board**: the F1, football and anime feeds, `🔮┃ranpos-deductions` for predictions, `🎖️┃promotions` for rank ups, `🖋️┃ink-and-regret` for quotes and `⭐┃the-agency-files` for the best messages and rare spawns
 - 🥃 **Bar Lupin**: `💬┃agency-office` (general chat), `📸┃evidence-board` (pictures and memes), `🔴┃pokedex-bureau`, `🃏┃card-vault` and `🐾┃stray-dogs-den` for the game bots, `🔢┃kunikidas-ledger` (counting), `💴┃the-yen-counter` (yen commands only answer there) and `🕯️┃midnight-confessions`
@@ -44,7 +45,7 @@ Every feature starts switched off in a new server, so nothing happens until an a
 
 - **F1**, from [Parc Fermé](https://parc-ferme.pages.dev): race week board, a ping before qualifying, sprints and the race, a live thread on race day, and results drawn as cards in Parc Fermé's look (Port Mafia dark or Detective Agency light). Results come with the race time, fastest lap, quickest pit stop, the biggest climb and how many didn't finish, and qualifying shows the pole lap. Standings, the schedule, an evening trivia fact and "on this day" too.
 - **Football**, from ESPN's public scoreboards: the day's matches worth watching, kick-off cards with both crests and full-time cards with the score and scorers, across 25+ leagues and cups. During international breaks the big national teams (and India) get posted too, Nations League, friendlies and qualifiers included. Anyone with a club on their profile gets pinged the moment their club scores.
-- **Predictions**: every morning `🔮┃ranpos-deductions` gets the day's big matches with home, draw and away buttons, and on race week a podium pick, pinging the **Deduction Informant** role. Calls close at kick-off or lights out, right calls pay yen and show up under the result, and `tz predict top` is the season table.
+- **Predictions**: every morning `🔮┃ranpos-deductions` first gets yesterday's verdict, drawn like the F1 results (each score, how many called it and the sharpest minds), then the day's big matches with home, draw and away buttons, and on race week a podium pick, pinging the **Deduction Informant** role. Calls close at kick-off or lights out, right calls pay yen and show up under the result, and `tz predict top` is the season table.
 
 Teams and clubs show their real logos as emoji wherever they're named, and `tz f1 quiz`, `tz quiz crest` and `tz history` are in Bar Lupin.
 
@@ -52,13 +53,13 @@ Teams and clubs show their real logos as emoji wherever they're named, and `tz f
 
 `tz anime <title>`, `tz manga <title>` and `tz char <name>` pull clean cards from AniList with the cover, banner, score, episodes, genres, related shows and official watch links. `tz wl` is your list with quick +1 episode buttons, and 🔔 on an airing show gets you a DM for every new episode. `tz whatson` is the day's schedule in your timezone with trending and the season a click away, `tz wp 21:00 frieren` plans a watch party with an event, pings and a spoiler thread, and there's a character of the day.
 
-**Movie night**: `tz movie` opens a picker for genres, decade, language, score and length, then rolls one, shows ten or puts three to a real Discord poll, handy in a watch party chat. `tz movie inception` looks one up with its poster, trailer, cast and a where to watch link, and `tz movie like interstellar` finds ones like it.
+**Movie night**: every evening a movie of the day lands in the Watch Party voice room's chat, a different mood each day. `tz movie` opens a picker for genres, decade, language, score and length, then rolls one, shows ten or puts three to a real Discord poll, handy in a watch party chat. `tz movie inception` looks one up with its poster, trailer, cast and a where to watch link, and `tz movie like interstellar` finds ones like it.
 
 The anime board posts the day's screenings with the biggest show's banner, each new episode with its art, "on this day" and a weekly recap. It never pings the server, everyone's own shows reach them by DM. AniList allows 30 requests a minute, so texz paces itself and keeps answers for half an hour.
 
 ## Games and interactions
 
-- **Interactions**: `tz hug @someone`, `tz pat`, `tz bonk`, `tz slap`, `tz kabedon`, `tz yeet` and 50 more, each with an anime gif and a line in the Agency's voice, plus a button for the other person to send one straight back. Some work alone, like `tz cry` or `tz tableflip`. `tz bonds` shows who you trade the most with, and the top three show under your profile card.
+- **Interactions**: `tz hug @someone`, `tz pat`, `tz bonk`, `tz slap`, `tz kabedon`, `tz yeet` and 50 more, each with an anime gif and a line in the Agency's voice, plus a button for the other person to send one straight back. Some work alone, like `tz cry`, `tz smile` or `tz tableflip`, or `/emote` from anywhere. `tz bonds` shows who you trade the most with, and the top three show under your profile card.
 - **Quizzes that pay yen**: the F1 quiz, the crest quiz, guess the anime and F1 trivia.
 - **Make it a Quote** turns a message into a framed quote picture (right click menu, `tz quote` as a reply, or a link). A copy goes to the quotes room and the most loved one each week becomes quote of the week.
 - The 8 question ship test, polls, dice, coin, 8ball and pick for me.
@@ -69,7 +70,7 @@ The anime board posts the day's screenings with the biggest show's banner, each 
 
 Levels are off until an admin turns them on. Ranks go from Stray up to Living Legend of Yokohama, each with perks (more xp, a bigger daily, extra giveaway chances), and `/setup` makes the rank roles in order. `tz rank` draws a rank card.
 
-Yen comes from `tz daily` (more for a streak), chatting, the quizzes and predictions. `tz give`, the role shop and `tz mycolour buy #c8283c` spend it: that last one is a role nobody else has for ¥5,000, with the colour, a gradient, the name or an icon changeable for ¥300 each.
+Yen comes from `tz daily` (more for a streak), chatting, the quizzes and predictions. `tz give`, the back room (`tz flip 100 heads`, `tz slots 200`, `tz bj 500`, bets from ¥10 to ¥10,000, `half` and `all` work too), the role shop and `tz mycolour buy #c8283c` spend it: that last one is a role nobody else has for ¥5,000, with the colour, a gradient, the name or an icon changeable for ¥300 each.
 
 Every day the server gets one Agency mission that pays yen (`tz mission`), and `tz achievements` shows all the medals, bronze to gold with relics for the rare ones. Up to six of them hang on your profile card.
 
@@ -94,7 +95,7 @@ texz watches the game bots people play and keeps track for them. It never plays 
 
 ## Moderation
 
-`tz warn`, `tz timeout @someone 10m`, `tz kick`, `tz ban` (`tz ban @someone 3d` lifts itself), `tz unban`, `tz purge 20`, `tz lock` and `tz slow 10s`. Every action is a numbered case with a DM to the person and `tz case` searches them. Automod (invites, spam, mass mentions), logs, tickets and a staff role that can use Port Mafia HQ are set from `/setup`.
+`tz warn`, `tz timeout @someone 10m`, `tz kick`, `tz ban` (`tz ban @someone 3d` lifts itself), `tz unban`, `tz purge 20`, `tz lock` and `tz slow 10s`. Every action is a numbered case with a DM to the person and `tz case` searches them. Admins can move xp with `tz xp give/take/level @someone` and yen with `tz money give/take/set @someone 500`. Automod (invites, spam, mass mentions), logs, tickets and a staff role that can use Port Mafia HQ are set from `/setup`.
 
 ## Outside the server
 

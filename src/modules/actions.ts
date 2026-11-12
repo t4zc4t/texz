@@ -63,6 +63,9 @@ const acts: Record<string, Act> = {
   nod: { emoji: '🙂‍↕️', past: 'nods', lines: ['{a} nods at {b}. Understood.'], solo: ['{a} nods.'] },
   lurk: { emoji: '🫣', past: 'lurks', lines: ['{a} lurks behind {b}.'], solo: ['{a} is lurking. Black Lizard training.'] },
   run: { emoji: '🏃', past: 'runs from', lines: ['{a} runs away from {b}. Fast.'], solo: ['{a} runs. From responsibility, probably.'] },
+  smile: { emoji: '😊', past: 'smiles', lines: ['{a} smiles at {b}. Rare, from this one.'], solo: ['{a} smiles. The whole Agency notices.'] },
+  bored: { emoji: '😑', past: 'is bored', lines: ['{a} is bored of {b}. Ouch.'], solo: ['{a} is bored. Dazai suggests a nap.'] },
+  wag: { emoji: '🐕', past: 'wags', lines: ['{a} wags at {b}. Loyal.'], solo: ['{a} wags. A true stray dog.'] },
   salute: { emoji: '🫡', past: 'salutes', lines: ['{a} salutes {b}. Yes, boss.'], solo: ['{a} salutes. Reporting for duty.'] },
 };
 
@@ -148,6 +151,23 @@ const each: Command[] = Object.keys(acts).map((name) => ({
   run: run(name),
 }));
 
+// the ones that work alone, one slash command for all of them
+const SOLO = ['cry', 'smile', 'blush', 'dance', 'laugh', 'smug', 'sleep', 'pout', 'shrug', 'facepalm', 'tableflip', 'happy', 'angry', 'shocked', 'confused', 'think', 'yawn', 'bored', 'nya', 'wag', 'spin', 'clap', 'thumbsup', 'wink', 'salute'];
+const emote: Command = {
+  name: 'emote',
+  group: 'fun',
+  hidden: true,
+  cooldown: 4,
+  data: new SlashCommandBuilder().setName('emote').setDescription('Cry, smile, dance, blush and more, with an anime gif')
+    .addStringOption((o) => o.setName('feeling').setDescription('What you\'re feeling').setRequired(true).addChoices(...SOLO.map((m) => ({ name: `${acts[m].emoji} ${m}`, value: m })))).toJSON(),
+  text: { args: ['feeling'] },
+  run: async (ctx, store) => {
+    const f = (ctx.str('feeling') ?? '').toLowerCase();
+    if (!acts[f]) return ctx.reply({ content: `Pick one of: ${SOLO.map((x) => `\`${x}\``).join(' ')}`, temp: true });
+    return run(f)({ ...ctx, user: () => null } as typeof ctx, store);
+  },
+};
+
 const act: Command = {
   name: 'act',
   cooldown: 4,
@@ -156,7 +176,7 @@ const act: Command = {
     .addUserOption((o) => o.setName('user').setDescription('Who, leave empty for the ones that work alone')).toJSON(),
   text: { aliases: ['action', 'interact'], args: ['action', 'user'] },
   example: 'hug @someone',
-  hint: '`{p} hug @someone` · `/fun view:act input:hug @someone`\n-# swap hug for pat, cuddle, poke, bonk, slap, punch, bite, tickle, highfive, handhold, kiss, peck, wink, blowkiss, lappillow, kabedon, handshake, nom, yeet, wave, carry, feed, stare or baka\n`{p} cry`\n-# works alone too: cry, blush, dance, laugh, smug, sleep, pout, shrug, facepalm, tableflip, sip, nope, salute, clap, happy, angry, shocked, confused, think, yawn, nya, spin, lurk, run\n`{p} bonds` · `{p} bonds @someone`\n-# who you hug, pat and bonk the most here',
+  hint: '`{p} hug @someone` · `/fun view:act input:hug @someone`\n-# swap hug for pat, cuddle, poke, bonk, slap, punch, bite, tickle, highfive, handhold, kiss, peck, wink, blowkiss, lappillow, kabedon, handshake, nom, yeet, wave, carry, feed, stare or baka\n`{p} cry` · `/emote feeling:cry`\n-# works alone too: cry, smile, blush, dance, laugh, smug, sleep, pout, shrug, facepalm, tableflip, sip, nope, salute, clap, happy, angry, shocked, confused, think, yawn, bored, nya, wag, spin, lurk, run\n`{p} bonds` · `{p} bonds @someone`\n-# who you hug, pat and bonk the most here',
   run: async (ctx, store) => {
     const action = (ctx.str('action') ?? '').toLowerCase();
     if (!acts[action]) return ctx.reply({ content: `Pick one of: ${Object.keys(acts).map((x) => `\`${x}\``).join(' ')}`, temp: true });
@@ -209,7 +229,8 @@ export async function onAct(store: Store, i: Interaction): Promise<boolean> {
   await i.update({ components: [] }).catch(() => {});
   const out = await perform(store, i.guildId, action, { id: owner, name: me?.displayName ?? i.user.displayName }, themUser ? { id: themUser.id, name: them?.displayName ?? themUser.displayName, bot: themUser.bot } : null, i.client.user.id);
   // a follow-up works everywhere, DMs and group chats included, where Texz can't post on its own
-  await i.followUp({ ...out, content: themUser ? `<@${themUser.id}>` : undefined, allowedMentions: { users: themUser ? [themUser.id] : [] } }).catch(() => {});
+  // a reply back is the end of it, no button to bounce it again
+  await i.followUp({ ...out, components: [], content: themUser ? `<@${themUser.id}>` : undefined, allowedMentions: { users: themUser ? [themUser.id] : [] } }).catch(() => {});
   return true;
 }
 
@@ -217,5 +238,5 @@ export const actions: Module = {
   name: 'actions',
   label: 'Interactions',
   about: 'Hug, pat, bonk, slap and 50 more with anime gifs, a counter for each pair and a button to send one back',
-  commands: [act, bonds, ...each],
+  commands: [act, emote, bonds, ...each],
 };

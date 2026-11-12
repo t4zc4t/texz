@@ -23,6 +23,7 @@ import { loadTypeIcons } from './features/typeicons.js';
 import { loadLogos } from './features/logos.js';
 import { startBulletins } from './modules/bulletins.js';
 import { startDesk } from './modules/predict.js';
+import { startMovieDay } from './modules/movies.js';
 import { onQuote, QUOTE_MENU, startQuoteOfWeek } from './modules/quote.js';
 import { settleAll, settleGuild } from './core/settle.js';
 import { cleanBooths, watchBooths } from './modules/booth.js';
@@ -94,6 +95,7 @@ client.once(Events.ClientReady, (c) => {
   });
   startBulletins(client, store);
   startDesk(client, store);
+  startMovieDay(client, store);
   // knowing the owner lets /setup offer the error channel to them only
   void c.application.fetch().catch(() => {});
   // rotating status, so the profile looks alive

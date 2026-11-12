@@ -198,3 +198,29 @@ export async function onMovie(store: Store, i: Interaction): Promise<boolean> {
   await i.update({ content: '', ...picker(owner, what === 'reset' ? unpack('g=;d=;s=0;l=;n=any') : f) });
   return true;
 }
+
+// every evening a movie of the day lands in the Watch Party voice room's chat, a different mood each day of the week
+const MOODS: string[][] = [['animation'], ['science-fiction'], ['thriller', 'mystery'], ['comedy'], ['action'], ['drama'], ['horror']];
+export function startMovieDay(client: import('discord.js').Client, store: Store) {
+  const tick = async () => {
+    if (!hasMovies()) return;
+    const now = new Date();
+    // around 7 in the evening in India
+    if (now.getUTCHours() * 60 + now.getUTCMinutes() < 13 * 60 + 30) return;
+    const day = now.toISOString().slice(0, 10);
+    for (const guild of client.guilds.cache.values()) {
+      const id = store.getKv(`voice:${guild.id}:watch`);
+      if (!id || !store.rules(guild.id, 'anime').enabled || !store.firstTime(guild.id, `movieday:${day}`)) continue;
+      const ch = await guild.channels.fetch(id).catch(() => null);
+      if (!ch?.isSendable()) continue;
+      const mood = MOODS[now.getUTCDay()];
+      const picks = await pickSome({ genres: mood, decade: null, score: 7, lang: null, length: 'any' }, 1).catch(() => [] as Film[]);
+      if (!picks.length) continue;
+      const out = await movieCard(picks[0].slug).catch(() => null);
+      if (!out) continue;
+      await ch.send({ ...out, content: `🎬 **Movie of the day** · ${mood.map(genreName).join(' and ')} night. Anyone in for a watch party? \`tz movie\` rolls something else.` }).catch(() => {});
+    }
+  };
+  setTimeout(() => void tick(), 120_000);
+  setInterval(() => void tick(), 15 * 60_000);
+}

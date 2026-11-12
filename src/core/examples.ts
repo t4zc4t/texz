@@ -11,7 +11,7 @@ export const sample: Record<string, string> = {
 const subSample: Record<string, string> = { 'remind': '2h drink water', 'giveaway start': '1d 1 Nitro', 'birthday set': '14 march', 'football fav': 'Inter Miami', 'wish add': 'Gojo', 'xp give': '@someone 500', 'xp level': '@someone 10', 'announce add': '#news 9pm Movie night tonight',
   'roleshop buy': '1', 'roleshop remove': '1', 'roleshop add': '@Gamers 500', 'giveaway end': '3', 'giveaway reroll': '3', 'giveaway cancel': '3', 'announce delete': '2',
   'case view': '12', 'case reason': '12 spamming links', 'case delete': '12', slowmode: '10s', rolepicker: 'Colours', afk: 'eating, back soon', 'backup import': '(attach the file)',
-  'mycolour buy': '#c8283c', 'mycolour colour': '#3fa7a3 #e8b04b', 'mycolour name': 'The Demon Prodigy', 'mycolour icon': '🦋' };
+  'mycolour buy': '#c8283c', 'money give': '@someone 500', 'money take': '@someone 200', 'money set': '@someone 1000', 'mycolour colour': '#3fa7a3 #e8b04b', 'mycolour name': 'The Demon Prodigy', 'mycolour icon': '🦋' };
 
 // a typed example and the matching slash one, no <x> or [x] to decode
 export function examples(c: Command, prefix: string): { label: string; typed: string; slash: string; about?: string }[] {

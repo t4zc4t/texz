@@ -53,7 +53,7 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
       ['🧹 This channel', ['purge', 'lock', 'slowmode']],
       ['🗄️ Case files', ['case.list', 'case.view', 'case.reason', 'case.delete']],
       ['🎁 Giveaways and roles', ['giveaway.start', 'giveaway.list', 'giveaway.end', 'giveaway.reroll', 'rolepicker']],
-      ['📣 Posts, xp and numbers', ['announce.add', 'announce.list', 'xp.give', 'xp.level', 'serverstats']],
+      ['📣 Posts, xp, yen and numbers', ['announce.add', 'announce.list', 'xp.give', 'xp.take', 'xp.level', 'money.give', 'money.take', 'money.set', 'serverstats']],
       ['🛠️ The building itself', ['setup', 'backup.export', 'backup.import']],
     ],
     quick: ['setup', 'giveaway.start', 'rolepicker', 'case.list', 'serverstats'],
@@ -80,7 +80,7 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
     quick: ['profile.view', 'profile.edit', 'rank', 'achievements', 'pings'],
   },
   yen: {
-    sections: [['💴 Your money', ['daily', 'wallet', 'give']], ['🛍️ Spend it', ['mycolour.view', 'mycolour.buy', 'mycolour.colour', 'mycolour.name', 'mycolour.icon', 'mycolour.remove', 'roleshop.view', 'roleshop.buy']], ['🏆 Rich list', ['rich']], ['🔧 Shop keeping', ['roleshop.add', 'roleshop.remove']]],
+    sections: [['💴 Your money', ['daily', 'wallet', 'give']], ['🎰 The back room', ['coinflip', 'slots', 'blackjack']], ['🛍️ Spend it', ['mycolour.view', 'mycolour.buy', 'mycolour.colour', 'mycolour.name', 'mycolour.icon', 'mycolour.remove', 'roleshop.view', 'roleshop.buy']], ['🏆 Rich list', ['rich']], ['🔧 Shop keeping', ['roleshop.add', 'roleshop.remove']]],
     quick: ['daily', 'wallet', 'give', 'roleshop.view', 'rich'],
   },
   misc: {
