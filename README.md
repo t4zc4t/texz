@@ -18,7 +18,7 @@ Everything sits behind ten dashboards, each one a slash command and the same wor
 | 🏁 Paddock & Pitch | `/sports` | F1, football, international games and predictions |
 | 🥃 Bar Lupin | `/fun` | interactions, F1 quiz, crest quiz, guess the anime, trivia, quotes, ship, polls, confessions and dice |
 | 🪪 Personnel File | `/profile` | your profile card and favourites, rank, medals, closest people, mission, birthday and every ping you get |
-| 💴 Yen Ledger | `/yen` | daily, wallet, give, the rich list, coin flips, slots, blackjack, a colour role of your own and the role shop |
+| 💴 Yen Ledger | `/yen` | daily, shifts, Port Mafia jobs, fishing, the vault, robbing, crew heists, coin flips, slots, blackjack, roulette, scratch cards, rock paper scissors, a colour role of your own and the role shop |
 | 🧰 Odds & Ends | `/misc` | user and server info, avatar, afk, one-off reminders, private voice booths and the bot ping |
 
 Each dashboard is a short list of its commands, a few per page, with the typed form, the slash form, the short names and what goes after it (`?` marks the parts you can leave out). `tz help hug` or `/help feature:hug` opens the right page with that command marked. Port Mafia HQ, `/setup` and the pings panel stay proper dashboards with buttons, since that's where things get switched on and off.
@@ -70,7 +70,23 @@ The anime board posts the day's screenings with the biggest show's banner, each 
 
 Levels are off until an admin turns them on. Ranks go from Stray up to Living Legend of Yokohama, each with perks (more xp, a bigger daily, extra giveaway chances), and `/setup` makes the rank roles in order. `tz rank` draws a rank card.
 
-Yen comes from `tz daily` (more for a streak), chatting, the quizzes and predictions. `tz give`, the back room (`tz flip 100 heads`, `tz slots 200`, `tz bj 500`, bets from ¥10 to ¥10,000, `half` and `all` work too), the role shop and `tz mycolour buy #c8283c` spend it: that last one is a role nobody else has for ¥5,000, with the colour, a gradient, the name or an icon changeable for ¥300 each.
+Ranks also unlock chat, one step at a time, and each rank keeps everything below it:
+
+| Rank | Level | Unlocks |
+| --- | --- | --- |
+| 🚪 Agency Visitor | 3 | outside emojis and stickers |
+| 📮 Errand Runner | 6 | gifs and link previews |
+| 🔍 Junior Detective | 10 | images and files |
+| 🕵️ Field Investigator | 15 | voice messages, camera and screen share |
+| 🧥 Senior Detective | 20 | soundboard and outside sounds |
+| ✨ Ability User | 30 | threads and polls |
+| 🎖️ Agency Elite | 40 | voice activities |
+| ♟️ Strategist | 50 | private threads |
+| 🌉 Living Legend of Yokohama | 75 | priority speaker |
+
+Texz takes those permissions off `@everyone` and the member role, puts them on the rank roles, and clears any channel that hands them out to everyone. Boosters get emojis, stickers, gifs, images and voice messages straight away, and the Black Lizard Unit keeps what bots need to post. Rooms that are plain on purpose, like the count and the bot rooms, stay plain for every rank.
+
+Yen comes from `tz daily` (more for a streak), chatting, the quizzes and predictions, and from earning it: `tz work` (an Agency shift each hour, higher ranks paid more), `tz crime` (a Port Mafia job every two hours, big pay or a fine), `tz fish` (the river, every twenty minutes, with the odd shark and one very rare Dazai) and `tz beg`. `tz bank deposit all` puts yen in your vault, where it grows 1% a day and can't be stolen, and the vault gets bigger with rank. Whatever's left in the wallet is fair game for `tz rob @someone`, which pays them a fine if you're caught. `tz heist` opens a crew job anyone can join with a button: more crew, better odds, and everyone splits the take. `tz rps @someone 100` is rock paper scissors with a bet, or against Texz with no one named. `tz give`, the back room (`tz flip 100 heads`, `tz slots 200`, `tz bj 500`, `tz roulette 200 red`, `tz scratch`, bets from ¥10 to ¥10,000, `half` and `all` work too), the role shop and `tz mycolour buy #c8283c` spend it: that last one is a role nobody else has for ¥5,000, with the colour, a gradient, the name or an icon changeable for ¥300 each.
 
 Every day the server gets one Agency mission that pays yen (`tz mission`), and `tz achievements` shows all the medals, bronze to gold with relics for the rare ones. Up to six of them hang on your profile card.
 

@@ -17,7 +17,7 @@ export const menu: Record<string, [string, string, string?]> = {
   'wish.list': ['💝', 'My Shoob wishlist'], 'wish.add': ['➕', 'Wish for a character'], 'wish.remove': ['➖', 'Drop a wish'],
   dex: ['📕', 'Server Pokédex', 'What\'s been caught here and what\'s missing'], race: ['🏃', 'Catch race', 'Who catches the most this week'],
   crestquiz: ['🛡️', 'Crest quiz', 'Guess the club from its crest, pays yen'],
-  daily: ['💴', 'Daily yen'], wallet: ['👛', 'Wallet'], give: ['💸', 'Give yen'], rich: ['🏆', 'Richest'],
+  daily: ['💴', 'Daily yen'], work: ['💼', 'Agency shift'], crime: ['🖤', 'Port Mafia job'], fish: ['🎣', 'Go fishing'], beg: ['🥺', 'Beg'], bank: ['🏦', 'Your vault'], rob: ['🫳', 'Rob someone'], heist: ['🕶️', 'Crew heist'], roulette: ['🎡', 'Roulette'], scratch: ['🎟️', 'Scratch card'], rps: ['✊', 'Rock paper scissors'], wallet: ['👛', 'Wallet'], give: ['💸', 'Give yen'], rich: ['🏆', 'Richest'],
   'roleshop.view': ['🛍️', 'Role shop'], 'roleshop.buy': ['🛒', 'Buy a role'], 'roleshop.add': ['➕', 'Stock the shop'], 'roleshop.remove': ['➖', 'Take a role off sale'],
   watchparty: ['🍿', 'Plan a watch party'], recap: ['📺', 'This week in anime'],
   rank: ['🎖️', 'Rank card'], levels: ['🏆', 'Level leaderboard'], perks: ['✨', 'Rank perks'],
@@ -80,7 +80,7 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
     quick: ['profile.view', 'profile.edit', 'rank', 'achievements', 'pings'],
   },
   yen: {
-    sections: [['💴 Your money', ['daily', 'wallet', 'give']], ['🎰 The back room', ['coinflip', 'slots', 'blackjack']], ['🛍️ Spend it', ['mycolour.view', 'mycolour.buy', 'mycolour.colour', 'mycolour.name', 'mycolour.icon', 'mycolour.remove', 'roleshop.view', 'roleshop.buy']], ['🏆 Rich list', ['rich']], ['🔧 Shop keeping', ['roleshop.add', 'roleshop.remove']]],
+    sections: [['💴 Your money', ['daily', 'wallet', 'give', 'bank']], ['💼 Earn it', ['work', 'crime', 'fish', 'beg', 'rob', 'heist']], ['🎰 The back room', ['coinflip', 'slots', 'blackjack', 'roulette', 'scratch', 'rps']], ['🛍️ Spend it', ['mycolour.view', 'mycolour.buy', 'mycolour.colour', 'mycolour.name', 'mycolour.icon', 'mycolour.remove', 'roleshop.view', 'roleshop.buy']], ['🏆 Rich list', ['rich']], ['🔧 Shop keeping', ['roleshop.add', 'roleshop.remove']]],
     quick: ['daily', 'wallet', 'give', 'roleshop.view', 'rich'],
   },
   misc: {

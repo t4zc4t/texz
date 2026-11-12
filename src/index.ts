@@ -17,7 +17,7 @@ import { startDailyCharacter } from './modules/anime.js';
 import { sweepQuiz } from './modules/f1quiz.js';
 import { mergeShoobRoles, watchSpawns } from './modules/spawns.js';
 import { onCount, startRecap } from './modules/community.js';
-import { carryRankPerms, fixRankOrder, tidyRanks } from './modules/levels.js';
+import { applyPerks, carryRankPerms, fixRankOrder, tidyRanks } from './modules/levels.js';
 import { warmModel } from './features/pokemodel.js';
 import { loadTypeIcons } from './features/typeicons.js';
 import { loadLogos } from './features/logos.js';
@@ -65,6 +65,7 @@ client.once(Events.ClientReady, (c) => {
       void (async () => {
         await fixRankOrder(guild, g.levels.rewards);
         if (!g.levels.stack) await carryRankPerms(guild, g.levels.rewards);
+        await applyPerks(store, guild);
         await tidyRanks(store, guild);
       })().catch((e) => report('rank roles', e));
     }

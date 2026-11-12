@@ -31,6 +31,7 @@ import { community, onConfess } from '../modules/community.js';
 import { actions, onAct } from '../modules/actions.js';
 import { onMovie } from '../modules/movies.js';
 import { onCasino } from '../modules/casino.js';
+import { onHustle } from '../modules/hustle.js';
 import { onShip } from '../modules/ship.js';
 import { onCatchCopy, onPingsButton, onSpawnButton, spawnsModule } from '../modules/spawns.js';
 import { fromComponent, fromSlash, fromText, withTokens, type Ctx } from './ctx.js';
@@ -56,7 +57,7 @@ const groups: Record<string, Group> = {
   sports: { label: 'Paddock & Pitch', emoji: '🏁', about: '*Odds, engines and ninety minutes of chaos.*\nFormula 1, football from the big leagues, and predictions that pay.', description: 'F1, football, international games and predictions', anywhere: true, old: ['sport'], extra: ['pings'] },
   fun: { label: 'Bar Lupin', emoji: '🥃', about: '*Three glasses on the counter. Pull up a stool.*\nQuizzes that pay yen, games for the channel, confessions and dice.', description: 'Quizzes, guess the anime, ship, polls, quotes, confessions, dice', anywhere: true, old: ['games', 'game'] },
   profile: { label: 'Personnel File', emoji: '🪪', about: '*Everything the Agency knows about you. Mostly flattering.*\nYour card, favourites, rank, medals, closest people, birthday and every ping you get.', description: 'Your profile card, favourites, rank, medals, bonds, birthday and pings', anywhere: true, old: ['you', 'me', 'file'] },
-  yen: { label: 'Yen Ledger', emoji: '💴', about: '*Kunikida balances it. Dazai owes it.*\nDaily yen, your wallet, paying people, the rich list, a colour role of your own and the role shop.', description: 'Daily yen, wallet, give, richest, slots, blackjack, your own colour role and the role shop', old: ['eco', 'money', 'bank'] },
+  yen: { label: 'Yen Ledger', emoji: '💴', about: '*Kunikida balances it. Dazai owes it.*\nDaily yen, shifts, Port Mafia jobs, the river, your vault, robbing, crew heists, the back room tables, a colour role of your own and the role shop.', description: 'Daily, work, crime, fishing, vault, rob, heists, casino games, your colour role and the shop', old: ['eco', 'money'] },
   misc: { label: 'Odds & Ends', emoji: '🧰', about: '*The drawer nobody labels.*\nLook people up, server info, afk, one-off reminders, your private voice booth and the bot ping.', description: 'User and server info, avatar, afk, reminders and private voice booths', anywhere: true, old: ['info', 'utils', 'odds'], extra: ['ping'] },
 };
 
@@ -69,7 +70,7 @@ const place: Record<string, [string, string?]> = {
   poll: ['fun'], choose: ['fun', 'pick'], roll: ['fun'], coin: ['fun', 'flip'], ship: ['fun'], '8ball': ['fun'], guess: ['fun'], quiz: ['fun'], trivia: ['fun'],
   onthisday: ['fun', 'otd'], crestquiz: ['fun', 'crest'], quote: ['fun'], confess: ['fun'],
   profile: ['profile', 'card'], achievements: ['profile', 'medals'], rank: ['profile'], levels: ['profile', 'top'], perks: ['profile'], mission: ['profile'], birthday: ['profile', 'bday'], pings: ['profile'],
-  daily: ['yen'], mycolour: ['yen', 'mycolour'], coinflip: ['yen', 'flip'], slots: ['yen'], blackjack: ['yen', 'bj'], money: ['admin'], wallet: ['yen', 'bal'], give: ['yen'], rich: ['yen', 'top'], roleshop: ['yen', 'shop'],
+  daily: ['yen'], mycolour: ['yen', 'mycolour'], coinflip: ['yen', 'flip'], slots: ['yen'], blackjack: ['yen', 'bj'], money: ['admin'], wallet: ['yen', 'bal'], give: ['yen'], rich: ['yen', 'top'], roleshop: ['yen', 'shop'], work: ['yen'], crime: ['yen'], beg: ['yen'], fish: ['yen'], bank: ['yen'], rob: ['yen'], roulette: ['yen'], scratch: ['yen'], heist: ['yen'], rps: ['yen'],
   booth: ['misc'], user: ['misc'], avatar: ['misc', 'av'], server: ['misc'], afk: ['misc'], remind: ['misc'],
 };
 for (const mod of [owo, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, community, spawnsModule, actions, anime]) for (const cmd of mod.commands) {
@@ -394,6 +395,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onAct(store, i)) return;
     if (await onMovie(store, i)) return;
     if (await onCasino(store, i)) return;
+    if (await onHustle(store, i)) return;
     if (await onBulletinButton(i, store)) return;
   } catch (e) {
     report('component', e);

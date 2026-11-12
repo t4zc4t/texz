@@ -9,7 +9,7 @@ import { buildBoard, CATEGORY } from '../modules/bulletins.js';
 import { confessIntro, countIntro, rooms } from '../modules/community.js';
 import { pickerView } from '../modules/welcome.js';
 import { liftColours } from '../modules/mycolour.js';
-import { perkLine, ranks } from '../modules/levels.js';
+import { applyPerks, perkLine, ranks } from '../modules/levels.js';
 import { DESK } from '../modules/predict.js';
 import { HUB } from '../modules/booth.js';
 
@@ -43,7 +43,7 @@ export const extraRooms = {
 } as const;
 
 type Mode = 'read' | 'chat' | 'bot' | 'open' | 'private';
-type Perms = Partial<Record<PermissionsString, boolean>>;
+type Perms = Partial<Record<PermissionsString, boolean | null>>;
 
 // a channel Texz made before, under an older name or in the wrong place, is moved and renamed; anyone else's channel is left alone
 const ours = (c: GuildBasedChannel, olds: string[]) => c.name.includes('┃') || olds.includes(c.name);
@@ -72,7 +72,7 @@ const locks: Record<Mode, { everyone: Perms; staff?: Perms; me: Perms }> = {
   },
   // ordinary chat, everything a person normally does
   open: {
-    everyone: { SendMessages: true, ReadMessageHistory: true, AddReactions: true, AttachFiles: true, EmbedLinks: true, UseExternalEmojis: true, UseExternalStickers: true, CreatePublicThreads: true, SendMessagesInThreads: true, MentionEveryone: false, SendTTSMessages: false },
+    everyone: { SendMessages: true, ReadMessageHistory: true, AddReactions: true, AttachFiles: null, EmbedLinks: null, UseExternalEmojis: null, UseExternalStickers: null, CreatePublicThreads: null, SendMessagesInThreads: true, MentionEveryone: false, SendTTSMessages: false },
     me: { ViewChannel: true, SendMessages: true, EmbedLinks: true, AttachFiles: true, AddReactions: true, ReadMessageHistory: true, ManageMessages: true, UseExternalEmojis: true },
   },
   // staff read, nobody else sees it
@@ -264,13 +264,13 @@ function ranksView(store: Store, guild: Guild, rolesRoom: string, patronRoom: st
     `🎨 Agency colours · pick one in <#${rolesRoom}>`,
     `✨ A role of your own · \`tz mycolour buy #hex\` for ¥5,000 in <#${yenRoom}>, then any colour, name or icon`,
     `🔔 Informant pings, pronouns, region and DMs · <#${rolesRoom}>`,
-    `💎 Server booster · boost the server, thanked in <#${patronRoom}>`,
+    `💎 Server booster · gifs, images, outside emojis, stickers and voice messages straight away, thanked in <#${patronRoom}>`,
     `🛍️ Shop roles · \`tz shop\` sells what the admins put up`,
     unit ? `🤖 <@&${unit}> · bots only` : null,
   ].filter(Boolean);
   return {
     embeds: [
-      card({ kind: 'bulletin', title: '📈 Agency ranks and perks', emoji: '', gif: 'off', line: '', body: `Chatting earns xp, xp earns levels, levels earn ranks. Each rank shows as its own group in the member list.\n\n${lines.join('\n')}\n\n-# \`tz rank\` shows where you are, \`tz perks\` what's next.` }),
+      card({ kind: 'bulletin', title: '📈 Agency ranks and perks', emoji: '', gif: 'off', line: '', body: `Chatting earns xp, xp earns levels, levels earn ranks. Each rank shows as its own group in the member list and unlocks more of chat, 🔓 marks what it opens up. A rank keeps everything the ones under it unlocked.\n\n${lines.join('\n')}\n\n-# Some rooms stay plain for everyone, like the count and the bot rooms. \`tz rank\` shows where you are, \`tz perks\` what's next.` }),
       card({ kind: 'bulletin', title: '🎖️ Special roles', emoji: '', gif: 'off', line: '', body: special.join('\n') }),
     ],
     allowedMentions: { parse: [] as never[] },
@@ -444,6 +444,7 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
     await gateEverything(store, guild, member, done);
   }
   await botAccess(store, guild);
+  await applyPerks(store, guild);
   // the ranks room, edited in place so it's always current
   const rkMsg = await rk.ch.messages.fetch(store.getKv(`ranksmsg:${guild.id}`) ?? '0').catch(() => null);
   const rkView = ranksView(store, guild, ro.ch.id, p.ch.id, y.ch.id);

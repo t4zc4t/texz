@@ -1,4 +1,4 @@
-import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, type Guild, type GuildMember, type Message, type MessageActionRowComponentBuilder } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, SlashCommandBuilder, type Guild, type GuildMember, type Message, type MessageActionRowComponentBuilder } from 'discord.js';
 import { fetchAvatar, rankCard } from '../features/rankcard.js';
 import type { LevelRules, Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
@@ -46,10 +46,34 @@ export const perks: Record<string, { xp: number; yen: number; tickets: number; h
   'Living Legend of Yokohama': { xp: 1.3, yen: 250, tickets: 3, hoist: true },
 };
 export const perksFor = (level: number) => perks[rankFor(level).name];
+
+// what each rank unlocks in chat. Everyone below a rank goes without, each rank role carries its own and every one under it
+const P = PermissionFlagsBits;
+export const unlocks: Record<string, [bigint, string][]> = {
+  'Stray': [],
+  'Agency Visitor': [[P.UseExternalEmojis, 'outside emojis'], [P.UseExternalStickers, 'outside stickers']],
+  'Errand Runner': [[P.EmbedLinks, 'gifs and link previews']],
+  'Junior Detective': [[P.AttachFiles, 'images and files']],
+  'Field Investigator': [[P.SendVoiceMessages, 'voice messages'], [P.Stream, 'camera and screen share']],
+  'Senior Detective': [[P.UseSoundboard, 'soundboard'], [P.UseExternalSounds, 'outside sounds']],
+  'Ability User': [[P.CreatePublicThreads, 'threads'], [P.SendPolls, 'polls']],
+  'Agency Elite': [[P.UseEmbeddedActivities, 'voice activities']],
+  'Strategist': [[P.CreatePrivateThreads, 'private threads']],
+  'Living Legend of Yokohama': [[P.PrioritySpeaker, 'priority speaker']],
+};
+// every permission that's earned by rank, so nobody gets it for free from @everyone or the member role
+export const GATED = Object.values(unlocks).flat().reduce((a, [b]) => a | b, 0n);
+// boosters skip the wait for the everyday ones
+export const BOOSTER = P.UseExternalEmojis | P.UseExternalStickers | P.EmbedLinks | P.AttachFiles | P.SendVoiceMessages;
+// bots need to post embeds and files whatever rank they'd be
+export const BOT_MEDIA = P.EmbedLinks | P.AttachFiles | P.UseExternalEmojis | P.UseExternalStickers | P.AddReactions;
+export const unlocksUpTo = (level: number) => ranks.filter((r) => r.at <= level).flatMap((r) => unlocks[r.name] ?? []).reduce((a, [b]) => a | b, 0n);
+
 export const perkLine = (name: string) => {
   const p = perks[name];
-  const bits = [p.xp > 1 && `+${Math.round((p.xp - 1) * 100)}% xp`, p.yen && `+¥${p.yen} daily`, p.tickets > 1 && `${p.tickets}x giveaway chance`].filter(Boolean);
-  return bits.join(' · ') || 'nothing yet, everyone starts somewhere';
+  const gets = (unlocks[name] ?? []).map(([, l]) => l);
+  const bits = [gets.length && `🔓 ${gets.join(', ')}`, p.xp > 1 && `+${Math.round((p.xp - 1) * 100)}% xp`, p.yen && `+¥${p.yen} daily`, p.tickets > 1 && `${p.tickets}x giveaway chance`].filter(Boolean);
+  return bits.join(' · ') || 'text chat and reactions, everyone starts somewhere';
 };
 
 // every multiplier that applies right now, so the rank card and /setup can show the same maths giveXp uses
@@ -101,6 +125,51 @@ export async function carryRankPerms(guild: Guild, rewards: Record<string, strin
     const next = x.role.permissions.bitfield | want[n];
     if (next !== x.role.permissions.bitfield) await x.role.setPermissions(next, 'carries the lower rank perms').catch(() => {});
   }
+}
+
+// puts the rank perks in place: the earned permissions come off @everyone and the member role, each rank role
+// gets its own and the ones below it, boosters and bots get theirs, and channels stop handing them out to everyone
+export async function applyPerks(store: Store, guild: Guild): Promise<number> {
+  const me = await guild.members.fetchMe().catch(() => null);
+  if (!me?.permissions.has(PermissionFlagsBits.ManageRoles)) return 0;
+  const rewards = store.guild(guild.id).levels.rewards ?? {};
+  if (!Object.keys(rewards).length) return 0;
+  // a bot can only hand out or take away permissions it has itself
+  const can = me.permissions.has(PermissionFlagsBits.Administrator) ? ~0n : me.permissions.bitfield;
+  const below = (r: { position: number; managed: boolean } | undefined) => !!r && r.position < me.roles.highest.position;
+  let changed = 0;
+  const setTo = async (role: { permissions: { bitfield: bigint }; setPermissions: (p: bigint, why: string) => Promise<unknown> }, next: bigint, why: string) => {
+    if (next === role.permissions.bitfield) return;
+    if (await role.setPermissions(next, why).then(() => true).catch(() => false)) changed++;
+  };
+  const gated = GATED & can;
+  // everyone and the member role start without the perks
+  const everyone = guild.roles.everyone;
+  await setTo(everyone, everyone.permissions.bitfield & ~gated, 'rank perks: earned by levelling');
+  const member = guild.roles.cache.get(store.getKv(`verifyrole:${guild.id}`) ?? '');
+  if (below(member) && !member!.managed) await setTo(member!, member!.permissions.bitfield & ~gated, 'rank perks: earned by levelling');
+  // each rank carries what it unlocks and everything under it, nothing more from the perk list
+  for (const [lvl, id] of Object.entries(rewards)) {
+    const role = guild.roles.cache.get(id);
+    if (!below(role) || role!.managed) continue;
+    await setTo(role!, (role!.permissions.bitfield & ~gated) | (unlocksUpTo(Number(lvl)) & can), `rank perks for level ${lvl}`);
+  }
+  const booster = guild.roles.premiumSubscriberRole;
+  if (booster && below(booster)) await setTo(booster, booster.permissions.bitfield | (BOOSTER & can), 'boosters skip the wait');
+  const unit = guild.roles.cache.get(store.getKv(`botrole:${guild.id}`) ?? '');
+  if (below(unit) && !unit!.managed) await setTo(unit!, unit!.permissions.bitfield | (BOT_MEDIA & can), 'bots post embeds and files');
+  // channels that hand the perks to everyone or the member role would undo all that, so those allows are cleared
+  const clear = Object.fromEntries(Object.entries(PermissionFlagsBits).filter(([, b]) => (gated & b) !== 0n).map(([k]) => [k, null]));
+  for (const c of guild.channels.cache.values()) {
+    if (c.isThread() || !('permissionOverwrites' in c)) continue;
+    for (const id of [everyone.id, member?.id].filter((x): x is string => !!x)) {
+      const o = c.permissionOverwrites.cache.get(id);
+      if (!o || (o.allow.bitfield & gated) === 0n) continue;
+      const keys = Object.fromEntries(Object.entries(clear).filter(([k]) => o.allow.has(k as never)));
+      if (await c.permissionOverwrites.edit(id, keys, { reason: 'rank perks: earned by levelling' }).then(() => true).catch(() => false)) changed++;
+    }
+  }
+  return changed;
 }
 
 // people holding more than the one rank role they should, from before only the highest was kept
