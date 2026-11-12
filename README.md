@@ -77,9 +77,7 @@ Yen comes from `tz daily` (more for every day in a row), chatting a little, and 
 
 - 🚪 **Agency Front Door**, at the very top: `🌸┃new-recruits` for welcomes and goodbyes, `📜┃agency-rules`, `🎭┃pick-your-roles` with menus for the F1, football, rare spawn and rare drop pings and ten name colours in the Agency's palette, and `💎┃agency-patrons` for booster thank-yous (off until switched on in `/setup` → Welcome). All read-only.
 - 🕵️ **Agency Bulletin Board**: the F1, football and anime feeds, `🎖️┃promotions` for rank ups, `🖋️┃ink-and-regret` for quotes and `⭐┃the-agency-files` for messages that get five stars. Read-only, people react. Anime episodes don't ping the server, everyone's own shows reach them in DMs.
-- ☕ **The Agency Office**: `💬┃agency-office`, the general chat, and `📸┃evidence-board` for pictures and memes.
-- 🥃 **Bar Lupin**: `🔢┃kunikidas-ledger` (one number each, a wrong one resets it, no files, stickers or threads), `💴┃the-yen-counter` (yen commands only answer there) and `🕯️┃midnight-confessions`, where `tz confess` or the pinned button posts anonymous numbered confessions.
-- 🎲 **Ability Grounds**: `🔴┃pokedex-bureau`, `🃏┃card-vault` and `🐾┃stray-dogs-den` for Pokétwo, Shoob and OwO. Commands and chat, no threads or files.
+- 🥃 **Bar Lupin**, where everyone hangs out: `💬┃agency-office` (the general chat) and `📸┃evidence-board` (pictures and memes), fully open; `🔴┃pokedex-bureau`, `🃏┃card-vault` and `🐾┃stray-dogs-den` for Pokétwo, Shoob and OwO (commands and chat, no threads or files); `🔢┃kunikidas-ledger` (one number each, a wrong one resets it), `💴┃the-yen-counter` (yen commands only answer there) and `🕯️┃midnight-confessions`, where `tz confess` or the pinned button posts anonymous numbered confessions.
 - 🎙️ **Lupin Lounge**: voice channels Bar Lupin, Late Night Shift, Mission Room and Watch Party.
 - 🗄️ **Port Mafia Archives**, at the very bottom and hidden from everyone but staff: `⚖️┃executive-orders` for moderation and automod, `👁️┃black-lizard-watch` for joins, leaves, edits and deletes, and `📓┃texz-ledger` for settings changes.
 
