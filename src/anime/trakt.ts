@@ -1,5 +1,6 @@
 // movies from Trakt. It needs a Client ID from developer.trakt.tv in .env as TRAKT_ID, nothing else.
 // Trakt allows 1000 reads every 5 minutes, and answers are kept for six hours anyway.
+// Its firewall turns away requests without a User-Agent, so one is always sent.
 
 const BASE = 'https://api.trakt.tv';
 export const hasMovies = () => !!process.env.TRAKT_ID;
@@ -11,7 +12,7 @@ async function get<T>(path: string, q: Record<string, string | number | undefine
   const key = url.toString();
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < 6 * 3600_000) return { data: hit.data as T, pages: hit.pages };
-  const r = await fetch(url, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': process.env.TRAKT_ID ?? '' }, signal: AbortSignal.timeout(10_000) });
+  const r = await fetch(url, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': process.env.TRAKT_ID ?? '', 'User-Agent': 'texz/1.0 (Discord bot)' }, signal: AbortSignal.timeout(10_000) });
   if (!r.ok) throw new Error(`trakt ${r.status}`);
   const data = await r.json();
   const pages = Number(r.headers.get('x-pagination-page-count') ?? 1);

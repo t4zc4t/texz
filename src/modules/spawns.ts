@@ -309,8 +309,17 @@ async function onSpawn(store: Store, m: Message) {
     const seen = nw.hash ? recognise(store, nw.hash) : null;
     const cls = nw.image ? await classify(nw.image).catch(() => null) : null;
     nw.vec = cls?.vec ?? null;
-    // a helper bot may have answered while the picture was being read, then its name stands
-    if (nw.confirmed) { await show(store, m, nw, nw.confirmed); return; }
+    // a helper bot may have answered while the picture was being read, then its name stands,
+    // and it gets learned now that the picture is ready (before this, fast helpers meant nothing was ever learned)
+    if (nw.confirmed) {
+      if (nw.hash) learn(store, nw.hash, nw.confirmed);
+      if (nw.vec) remember(store, nw.vec, nw.confirmed);
+      if (nw.image && !nw.kept) { keepSpawn(nw.image, nw.confirmed); nw.kept = true; }
+      const late = decide(store, cls, seen);
+      logSpawn({ at: nw.at, guess: late ? { name: late.name, p: late.p, how: late.how } : null, confirmed: nw.confirmed, how: 'late' });
+      await show(store, m, nw, nw.confirmed);
+      return;
+    }
     const pick = decide(store, cls, seen);
     nw.guess = pick ? { name: pick.name, p: pick.p, how: pick.how } : null;
     // a weak guess from the model alone is often one of Pokétwo's own event forms, so it's shown as a maybe and pings nobody
