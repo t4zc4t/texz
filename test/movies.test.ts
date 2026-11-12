@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { movie } from '../src/modules/movies.ts';
+import { movie, onMovie } from '../src/modules/movies.ts';
+import { Store } from '../src/db.ts';
 
 test('movie search, likes and the picker answer with Trakt data', async () => {
   const real = globalThis.fetch;
@@ -10,6 +11,7 @@ test('movie search, likes and the picker answer with Trakt data', async () => {
     const u = String(url);
     if (u.includes('/search/movie')) return new Response(JSON.stringify([{ movie: raw }]));
     if (u.includes('/related')) return new Response(JSON.stringify([{ ...raw, title: 'Looper', ids: { slug: 'looper-2012', trakt: 1 } }]));
+    if (u.includes('/movies/popular')) return new Response(JSON.stringify([raw]));
     if (u.includes('/people')) return new Response(JSON.stringify({ cast: [{ person: { name: 'Leonardo DiCaprio' } }], crew: { directing: [{ jobs: ['Director'], person: { name: 'Christopher Nolan' } }] } }));
     return new Response(JSON.stringify(raw));
   }) as typeof fetch;
@@ -27,6 +29,19 @@ test('movie search, likes and the picker answer with Trakt data', async () => {
     assert.match(like.embeds![0].data.description!, /Looper/);
     const pick = await run(null);
     assert.equal(pick.components!.length, 5);
+    // buttons edit the message they're on, they never post a new one
+    const calls: string[] = [];
+    const press = (customId: string, values: string[] = []) => ({
+      customId, values, user: { id: 'u1' }, message: { id: 'm1', components: [] },
+      isButton: () => !values.length, isStringSelectMenu: () => !!values.length,
+      deferUpdate: async () => { calls.push('deferUpdate'); }, editReply: async () => { calls.push('editReply'); },
+      update: async () => { calls.push('update'); }, reply: async () => { calls.push('reply'); }, followUp: async () => { calls.push('followUp'); }, deferReply: async () => { calls.push('deferReply'); },
+    }) as never;
+    const store = new Store(':memory:');
+    await onMovie(store, press('mvl|inception-2010'));
+    await onMovie(store, press('mvo|mvl|inception-2010', ['looper-2012']));
+    await onMovie(store, press('mvp|u1|roll|g=action;d=;s=0;l=;n=any'));
+    assert.ok(!calls.includes('reply') && !calls.includes('deferReply') && !calls.includes('followUp'), calls.join(','));
   } finally {
     globalThis.fetch = real;
     delete process.env.TRAKT_ID;

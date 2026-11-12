@@ -33,7 +33,8 @@ const describe = (f: Filters) => [
   f.length !== 'any' ? LENGTHS[f.length].toLowerCase() : null,
 ].filter(Boolean).join(' · ');
 
-export async function movieCard(slug: string) {
+// extra buttons ride on the card, like going back to the list it came from or rolling again
+export async function movieCard(slug: string, extra: ButtonBuilder[] = []) {
   const [m, who] = await Promise.all([details(slug), people(slug).catch(() => ({ director: null, cast: [] as string[] }))]);
   const story = m.overview.length > 380 ? `${m.overview.slice(0, 380).replace(/\s+\S*$/, '')}…` : m.overview;
   const e = card({
@@ -52,16 +53,18 @@ export async function movieCard(slug: string) {
   const buttons = [new ButtonBuilder().setCustomId(`mvl|${m.slug}`.slice(0, 100)).setLabel('More like this').setStyle(ButtonStyle.Secondary)];
   if (m.trailer) buttons.unshift(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(m.trailer).setLabel('Trailer'));
   buttons.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(`https://www.justwatch.com/in/search?q=${encodeURIComponent(m.title)}`).setLabel('Where to watch'));
-  return { embeds: [e], components: [row(...buttons)] };
+  return { content: '', embeds: [e], components: extra.length ? [row(...buttons), row(...extra)] : [row(...buttons)] };
 }
 
-const listOf = (title: string, films: Film[]) => {
+// a list keeps where it came from in its menu, so opening one and pressing Back rebuilds the same list in the same message
+const listOf = (title: string, films: Film[], from: string, extra: ButtonBuilder[] = []) => {
   const e = new EmbedBuilder().setColor(0xc8283c).setTitle(title).setFooter({ text: 'Movie data from Trakt' })
     .setDescription(films.map((f, n) => `**${n + 1}. ${f.title}** (${year(f)})\n-# ${[f.votes ? `⭐ ${f.rating.toFixed(1)}` : null, hm(f.runtime), f.genres.slice(0, 3).map(genreName).join(', ')].filter(Boolean).join(' · ')}`).join('\n'));
   if (films[0]?.fanart) e.setImage(films[0].fanart);
-  const menu = new StringSelectMenuBuilder().setCustomId('mvo').setPlaceholder('Open one').addOptions(films.slice(0, 25).map((f) => ({ label: `${f.title} (${year(f)})`.slice(0, 100), value: f.slug.slice(0, 100) })));
-  return { embeds: [e], components: [row(menu)] };
+  const menu = new StringSelectMenuBuilder().setCustomId(`mvo|${from}`.slice(0, 100)).setPlaceholder('Open one').addOptions(films.slice(0, 25).map((f) => ({ label: `${f.title} (${year(f)})`.slice(0, 100), value: f.slug.slice(0, 100) })));
+  return { content: '', embeds: [e], components: extra.length ? [row(menu), row(...extra)] : [row(menu)] };
 };
+const backTo = (id: string, label = 'Back') => new ButtonBuilder().setCustomId(id.slice(0, 100)).setLabel(label).setStyle(ButtonStyle.Secondary);
 
 // the picker panel, only its owner changes the filters
 function picker(owner: string, f: Filters) {
@@ -106,62 +109,92 @@ export const movie: Command = {
     if (like) {
       const recs = (await similar(found[0].slug).catch(() => [])).slice(0, 10);
       if (!recs.length) return ctx.reply({ content: `Trakt has nothing like ${found[0].title} yet.`, temp: true });
-      return ctx.reply({ ...listOf(`If you liked ${found[0].title}`, recs), public: true });
+      return ctx.reply({ ...listOf(`If you liked ${found[0].title}`, recs, `mvl|${found[0].slug}`), public: true });
     }
     // an exact title opens straight away, otherwise a short list to pick from
     const exact = found.find((f) => f.title.toLowerCase() === q.toLowerCase()) ?? (found.length === 1 ? found[0] : null);
     if (exact) return ctx.reply({ ...(await movieCard(exact.slug)), public: true });
-    return ctx.reply({ ...listOf(`Movies matching "${q}"`, found.slice(0, 8)), public: true });
+    return ctx.reply({ ...listOf(`Movies matching "${q}"`, found.slice(0, 8), `mvs|${q.slice(0, 60)}`), public: true });
   },
 };
 
+// everything edits the message it was pressed on, nothing posts a new one
 export async function onMovie(store: Store, i: Interaction): Promise<boolean> {
-  void store;
   if (!(i.isButton() || i.isStringSelectMenu())) return false;
   const id = i.customId;
   if (!id.startsWith('mv')) return false;
   if (!hasMovies()) { await i.reply({ content: nokey, flags: MessageFlags.Ephemeral }); return true; }
-  // open one from a list, anyone can
-  if (id === 'mvo' && i.isStringSelectMenu()) {
-    await i.deferReply();
-    await i.editReply(await movieCard(i.values[0])).catch(() => {});
+  const fail = () => i.editReply({ content: 'Trakt didn\'t answer, try again in a moment.' }).catch(() => {});
+  // open one from a list, with Back to that list
+  if (id.startsWith('mvo|') && i.isStringSelectMenu()) {
+    await i.deferUpdate();
+    const from = id.slice(4);
+    await i.editReply(await movieCard(i.values[0], [backTo(from, 'Back to the list')])).catch(fail);
     return true;
   }
-  if (id.startsWith('mvl|')) {
-    await i.deferReply();
-    const recs = (await similar(id.split('|')[1]).catch(() => [])).slice(0, 10);
-    await i.editReply(recs.length ? listOf('More like this', recs) : { content: 'Nothing similar on Trakt yet.' }).catch(() => {});
+  // more like this, or a search list rebuilt for Back
+  if (id.startsWith('mvl|') || id.startsWith('mvs|')) {
+    await i.deferUpdate();
+    const arg = id.slice(4);
+    if (id.startsWith('mvl|')) {
+      const recs = (await similar(arg).catch(() => [])).slice(0, 10);
+      if (!recs.length) { await i.followUp({ content: 'Nothing similar on Trakt yet.', flags: MessageFlags.Ephemeral }); return true; }
+      await i.editReply(listOf('More like this', recs, id, [backTo(`mvc|${arg}`, 'Back to the movie')])).catch(fail);
+    } else {
+      const found = (await search(arg).catch(() => [])).slice(0, 8);
+      await i.editReply(listOf(`Movies matching "${arg}"`, found, id)).catch(fail);
+    }
+    return true;
+  }
+  if (id.startsWith('mvc|')) {
+    await i.deferUpdate();
+    await i.editReply(await movieCard(id.slice(4))).catch(fail);
+    return true;
+  }
+  // a vote on the same message: one pick each, changing your mind moves it
+  if (id.startsWith('mvv|')) {
+    const n = id.split('|')[1];
+    const key = `mvvote:${i.message.id}`;
+    const votes = JSON.parse(store.getKv(key) ?? '{}') as Record<string, number>;
+    votes[i.user.id] = Number(n);
+    store.setKv(key, JSON.stringify(votes));
+    const counts = [0, 0, 0];
+    for (const v of Object.values(votes)) counts[v]++;
+    const rows = i.message.components.map((r) => ActionRowBuilder.from(r as never) as ActionRowBuilder<ButtonBuilder>);
+    for (const b of rows[1]?.components ?? []) {
+      const at = Number((b.data as { custom_id?: string }).custom_id?.split('|')[1]);
+      if (!Number.isNaN(at) && (b.data as { custom_id?: string }).custom_id?.startsWith('mvv|')) b.setLabel(`${(b.data as { label?: string }).label?.replace(/ · \d+$/, '')} · ${counts[at]}`);
+    }
+    await i.update({ components: rows as never }).catch(() => {});
     return true;
   }
   if (!id.startsWith('mvp|')) return false;
   const [, owner, what, st] = id.split('|');
   const f = unpack(st);
-  // results anyone can use, the filters only the person who opened it
+  if (i.user.id !== owner) { await i.reply({ content: 'This is someone else\'s movie night. Open your own with `tz movie`.', flags: MessageFlags.Ephemeral }); return true; }
+  const panelBtn = backTo(`mvp|${owner}|panel|${st}`, 'Change filters');
   if (['roll', 'vote', 'list'].includes(what)) {
-    await i.deferReply();
+    await i.deferUpdate();
     const n = what === 'roll' ? 1 : what === 'vote' ? 3 : 10;
     const films = await pickSome(f, n).catch(() => [] as Film[]);
-    if (!films.length) { await i.editReply({ content: `Nothing fits ${describe(f)}. Loosen a filter and try again.` }); return true; }
+    if (!films.length) { await i.followUp({ content: `Nothing fits ${describe(f)}. Loosen a filter and try again.`, flags: MessageFlags.Ephemeral }); return true; }
     if (what === 'roll') {
-      const out = await movieCard(films[0].slug);
-      out.components[0].addComponents(new ButtonBuilder().setCustomId(`mvp|${owner}|roll|${st}`).setLabel('Roll again').setEmoji('🎲').setStyle(ButtonStyle.Primary));
-      await i.editReply(out).catch(() => {});
+      await i.editReply(await movieCard(films[0].slug, [new ButtonBuilder().setCustomId(`mvp|${owner}|roll|${st}`).setLabel('Roll again').setEmoji('🎲').setStyle(ButtonStyle.Primary), panelBtn])).catch(fail);
     } else if (what === 'list') {
-      await i.editReply(listOf(`Ten for ${describe(f)}`, films)).catch(() => {});
+      await i.editReply(listOf(`Ten for ${describe(f)}`, films, `mvp|${owner}|list|${st}`, [new ButtonBuilder().setCustomId(`mvp|${owner}|list|${st}`).setLabel('Another ten').setStyle(ButtonStyle.Primary), panelBtn])).catch(fail);
     } else {
-      // a real Discord poll, open for an hour, with the three cards one click away
-      await i.editReply({
-        ...listOf('What are we watching?', films),
-        poll: { question: { text: 'What are we watching?' }, answers: films.map((x) => ({ text: `${x.title} (${year(x)})`.slice(0, 55) })), duration: 1, allowMultiselect: false },
-      }).catch(async () => { await i.editReply(listOf('What are we watching? React with 1, 2 or 3', films)).catch(() => {}); });
+      // the vote happens right on this message, a button per movie with its count
+      const out = listOf('What are we watching? Vote below', films, `mvp|${owner}|vote|${st}`);
+      const voteRow = row(...films.map((x, n) => new ButtonBuilder().setCustomId(`mvv|${n}|${x.slug}`.slice(0, 100)).setLabel(`${n + 1}. ${x.title}`.slice(0, 70) + ' · 0').setStyle(ButtonStyle.Secondary)));
+      store.setKv(`mvvote:${i.message.id}`, null);
+      await i.editReply({ ...out, components: [out.components[0], voteRow, row(new ButtonBuilder().setCustomId(`mvp|${owner}|vote|${st}`).setLabel('Three others').setStyle(ButtonStyle.Primary), panelBtn)] }).catch(fail);
     }
     return true;
   }
-  if (i.user.id !== owner) { await i.reply({ content: 'These are someone else\'s filters. Open your own with `tz movie`.', flags: MessageFlags.Ephemeral }); return true; }
   if (what === 'g' && i.isStringSelectMenu()) f.genres = i.values;
   if (what === 'd' && i.isStringSelectMenu()) f.decade = Number(i.values[0]) || null;
   if (what === 'l' && i.isStringSelectMenu()) f.lang = i.values[0] === 'any' ? null : i.values[0];
   if (what === 's' && i.isStringSelectMenu()) for (const v of i.values) { if (v.startsWith('s')) f.score = Number(v.slice(1)); else f.length = v.slice(1) as Filters['length']; }
-  await i.update(picker(owner, what === 'reset' ? unpack('g=;d=;s=0;l=;n=any') : f));
+  await i.update({ content: '', ...picker(owner, what === 'reset' ? unpack('g=;d=;s=0;l=;n=any') : f) });
   return true;
 }
