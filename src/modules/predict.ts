@@ -191,7 +191,10 @@ export function startDesk(client: import('discord.js').Client, store: Store) {
         const big = (await todaysBig(store, guild.id).catch(() => [] as Match[])).slice(0, 4);
         if (big.length) {
           for (const m of big) store.setKv(`predko:${m.id}`, String(m.date));
+          const ping = store.getKv(`predrole:${guild.id}`);
           await ch.send({
+            content: ping && guild.roles.cache.has(ping) ? `<@&${ping}> today's calls are open` : undefined,
+            allowedMentions: { roles: ping ? [ping] : [] },
             embeds: [card({ kind: 'help', title: `Today's matches · ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`, emoji: '⚽', gif: 'off', line: '',
               body: `${big.map((m) => `${clubDot(m.home)} **${m.home.name}** vs **${m.away.name}** ${clubDot(m.away)}\n-# ${leagues[m.league]?.name ?? ''} · kick-off <t:${unix(m.date)}:t>, calls close then`).join('\n\n')}\n\n-# A right call pays ¥${MATCH_PAY}. Press again to change your mind before kick-off.` })],
             components: big.map((m) => row(
@@ -209,7 +212,10 @@ export function startDesk(client: import('discord.js').Client, store: Store) {
         const h = await home().catch(() => null);
         const drivers = (h?.standings ?? []).slice(0, 25);
         if (drivers.length) {
+          const ping = store.getKv(`predrole:${guild.id}`);
           await ch.send({
+            content: ping && guild.roles.cache.has(ping) ? `<@&${ping}> the podium calls are open` : undefined,
+            allowedMentions: { roles: ping ? [ping] : [] },
             embeds: [card({ kind: 'help', title: `${flagOf[r.circuit.country] ?? '🏁'} ${r.name} · call the podium`, emoji: '', gif: 'off', line: '',
               body: `Pick the top three before lights out <t:${unix(start)}:R>.\n\n-# ¥${PODIUM.exact} for each driver in the right spot, ¥${PODIUM.onPodium} on the podium but the wrong spot. Picking again changes it.` })],
             components: [0, 1, 2].map((n) => row(new StringSelectMenuBuilder().setCustomId(`prd|f1|${r.round}|${n}`).setPlaceholder(['🥇 Winner', '🥈 Second', '🥉 Third'][n])

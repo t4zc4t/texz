@@ -167,12 +167,15 @@ async function colourRoles(store: Store, guild: Guild, me: GuildMember) {
 // the two menus in the roles room, edited in place on every build so there's never a pile of old ones
 async function rolePanels(store: Store, guild: Guild, ch: TextChannel, colours: Role[], info: { key: string; title: string; about: string; style: 'menu' | 'single'; roles: Role[] }[]) {
   const g = store.guild(guild.id);
+  // the prediction desk gets its own ping role, so the morning calls don't get missed
+  const oracle = await keptRole(store, guild, 'predict', 'Deduction Informant');
+  if (oracle) store.setKv(`predrole:${guild.id}`, oracle.id);
   const pings = [
-    g.bulletins.f1.role, g.bulletins.football.role,
+    g.bulletins.f1.role, g.bulletins.football.role, oracle?.id,
     store.getKv(`spawnrole:${guild.id}:p2rare`), store.getKv(`spawnrole:${guild.id}:shoobrare`),
   ].map((id) => (id ? guild.roles.cache.get(id) : undefined)).filter((r): r is Role => !!r && r.editable);
   const panels: [string, ReturnType<typeof pickerView>][] = [];
-  if (pings.length) panels.push(['pings', pickerView('Informant roles', 'Pick the pings you want. Race days, big matches, rare spawns and rare drops. Unpick to drop one.', 'menu', pings)]);
+  if (pings.length) panels.push(['pings', pickerView('Informant roles', 'Pick the pings you want: race days, big matches, the morning prediction calls, rare spawns and rare drops. Pick as many as you like, unpick to drop one.', 'menu', pings)]);
   for (const set of info) panels.push([set.key, pickerView(set.title, set.about, set.style, set.roles)]);
   if (colours.length) panels.push(['colours', pickerView('Agency colours', 'One colour for your name. Pick another to swap, clear the menu to go plain.\n-# Want one nobody else has? `tz mycolour` sells you your own.', 'single', colours)]);
   for (const [key, view] of panels) {

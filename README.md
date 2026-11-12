@@ -1,110 +1,107 @@
 # texz
 
-texz started as a bot to keep up with OwO without missing anything, and grew into the all in one bot for my server. It has a Dazai theme all the way through (Bungou Stray Dogs, the Armed Detective Agency), reminds and advises for OwO without ever playing it for you, and also does anime, F1 and football bulletins, Pokétwo and Shoob help, levels, yen, games, moderation and the usual server tools.
+texz is an all in one Discord bot with a Bungou Stray Dogs theme the whole way through. The server is the Armed Detective Agency, the admin side is the Port Mafia, and Dazai does most of the talking. It runs the server layout and its roles, F1, football and anime bulletins, predictions, levels, yen, profiles, games, interactions, moderation, and keeps track of the game bots people play (OwO, Pokétwo and Shoob) so nobody misses anything.
 
-Everything is behind a few dashboards, so nobody has to remember commands. Type `tz` or run `/help` and go from there, or ask in plain words: `tz help money`, `tz help ping me`, `tz help birthday`. A typo like `tz rnak` gets a "did you mean `tz rank`" with a button that runs it.
+Nothing needs memorising. Type `tz` or run `/help` and pick a door, or ask in plain words like `tz help money` or `tz help hug`. A typo like `tz rnak` gets a "did you mean `tz rank`" with a button that runs it.
 
-## The dashboards
+## Getting around
 
-Ten dashboards, each a single slash command and the same word typed after `tz`. Each one is a short list of its commands, a few per page: the typed form, the slash form and what goes after it, with `?` on the parts you can leave out. `tz help hug` or `/help feature:hug` opens the page that has it, marked. Port Mafia HQ stays a real dashboard with buttons, since it's where admins change things, and so do `/setup` and the pings and reminders panel. Old names (`tz games`, `tz you`, `tz staff`, `tz mod`) still open the new ones.
+Everything sits behind ten dashboards, each one a slash command and the same word typed after `tz`.
 
 | Dashboard | Command | What's in it |
 |---|---|---|
-| 🖤 Port Mafia HQ | `/admin` | moderation and the case files, giveaways, role pickers, planned posts, xp tools, server activity, backups and `/setup`. Only admins and the staff role see it |
-| 🐾 Stray Dogs Den | `/owo` | huntbot, gems, zoo, weapons and armoury, quests, the shop, OwO timers and quest buddies |
-| 🔴 Pokédex Bureau | `/poketwo` | claim help and the helper switch, hint solving, the server Pokédex and the weekly catch race |
-| 🃏 Card Vault | `/shoob` | rare drop pings and your character wishlist |
-| 📚 Literary Annex | `/anime` | what's on, anime, manga and character search, your list, alerts, watch parties |
-| 🏁 Paddock & Pitch | `/sports` | the next Grand Prix, standings, last race, today's football and predictions |
-| 🥃 Bar Lupin | `/fun` | hugs, pats, bonks and 27 more interactions with anime gifs, F1 quiz, crest quiz, guess the anime, trivia, on this day, make it a quote, ship, polls, confessions and dice |
-| 🪪 Personnel File | `/profile` | your profile card and favourites, rank, medals, mission, birthday and every ping you get |
-| 💴 Yen Ledger | `/yen` | daily, wallet, give, the rich list and the role shop |
-| 🧰 Odds & Ends | `/misc` | user and server info, avatar, afk, one-off reminders and the bot ping |
+| 🖤 Port Mafia HQ | `/admin` | moderation and case files, giveaways, role pickers, planned posts, xp tools, server stats, backups and `/setup`, only for admins and the staff role |
+| 🐾 Stray Dogs Den | `/owo` | OwO timers, huntbot, gems, zoo, weapons, quests and the shop |
+| 🔴 Pokédex Bureau | `/poketwo` | Pokétwo claim help, hints, the server Pokédex and the weekly catch race |
+| 🃏 Card Vault | `/shoob` | Shoob rare drops and your character wishlist |
+| 📚 Literary Annex | `/anime` | what's on today, anime, manga and character search, your list, alerts and watch parties |
+| 🏁 Paddock & Pitch | `/sports` | F1, football, international games and predictions |
+| 🥃 Bar Lupin | `/fun` | interactions, F1 quiz, crest quiz, guess the anime, trivia, quotes, ship, polls, confessions and dice |
+| 🪪 Personnel File | `/profile` | your profile card and favourites, rank, medals, closest people, mission, birthday and every ping you get |
+| 💴 Yen Ledger | `/yen` | daily, wallet, give, the rich list, a colour role of your own and the role shop |
+| 🧰 Odds & Ends | `/misc` | user and server info, avatar, afk, one-off reminders, private voice booths and the bot ping |
 
-`/setup` is the admin front desk (members never see admin commands in help or the dashboards), `/ping` checks the bot, and right clicking a message gives **Make it a Quote**. When something fails because of a missing permission or a role sitting above texz, the message says exactly which one and how to fix it.
+Each dashboard is a short list of its commands, a few per page, with the typed form, the slash form, the short names and what goes after it (`?` marks the parts you can leave out). `tz help hug` or `/help feature:hug` opens the right page with that command marked. Port Mafia HQ, `/setup` and the pings panel stay proper dashboards with buttons, since that's where things get switched on and off.
 
-Typed commands follow the slash ones: `/owo view:huntbot` is `tz owo huntbot` (or just `tz hb`), and `/fun view:ship input:@someone` is `tz ship @someone`. Some read as two words: `tz quiz crest`, `tz predict top`, `tz history`. Old names like `tz bal`, `tz perks` and `tz settings` still work. Each command has a short cooldown per person, a little longer for the ones that draw pictures or call other sites.
+## The server layout
 
-## OwO
+`/setup` → **Build the Agency** lays the whole server out in one click and puts the right locks on every room. It can be run again any time, it fixes things in place instead of making copies, and channels it made before get moved and renamed.
 
-texz reads your OwO commands and OwO's replies in channels it can see and keeps track for you.
+- 🚪 **Agency Front Door**, at the very top
+  - `🚪┃the-entrance-exam`: newcomers only see this and the rules until they press the button, which gives them **Agency Member** and opens the rest of the server. Everyone already in gets it automatically and bots skip it.
+  - `📜┃agency-rules`, `🌸┃new-recruits` for welcomes and goodbyes, `💎┃agency-patrons` for booster thank-yous (off until it's switched on in `/setup` → Welcome)
+  - `🎭┃pick-your-roles`: the informant pings (F1, football, prediction calls, rare spawns, rare drops), pronouns, region (Asia Branch, Europe Branch and so on), DMs (Line Open, Knock First, Line Closed) and ten name colours in the Agency's palette. Everything except the pings is one at a time.
+- 🕵️ **Agency Bulletin Board**: the F1, football and anime feeds, `🔮┃ranpos-deductions` for predictions, `🎖️┃promotions` for rank ups, `🖋️┃ink-and-regret` for quotes and `⭐┃the-agency-files` for the best messages and rare spawns
+- 🥃 **Bar Lupin**: `💬┃agency-office` (general chat), `📸┃evidence-board` (pictures and memes), `🔴┃pokedex-bureau`, `🃏┃card-vault` and `🐾┃stray-dogs-den` for the game bots, `🔢┃kunikidas-ledger` (counting), `💴┃the-yen-counter` (yen commands only answer there) and `🕯️┃midnight-confessions`
+- 🎙️ **Lupin Lounge**: voice rooms, plus **➕ Open a private booth** (see below)
+- 🗄️ **Port Mafia Archives**, at the very bottom and staff only: `⚖️┃executive-orders` (moderation and automod), `👁️┃black-lizard-watch` (joins, leaves, edits, deletes) and `📓┃texz-ledger` (who changed which setting)
 
-- **Reminders** for huntbot, pray, curse, vote and the daily reset, with a last call two hours before reset listing whatever is still open, the patreon minigames included. A captcha gets you pinged straight away. Each reminder can go to DM or the channel, on or off, from `tz reminders`. `tz r 30 restart huntbot` sets one of your own.
-- **Advice** from the screens you open: `owo hb` feeds `tz hb` (which trait to put essence in next), `owo inv` feeds `tz gems` (gem sets that run out together), `owo team` and `owo weapon` feed `tz weapon` and `tz team`, `owo zoo` feeds `tz zoo`, and flipping through weapons builds the armoury in `tz a` with the best weapon per pet and the duplicates that are safe to dismantle. `owo shop` feeds `tz shop`, which marks what's actually an upgrade.
-- **Quest buddies:** `tz buddy join` opts in, and `tz ask pray` pings the buddies when a quest needs a pray, curse, cookie or battle.
+Notice rooms are read-only with reactions, chat rooms are open, bot rooms take commands but no threads or files, and nobody can @everyone. Ping and colour roles carry no permissions, and the colours sit above the rank roles so they actually show.
 
-`tz owo` puts all of it on one page.
+Every feature starts switched off in a new server, so nothing happens until an admin picks what they want in `/setup` → Features (there's an Everything on button).
 
-## Anime
+## Sports
 
-`tz anime <title>`, `tz manga <title>` and `tz char <name>` pull full cards from AniList, with official watch links, related shows and a 📋 menu to put it on your list. `tz wl` is your list with filters and quick +1 episode buttons. 🔔 on an airing show gets you a DM for every new episode. `tz anime` with no title opens what's on today, with the full schedule in your timezone, trending shows, the season and the weekly recap a click away, `tz guess` is a guess the anime game that pays yen, and there's a character of the day. `tz wp 21:00 frieren` plans a watch party with a server event, a ping for everyone who has the show on their list and a spoiler thread, and every Sunday the anime board posts what the server watched that week.
+- **F1**, from [Parc Fermé](https://parc-ferme.pages.dev): race week board, a ping before qualifying, sprints and the race, a live thread on race day, and results drawn as cards in Parc Fermé's look (Port Mafia dark or Detective Agency light). Results come with the race time, fastest lap, quickest pit stop, the biggest climb and how many didn't finish, and qualifying shows the pole lap. Standings, the schedule, an evening trivia fact and "on this day" too.
+- **Football**, from ESPN's public scoreboards: the day's matches worth watching, kick-off cards with both crests and full-time cards with the score and scorers, across 25+ leagues and cups. During international breaks the big national teams (and India) get posted too, Nations League, friendlies and qualifiers included. Anyone with a club on their profile gets pinged the moment their club scores.
+- **Predictions**: every morning `🔮┃ranpos-deductions` gets the day's big matches with home, draw and away buttons, and on race week a podium pick, pinging the **Deduction Informant** role. Calls close at kick-off or lights out, right calls pay yen and show up under the result, and `tz predict top` is the season table.
 
-AniList allows 30 requests a minute right now, so texz paces itself and keeps answers for half an hour.
+Teams and clubs show their real logos as emoji wherever they're named, and `tz f1 quiz`, `tz quiz crest` and `tz history` are in Bar Lupin.
 
-## Bulletins
+## Anime and manga
 
-`/setup` → Bulletins → **Set up the board** makes a category with three read only channels and a role for each. Setup can be run again any time, it only fills in what's missing, and renaming or moving the channels is fine.
+`tz anime <title>`, `tz manga <title>` and `tz char <name>` pull clean cards from AniList with the cover, banner, score, episodes, genres, related shows and official watch links. `tz wl` is your list with quick +1 episode buttons, and 🔔 on an airing show gets you a DM for every new episode. `tz whatson` is the day's schedule in your timezone with trending and the season a click away, `tz wp 21:00 frieren` plans a watch party with an event, pings and a spoiler thread, and there's a character of the day.
 
-- **🏎️ F1** from [Parc Fermé](https://parc-ferme.pages.dev): race week board, a ping an hour before qualifying, sprints and the race, results, standings and the race week schedule drawn in Parc Fermé's own look (Port Mafia dark, or Detective Agency light from `/setup` → Bulletins), an evening trivia fact and "on this day" every morning.
-- **⚽ Football** from ESPN's public scoreboards: the morning's matches worth watching, a kick-off card with both crests and VS, and a full-time card with the score and scorers. Big games are the World Cup and Euros, two big clubs meeting, or a big club in Europe, plus every match of the server's favourite clubs and anyone's own club. Over 25 leagues and cups are covered, MLS included. "On this day" comes from Wikipedia.
-- **📺 Anime** from AniList: the day's screenings, a ping when an episode is out (premieres and finales marked), and "on this day" with anniversaries and character birthdays.
+The anime board posts the day's screenings with the biggest show's banner, each new episode with its art, "on this day" and a weekly recap. It never pings the server, everyone's own shows reach them by DM. AniList allows 30 requests a minute, so texz paces itself and keeps answers for half an hour.
 
-`tz history` shows today's history for all three, `tz f1 quiz` and `tz quiz crest` run quizzes that pay yen, and `tz football` shows today's matches as one board. Race day opens a live chat thread that closes with the podium, and anyone with a club in their profile gets pinged the moment their club scores. F1 teams and football clubs show their real logo and crest as emoji wherever they're named.
+## Games and interactions
 
-`tz predict` lets people call the podium before each race and the result of the day's big matches. Right calls pay yen and show up under the result, and `tz predict top` is the season table.
+- **Interactions**: `tz hug @someone`, `tz pat`, `tz bonk`, `tz slap`, `tz kabedon`, `tz yeet` and 50 more, each with an anime gif and a line in the Agency's voice, plus a button for the other person to send one straight back. Some work alone, like `tz cry` or `tz tableflip`. `tz bonds` shows who you trade the most with, and the top three show under your profile card.
+- **Quizzes that pay yen**: the F1 quiz, the crest quiz, guess the anime and F1 trivia.
+- **Make it a Quote** turns a message into a framed quote picture (right click menu, `tz quote` as a reply, or a link). A copy goes to the quotes room and the most loved one each week becomes quote of the week.
+- The 8 question ship test, polls, dice, coin, 8ball and pick for me.
 
-## Pokétwo and Shoob
+## Profiles, levels and yen
 
-- **Claim help:** every Pokétwo spawn gets a reply with the name, its types and the catch line, as tap to copy text for phones and a copy box for PC. It reads the picture with an open 1,025 species classifier (it downloads itself on first start), and remembers every spawn that gets confirmed by a catch, a hint or another helper bot, so Pokétwo's own forms and variants come out right after the first one. A weak guess is shown as a maybe, a wrong one gets crossed out with the next best guess, and hints get solved too (`tz hint p_k_ch_` by hand). Types show as Pokémon HOME badges, and admins can switch the whole helper off per server from `tz spawns` or `/setup`.
-- **Pings:** only for what matters. Legendary, mythical and ultra beast spawns (their card gets pinned until it's caught), any of the 18 types you pick for quests, and a shout for shiny catches.
-- **Shoob:** one role for rare drops, so only tier 5 and 6 cards ping, the lower tiers stay quiet.
+`tz profile` draws your personnel file: your colour, your medals and a favourites corner with your F1 team's logo, your club's crest and your favourite anime and manga covers, all picked from menus in `tz profile edit`. Profiles, birthdays, wishlists and yen belong to the server they were made in.
 
-`tz spawns` is where people opt in, with a status box for each bot. `tz dex` is the server's Pokédex by generation with the most wanted legends, and spawns not caught here yet get a 🆕. `tz race` is the weekly catch race, the winner gets yen on Monday. For Shoob, `tz wish add Gojo` pings you when that character drops, whatever the tier.
+Levels are off until an admin turns them on. Ranks go from Stray up to Living Legend of Yokohama, each with perks (more xp, a bigger daily, extra giveaway chances), and `/setup` makes the rank roles in order. `tz rank` draws a rank card.
 
-## Pings
+Yen comes from `tz daily` (more for a streak), chatting, the quizzes and predictions. `tz give`, the role shop and `tz mycolour buy #c8283c` spend it: that last one is a role nobody else has for ¥5,000, with the colour, a gradient, the name or an icon changeable for ¥300 each.
 
-`tz pings` is one page for every ping and reminder texz can send you, your own reminders and OwO timers included: the bulletin roles, rare and type spawn pings, Shoob rare drops, your anime episode alerts, OwO quest buddies, and mentions for your own club, F1 team and show (set in `tz profile edit`). When more than three people share a pick they get a role of their own, so one ping covers everyone.
+Every day the server gets one Agency mission that pays yen (`tz mission`), and `tz achievements` shows all the medals, bronze to gold with relics for the rare ones. Up to six of them hang on your profile card.
 
-## Levels, yen and profiles
+## Game bots
 
-Levels are off until an admin turns them on. Ranks go from Stray up to Living Legend of Yokohama, and each one has perks: more xp, a bigger daily and extra giveaway chances (the Perks button on `tz rank`). Everyone keeps only their highest rank role, and each rank role carries the permissions of the ones below it. `/setup` makes the rank roles in order, picks where level-ups go, and handles xp rules, boosts and reward roles. `tz rank` draws a rank card.
+texz watches the game bots people play and keeps track for them. It never plays for anyone.
 
-Yen comes from `tz daily` (more for every day in a row), chatting a little, and the quizzes and guess game. `tz wallet` (your balance, daily and the richest), `tz give` and a role shop (on `/yen`) cover the rest. `tz mycolour buy #c8283c` buys a role nobody else has for ¥5,000, then the colour, a gradient, the name or an icon can change for ¥300 each. `tz profile` draws a profile card with your colour, your medals and a favourites strip: your F1 team's logo, your club's crest and your favourite anime and manga covers, each glowing in its own colour. Pick them in `tz profile edit`, the club from a list by league. Profiles, birthdays and wishlists belong to the server they were made in, so a file in one server says nothing in another.
+- **OwO**: reminders for huntbot, pray, curse, vote and the daily reset (to DM or the channel), a last call before reset with whatever's still open, a ping on captchas, and advice from the screens you open: which huntbot trait to upgrade, gem sets that run out together, weapons and team, zoo, the best weapon per pet and what's safe to dismantle. `tz buddy join` and `tz ask pray` find quest buddies.
+- **Pokétwo**: every spawn gets a reply with the name, region and the catch line (tap to copy on phones, a copy box on PC). It reads the picture with an open 1,025 species classifier and learns every spawn confirmed by a catch or a hint, so Pokétwo's own forms come out right after the first one, and solves hints too (`tz hint p_k_ch_`). Legendaries, mythicals and ultra beasts ping their role, get pinned until caught and get filed in the Agency files. `tz dex` is the server's Pokédex and `tz race` the weekly catch race.
+- **Shoob**: only tier 5 and 6 drops ping, tier 6 gets filed in the Agency files, and `tz wish add Gojo` pings you when that character drops at any tier.
 
-## Community and the server layout
+`tz pings` is one page for every ping and reminder texz can send you.
 
-`/setup` → **Build the Agency** lays out the whole server in one click, with the right locks on every room:
+## Community
 
-- 🚪 **Agency Front Door**, at the very top: `🚪┃the-entrance-exam`, where newcomers press a button to get **Agency Member** and see the rest of the server (everyone already in gets it automatically, bots skip it), `📜┃agency-rules`, `🌸┃new-recruits` for welcomes once someone passes, `🎭┃pick-your-roles` with menus for the F1, football, rare spawn and rare drop pings, pronouns, region (Asia Branch, Europe Branch...), DMs (Line Open, Knock First, Line Closed) and ten name colours in the Agency's palette that sit above the rank roles so they show, and `💎┃agency-patrons` for booster thank-yous (off until switched on in `/setup` → Welcome). All read-only.
-- 🕵️ **Agency Bulletin Board**: the F1, football and anime feeds, `🔮┃ranpos-deductions` (every morning the day's big matches with buttons to call them, and the podium on race week), `🎖️┃promotions` for rank ups, `🖋️┃ink-and-regret` for quotes and `⭐┃the-agency-files` for messages that get five stars. Read-only, people react. Legendary, mythical and ultra beast Pokétwo spawns and tier 6 Shoob drops get framed like a quote and filed in the Agency files too, caught or not. Anime episodes don't ping the server, everyone's own shows reach them in DMs.
-- 🥃 **Bar Lupin**, where everyone hangs out: `💬┃agency-office` (the general chat) and `📸┃evidence-board` (pictures and memes), fully open; `🔴┃pokedex-bureau`, `🃏┃card-vault` and `🐾┃stray-dogs-den` for Pokétwo, Shoob and OwO (commands and chat, no threads or files); `🔢┃kunikidas-ledger` (one number each, a wrong one resets it), `💴┃the-yen-counter` (yen commands only answer there) and `🕯️┃midnight-confessions`, where `tz confess` or the pinned button posts anonymous numbered confessions.
-- 🎙️ **Lupin Lounge**: voice channels Bar Lupin, Late Night Shift, Mission Room and Watch Party, plus **➕ Open a private booth**: join it and Texz makes you a voice room of your own that nobody enters uninvited. `tz booth invite @someone` (a friend or a music bot), `kick`, `open`, `lock`, `name` and `limit` run it, and it closes the moment you leave.
-- 🗄️ **Port Mafia Archives**, at the very bottom and hidden from everyone but staff: `⚖️┃executive-orders` for moderation and automod, `👁️┃black-lizard-watch` for joins, leaves, edits and deletes, and `📓┃texz-ledger` for settings changes.
+- **Counting** in `🔢┃kunikidas-ledger`: one number each, a wrong one resets it, the record is kept.
+- **Confessions**: `tz confess` or the pinned button posts an anonymous numbered confession, and staff can trace one if it breaks the rules.
+- **The Agency files**: messages that get five stars, plus every rare spawn, framed and kept.
+- **Private voice booths**: join **➕ Open a private booth** and texz makes you a voice room of your own that nobody enters uninvited. `tz booth invite @someone` (friends or a music bot), `kick`, `open`, `lock`, `name` and `limit` run it, and it closes the moment you leave.
+- **Weekly recap** every Monday: top chatters, top catchers, the busiest room and the count.
+- Birthdays, giveaways with entry conditions, role pickers and planned announcements.
 
-Channels Texz made before are moved and renamed instead of duplicated, and the ping roles it hands out carry no permissions. Every Monday the week's file goes to the archive: top chatters, top catchers, the busiest channel and the count.
+## Moderation
 
-## Missions and achievements
+`tz warn`, `tz timeout @someone 10m`, `tz kick`, `tz ban` (`tz ban @someone 3d` lifts itself), `tz unban`, `tz purge 20`, `tz lock` and `tz slow 10s`. Every action is a numbered case with a DM to the person and `tz case` searches them. Automod (invites, spam, mass mentions), logs, tickets and a staff role that can use Port Mafia HQ are set from `/setup`.
 
-Every day the server gets one Agency mission (make a quote, win two quiz questions, catch a Water type and so on) that pays yen, more for a streak, see `tz mission`.
+## Outside the server
 
-`tz achievements` shows all 28 medals as a drawn sheet, bronze to gold with purple relics for the rare ones, each with how to earn it and how close you are: first shiny, every type caught, a 30 day daily streak, quote of the week three times, quick draw on the anime guess, night owl and more. Pick up to six from the menu there and they hang on your profile card.
-
-## Fun
-
-Make it a Quote turns a message into the classic black and white quote picture, from the right click menu, by replying with `tz quote`, or with a message link. It posts where you made it and a copy goes to the quotes channel if one is set, and every Sunday the quote with the most reactions becomes quote of the week. There's also an 8 question ship test, polls, dice, coin, 8ball and pick for me.
-
-## Interactions
-
-`tz hug @someone`, `tz pat`, `tz bonk`, `tz slap`, `tz yeet` and 50 more, or `/fun view:act`. Each one comes with an anime gif from [nekos.best](https://nekos.best) and a line in the Agency's voice, counts how many times one person did it to another, and the person on the other end gets a button to send one straight back. `tz bonds` shows who you trade the most with, and the top three show under your profile card. `/hug`, `/pat`, `/kiss`, `/slap`, `/bonk` and a few more also work as their own slash commands, so with Texz added to your account they work in DMs and group chats too, and anything run there is shown to everyone in the chat. A few work alone too, like `tz cry`, `tz dance` and `tz tableflip`.
-
-## Moderation and server tools
-
-`tz warn`, `tz timeout @someone 10m`, `tz kick`, `tz ban` (`tz ban @someone 3d` lifts itself), `tz unban`, `tz purge 20`, `tz lock` and `tz slow 10s`. Every action is a numbered case with a DM to the person, and `tz case` searches the archive. Logs, automod (invites, spam, mass mentions), welcome and goodbye, autorole, tickets, giveaways with entry conditions, birthdays, role pickers, planned announcements and server stats are all set from `/setup` or `/admin`.
+With texz added to your own account, `/hug`, `/pat`, `/kiss`, `/slap`, `/bonk` and the other favourites, plus `/fun`, `/anime`, `/sports` and `/profile`, work in DMs and group chats too, and the answer is shown to everyone in the chat. Make it a Quote works there as well.
 
 ## Setting it up
 
-1. Make an application on the [Discord developer portal](https://discord.com/developers/applications), add a bot, and switch on the Message Content and Server Members intents.
-2. Invite it with the `bot` and `applications.commands` scopes. It needs to manage roles and channels for bulletins, rank roles and spawn pings, and it has to be in the server where people play OwO and Pokétwo.
+1. Make an application on the [Discord developer portal](https://discord.com/developers/applications), add a bot, and switch on the Message Content, Server Members and Presence intents. Turn on User Install under Installation if you want it in DMs.
+2. Invite it with the `bot` and `applications.commands` scopes. It needs to manage roles and channels, and its role should sit near the top so it can hand out and order roles.
 3. Copy `.env.example` to `.env` and fill in the bot token and the application ID.
 4. Then:
 
@@ -114,13 +111,13 @@ npm run build
 npm start
 ```
 
-Every feature starts switched off in a new server, so nothing happens until an admin picks what they want in `/setup` → Features (there's an Everything on button). Slash commands register themselves when they change, so there's no separate deploy step. It needs Node 24 or newer and stores everything in one SQLite file using Node's built in sqlite.
+Slash commands register themselves when they change. It needs Node 24 or newer and keeps everything in one SQLite file with Node's built in sqlite.
 
 ## Keeping it online
 
 On Windows, double click `tray/texz-tray.vbs` once. A dot appears next to the clock (green online, orange starting, grey off) with a menu to turn it on or off, restart, rebuild, start with Windows, and update from GitHub once a day, rolling back if an update crashes in its first minute. Output goes to `texz.log`. Any always on Linux box with Node works too.
 
-A copy of the database is saved daily in `backups/` (last seven kept), and the owner can pick a channel in `/setup` → Logs where texz reports its own errors. A dropped internet connection is one line in the log instead of an error, the tray shows it, and reminders that came due while offline are sent once it's back, marked late. Every Sunday the owner gets a short check-up in DMs with uptime, errors, spawn accuracy and the most used commands. `/tools view:backup` saves a server's setup to a file that can be loaded here or on another server.
+The database is copied to `backups/` every day (last seven kept), errors can go to a channel picked in `/setup` → Logs, reminders that came due while offline are sent once it's back, and every Sunday the owner gets a short check-up in DMs. `/admin view:backup` saves a server's setup to a file that loads here or on another server.
 
 ## Tests
 
@@ -132,9 +129,10 @@ The OwO tests use replies copied from real screens. OwO changes its layout now a
 
 ## Credits
 
-- Anime data from [AniList](https://anilist.co), F1 from [Parc Fermé](https://parc-ferme.pages.dev), football from ESPN's public scoreboards, "on this day" from Wikipedia's feed.
-- Pokémon names, types and artwork from [PokeAPI](https://pokeapi.co), and spawn recognition with the open [pokedex_project](https://huggingface.co/Sutadasuto/pokedex_project) classifier.
-- Gifs from Giphy, fonts are Inter, Cinzel and Playfair Display under the SIL Open Font License (in `assets/fonts`).
+- Anime from [AniList](https://anilist.co), F1 from [Parc Fermé](https://parc-ferme.pages.dev) and the [Jolpica F1 API](https://github.com/jolpica/jolpica-f1), football from ESPN's public scoreboards, "on this day" from Wikipedia.
+- Pokémon names, types and artwork from [PokeAPI](https://pokeapi.co), spawn recognition with the open [pokedex_project](https://huggingface.co/Sutadasuto/pokedex_project) classifier.
+- Interaction gifs from [nekos.best](https://nekos.best), other gifs from Giphy.
+- Fonts in `assets/fonts` are Shippori Mincho B1, Zen Kaku Gothic New, JetBrains Mono, Inter, Cinzel and Playfair Display, all under the SIL Open Font License.
 
 ## License
 
