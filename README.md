@@ -52,7 +52,7 @@ Teams and clubs show their real logos as emoji wherever they're named, and `tz f
 
 `tz anime <title>`, `tz manga <title>` and `tz char <name>` pull clean cards from AniList with the cover, banner, score, episodes, genres, related shows and official watch links. `tz wl` is your list with quick +1 episode buttons, and 🔔 on an airing show gets you a DM for every new episode. `tz whatson` is the day's schedule in your timezone with trending and the season a click away, `tz wp 21:00 frieren` plans a watch party with an event, pings and a spoiler thread, and there's a character of the day.
 
-**Movie night**: `tz movie` opens a picker for genres, decade, language, score and length, then rolls one, shows ten or puts three to a real Discord poll, handy in a watch party chat. `tz movie inception` looks one up with its trailer, cast and where it's streaming in India, and `tz movie like interstellar` finds ones like it.
+**Movie night**: `tz movie` opens a picker for genres, decade, language, score and length, then rolls one, shows ten or puts three to a real Discord poll, handy in a watch party chat. `tz movie inception` looks one up with its poster, trailer, cast and a where to watch link, and `tz movie like interstellar` finds ones like it.
 
 The anime board posts the day's screenings with the biggest show's banner, each new episode with its art, "on this day" and a weekly recap. It never pings the server, everyone's own shows reach them by DM. AniList allows 30 requests a minute, so texz paces itself and keeps answers for half an hour.
 
@@ -104,7 +104,7 @@ With texz added to your own account, `/hug`, `/pat`, `/kiss`, `/slap`, `/bonk` a
 
 1. Make an application on the [Discord developer portal](https://discord.com/developers/applications), add a bot, and switch on the Message Content, Server Members and Presence intents. Turn on User Install under Installation if you want it in DMs.
 2. Invite it with the `bot` and `applications.commands` scopes. It needs to manage roles and channels, and its role should sit near the top so it can hand out and order roles.
-3. Copy `.env.example` to `.env` and fill in the bot token and the application ID. Movies need a free [TMDB](https://www.themoviedb.org/settings/api) read access token as `TMDB_TOKEN`, everything else works without it.
+3. Copy `.env.example` to `.env` and fill in the bot token and the application ID. Movies need a free Client ID from [Trakt](https://developer.trakt.tv/apps) as `TRAKT_ID` (no phone number or personal details needed), everything else works without it.
 4. Then:
 
 ```
@@ -131,7 +131,7 @@ The OwO tests use replies copied from real screens. OwO changes its layout now a
 
 ## Credits
 
-- Movies from [TMDB](https://www.themoviedb.org). This product uses the TMDB API but is not endorsed or certified by TMDB.
+- Movies from [Trakt](https://trakt.tv).
 - Anime from [AniList](https://anilist.co), F1 from [Parc Fermé](https://parc-ferme.pages.dev) and the [Jolpica F1 API](https://github.com/jolpica/jolpica-f1), football from ESPN's public scoreboards, "on this day" from Wikipedia.
 - Pokémon names, types and artwork from [PokeAPI](https://pokeapi.co), spawn recognition with the open [pokedex_project](https://huggingface.co/Sutadasuto/pokedex_project) classifier.
 - Interaction gifs from [nekos.best](https://nekos.best), other gifs from Giphy.
