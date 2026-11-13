@@ -3,7 +3,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Store } from '../db.js';
-import { formsOf, nameIn } from './pokedex.js';
+import { canonical, formsOf, nameIn } from './pokedex.js';
 
 // Pokétwo draws each species the same way every time, so a small fingerprint of the picture is enough to know it again.
 // The bot starts knowing nothing and learns from every catch, every hint it solves and every name another helper bot gives.
@@ -95,12 +95,21 @@ const mem = (store: Store) => (memory ??= JSON.parse(store.getKv('p2:mem') ?? '[
 // every confirmed spawn is remembered with what the classifier saw, newest kept when it gets long
 export function remember(store: Store, vec: Sparse, name: string) {
   const list = mem(store);
-  list.push([name, vec.map(([i, v]) => [i, Math.round(v * 1e4) / 1e4])]);
+  list.push([canonical(name), vec.map(([i, v]) => [i, Math.round(v * 1e4) / 1e4])]);
   if (list.length > 4000) list.splice(0, list.length - 4000);
   store.setKv('p2:mem', JSON.stringify(list));
 }
 
 export const memorySize = (store: Store) => mem(store).length;
+
+// older entries spelled differently are merged into one name, once
+export function foldMemory(store: Store) {
+  const list = mem(store);
+  let n = 0;
+  for (const e of list) { const c = canonical(e[0]); if (c !== e[0]) { e[0] = c; n++; } }
+  if (n) store.setKv('p2:mem', JSON.stringify(list));
+  return n;
+}
 
 // keeps at most `keep` of the newest entries for each of these names
 export function trimMemory(store: Store, names: string[], keep: number) {

@@ -9,8 +9,8 @@ import type { Command, Module } from '../core/module.js';
 import { bar, card } from '../theme.js';
 import { fixText } from '../core/fixes.js';
 import { picksOf, savePicks } from './profile.js';
-import { TYPES, addExtra, allSpecies, artwork, catchLine, formsOf, hintOf, idOf, nameIn, rarityOf, regionOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
-import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize, recognise, remember, trimMemory, type Sparse } from '../features/pokeid.js';
+import { TYPES, addExtra, canonical, allSpecies, artwork, catchLine, formsOf, hintOf, idOf, nameIn, rarityOf, regionOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
+import { decide, download, fingerprint, foldMemory, knownCount, learn, logSpawn, memorySize, recognise, remember, trimMemory, type Sparse } from '../features/pokeid.js';
 import { classify, dressUp, keepSpawn, seedMemory } from '../features/pokemodel.js';
 import { teamDot } from '../feeds/f1.js';
 
@@ -82,7 +82,16 @@ const last = new Map<string, number>();
 export function watchSpawns(client: Client, store: Store) {
   setInterval(() => void raceTick(client, store).catch(() => {}), 3600_000).unref?.();
   for (const [k, v] of JSON.parse(store.getKv('p2:catchas') ?? '[]') as [string, string][]) catchAs.set(k, v);
-  addExtra(JSON.parse(store.getKv('p2:extra') ?? '[]') as string[]);
+  {
+    // one spelling per form, whatever case it was first seen in
+    const raw = JSON.parse(store.getKv('p2:extra') ?? '[]') as string[];
+    const seen = new Map<string, string>();
+    for (const n of raw) { const k = n.toLowerCase(); const had = seen.get(k); if (!had || (n.match(/[A-Z]/g)?.length ?? 0) > (had.match(/[A-Z]/g)?.length ?? 0)) seen.set(k, n); }
+    const list = [...seen.values()];
+    if (list.length !== raw.length) store.setKv('p2:extra', JSON.stringify(list));
+    addExtra(list);
+    foldMemory(store);
+  }
   for (const [k, v] of JSON.parse(store.getKv('p2:dexart') ?? '[]') as [string, string][]) dexArt.set(k, v);
   // once: the forms looked up twice before repeats were skipped keep just one look's worth
   if (store.firstTime('global', 'p2:dexdedupe')) trimMemory(store, [...dexArt.keys()], 4);
@@ -105,6 +114,15 @@ const rareMark: Record<string, string> = { legendary: '🌟 Legendary', mythical
 
 // a variant like "Alolan Vulpix" or "Paldean Tauros" counts as its species for types, rarity and art
 const baseOf = (name: string) => nameIn(name) ?? name;
+// a form name worth knowing for hints and the claim card, stored once whatever its case
+function keepForm(store: Store, raw: string) {
+  const name = canonical(raw);
+  const list = JSON.parse(store.getKv('p2:extra') ?? '[]') as string[];
+  if (list.some((n) => n.toLowerCase() === name.toLowerCase())) return;
+  list.push(name);
+  store.setKv('p2:extra', JSON.stringify(list));
+  addExtra([name]);
+}
 
 // the name people actually caught a form with, learned from catches, else the species name
 const catchAs = new Map<string, string>();
@@ -209,18 +227,17 @@ async function confirm(store: Store, m: Message, w: Waiting, name: string, how: 
   if (w.vec) remember(store, w.vec, name);
   // a form the dex doesn't have gets added for hints
   if (!idOf(name)) {
-    const list = JSON.parse(store.getKv('p2:extra') ?? '[]') as string[];
-    if (!list.includes(name)) { list.push(name); store.setKv('p2:extra', JSON.stringify(list)); addExtra([name]); }
+    keepForm(store, name);
   }
   if (w.image && !w.kept) { keepSpawn(w.image, name); w.kept = true; }
   logSpawn({ at: w.at, guess: w.guess, confirmed: name, how });
   if (how !== 'catch') await show(store, m, w, name);
 }
 
-// someone ran "@Pokétwo dex <name>": the picture in Pokétwo's answer teaches the identifier that name, forms included,
-// so a form nobody has caught yet can still be recognised. A ✅ on Pokétwo's message says it was learned
+// a Pokétwo dex answer: its picture teaches the identifier that name, forms included, so a form nobody has caught yet
+// can still be recognised. Only the bot owner can feed it, by replying "tz dexit" to the dex message
 const dexArt = new Map<string, string>();
-async function fromDex(store: Store, m: Message): Promise<boolean> {
+export async function fromDex(store: Store, m: Message): Promise<boolean> {
   const e = m.embeds[0];
   const title = e?.title ?? '';
   const url = e?.image?.url;
@@ -228,7 +245,7 @@ async function fromDex(store: Store, m: Message): Promise<boolean> {
   if (!head || !url) return false;
   // shiny pictures are coloured differently, they'd teach the wrong look
   if (/✨|shiny/i.test(`${title} ${e.description ?? ''}`)) return true;
-  const raw = head[1].replace(/[^\p{L}\p{N}'’.: -]/gu, ' ').replace(/\s+/g, ' ').trim();
+  const raw = canonical(head[1].replace(/[^\p{L}\p{N}'’.: -]/gu, ' ').replace(/\s+/g, ' ').trim());
   const name = raw && (nameIn(raw) === raw ? raw : raw.split(' ').length <= 4 ? raw : nameIn(raw));
   if (!name) return true;
   // already learned from the dex once, a second look adds nothing
@@ -242,8 +259,7 @@ async function fromDex(store: Store, m: Message): Promise<boolean> {
   }
   if (!n) return true;
   if (baseOf(name).toLowerCase() !== name.toLowerCase()) {
-    const list = JSON.parse(store.getKv('p2:extra') ?? '[]') as string[];
-    if (!list.includes(name)) { list.push(name); store.setKv('p2:extra', JSON.stringify(list)); addExtra([name]); }
+    keepForm(store, name);
   }
   dexArt.set(name.toLowerCase(), url);
   store.setKv('p2:dexart', JSON.stringify([...dexArt]));
@@ -251,6 +267,31 @@ async function fromDex(store: Store, m: Message): Promise<boolean> {
   await m.react('✅').catch(() => {});
   return true;
 }
+
+// reply "tz dexit" to a Pokétwo dex message and its picture is learned. Bot owner only
+let ownerId: string | null = null;
+const dexit: Command = {
+  name: 'dexit',
+  group: 'poketwo',
+  hidden: true,
+  data: new SlashCommandBuilder().setName('dexit').setDescription('Learn a Pokétwo dex picture').toJSON(),
+  run: async (ctx, store) => {
+    const client = ctx.guild?.client;
+    if (client && !ownerId) {
+      const app = await client.application?.fetch().catch(() => null);
+      const o = app?.owner;
+      ownerId = o && 'ownerId' in o ? o.ownerId ?? null : o?.id ?? null;
+    }
+    if (ctx.userId !== ownerId) return ctx.reply({ content: 'That one is only for the bot owner.', temp: true });
+    const ref = await ctx.replyTo?.();
+    if (!ref || ref.author.id !== POKETWO_ID || !ref.embeds[0]?.image) return ctx.reply({ content: 'Reply to a Pokétwo dex message with `tz dexit`.', temp: true });
+    const before = memorySize(store);
+    const ok = await fromDex(store, ref);
+    const added = memorySize(store) - before;
+    if (!ok) return ctx.reply({ content: 'That doesn\'t look like a dex page I can read.', temp: true });
+    return ctx.reply({ content: added ? '✅ Learned.' : '✅ Already knew that one, or it was a shiny picture. Nothing new added.', temp: true });
+  },
+};
 
 async function onSpawn(store: Store, m: Message) {
   if (!m.guild || !m.author.bot || m.author.id === m.client.user.id) return;
@@ -264,7 +305,6 @@ async function onSpawn(store: Store, m: Message) {
     }
     return;
   }
-  if (which === 'p2' && await fromDex(store, m)) return;
   if (which === 'p2') {
     // someone tried the name on the card and Pokétwo said no: cross it out and offer the next one
     if (w && w.sent && !w.confirmed && /wrong pok[eé]mon/i.test(m.content) && m.reference?.messageId) {
@@ -739,5 +779,5 @@ export const spawnsModule: Module = {
   name: 'spawns',
   label: 'Pings and spawns',
   about: 'One panel for every ping, Pokétwo spawns with hint solving, and Shoob pings for tier 5 and 6.',
-  commands: [pings, spawns, pokemon, dex, race, wish],
+  commands: [pings, spawns, pokemon, dex, race, wish, dexit],
 };

@@ -45,7 +45,14 @@ export function hintOf(text: string): string | null {
 
 // Pokétwo's own forms learned from catches, like Mosslax, so hints can find them too
 const extra = new Set<string>();
-export const addExtra = (names: string[]) => names.forEach((n) => extra.add(n));
+// one spelling per name: "Blue-striped Basculin" and "Blue-Striped Basculin" are the same pokémon
+export function canonical(name: string): string {
+  const k = plain(name).replace(/\s+/g, ' ').trim();
+  for (const n of extra) if (plain(n) === k) return n;
+  for (const [, n] of all()) if (plain(n) === k) return n;
+  return name.trim();
+}
+export const addExtra = (names: string[]) => names.forEach((n) => { if (canonical(n) === n.trim()) extra.add(n.trim()); });
 // the region a pokémon comes from, its regional form first ("Alolan Muk" is Alola), else its dex number
 const regions: [number, string][] = [[151, 'Kanto'], [251, 'Johto'], [386, 'Hoenn'], [493, 'Sinnoh'], [649, 'Unova'], [721, 'Kalos'], [809, 'Alola'], [898, 'Galar'], [905, 'Hisui'], [1025, 'Paldea']];
 export function regionOf(name: string): string | null {
