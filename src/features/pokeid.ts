@@ -102,6 +102,22 @@ export function remember(store: Store, vec: Sparse, name: string) {
 
 export const memorySize = (store: Store) => mem(store).length;
 
+// keeps at most `keep` of the newest entries for each of these names
+export function trimMemory(store: Store, names: string[], keep: number) {
+  const want = new Set(names.map((n) => n.toLowerCase()));
+  const count = new Map<string, number>();
+  const list = mem(store);
+  const kept = list.reverse().filter(([n]) => {
+    const k = n.toLowerCase();
+    if (!want.has(k)) return true;
+    count.set(k, (count.get(k) ?? 0) + 1);
+    return count.get(k)! <= keep;
+  }).reverse();
+  memory = kept;
+  store.setKv('p2:mem', JSON.stringify(kept));
+  return list.length - kept.length;
+}
+
 export function nearest(store: Store, vec: Sparse): { name: string; cos: number; votes: number } | null {
   const scored = mem(store).map(([name, v]) => ({ name, cos: cosine(vec, v) })).sort((a, b) => b.cos - a.cos).slice(0, 5);
   if (!scored.length) return null;

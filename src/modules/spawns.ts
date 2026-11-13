@@ -10,7 +10,7 @@ import { bar, card } from '../theme.js';
 import { fixText } from '../core/fixes.js';
 import { picksOf, savePicks } from './profile.js';
 import { TYPES, addExtra, allSpecies, artwork, catchLine, formsOf, hintOf, idOf, nameIn, rarityOf, regionOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
-import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize, recognise, remember, type Sparse } from '../features/pokeid.js';
+import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize, recognise, remember, trimMemory, type Sparse } from '../features/pokeid.js';
 import { classify, dressUp, keepSpawn, seedMemory } from '../features/pokemodel.js';
 import { teamDot } from '../feeds/f1.js';
 
@@ -84,6 +84,8 @@ export function watchSpawns(client: Client, store: Store) {
   for (const [k, v] of JSON.parse(store.getKv('p2:catchas') ?? '[]') as [string, string][]) catchAs.set(k, v);
   addExtra(JSON.parse(store.getKv('p2:extra') ?? '[]') as string[]);
   for (const [k, v] of JSON.parse(store.getKv('p2:dexart') ?? '[]') as [string, string][]) dexArt.set(k, v);
+  // once: the forms looked up twice before repeats were skipped keep just one look's worth
+  if (store.firstTime('global', 'p2:dexdedupe')) trimMemory(store, [...dexArt.keys()], 4);
   void seedMemory((vec, name) => remember(store, vec, name), memorySize(store) === 0);
   client.on(Events.MessageCreate, (m) => void onSpawn(store, m).catch(() => {}));
 }
@@ -229,6 +231,8 @@ async function fromDex(store: Store, m: Message): Promise<boolean> {
   const raw = head[1].replace(/[^\p{L}\p{N}'’.: -]/gu, ' ').replace(/\s+/g, ' ').trim();
   const name = raw && (nameIn(raw) === raw ? raw : raw.split(' ').length <= 4 ? raw : nameIn(raw));
   if (!name) return true;
+  // already learned from the dex once, a second look adds nothing
+  if (dexArt.has(name.toLowerCase())) { await m.react('✅').catch(() => {}); return true; }
   const art = await download(url);
   if (!art) return true;
   let n = 0;
