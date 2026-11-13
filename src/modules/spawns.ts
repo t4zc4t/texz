@@ -10,8 +10,8 @@ import { bar, card } from '../theme.js';
 import { fixText } from '../core/fixes.js';
 import { picksOf, savePicks } from './profile.js';
 import { TYPES, addExtra, canonical, allSpecies, artwork, catchLine, formsOf, hintOf, idOf, nameIn, rarityOf, regionOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
-import { decide, download, fingerprint, foldMemory, knownCount, learn, logSpawn, memorySize, recognise, remember, trimMemory, type Sparse } from '../features/pokeid.js';
-import { classify, dressUp, keepSpawn, seedMemory } from '../features/pokemodel.js';
+import { type Guess, decide, download, fingerprint, foldMemory, knownCount, learn, logSpawn, memorySize, recognise, remember, trimMemory, type Sparse } from '../features/pokeid.js';
+import { artColours, classify, colourFit, keepSpawn, sceneColours, seedMemory } from '../features/pokemodel.js';
 import { teamDot } from '../feeds/f1.js';
 
 export const POKETWO_ID = '716390085896962058';
@@ -95,6 +95,8 @@ export function watchSpawns(client: Client, store: Store) {
   for (const [k, v] of JSON.parse(store.getKv('p2:dexart') ?? '[]') as [string, string][]) dexArt.set(k, v);
   // once: the forms looked up twice before repeats were skipped keep just one look's worth
   if (store.firstTime('global', 'p2:dexdedupe')) trimMemory(store, [...dexArt.keys()], 4);
+  // once: the readings made from dex pictures for forms go, the colour check does that job now
+  if (store.firstTime('global', 'p2:dexvecs')) trimMemory(store, [...dexArt.keys()].filter((k) => baseOf(k).toLowerCase() !== k), 0);
   void seedMemory((vec, name) => remember(store, vec, name), memorySize(store) === 0);
   client.on(Events.MessageCreate, (m) => void onSpawn(store, m).catch(() => {}));
 }
@@ -250,22 +252,43 @@ export async function fromDex(store: Store, m: Message): Promise<boolean> {
   if (!name) return true;
   // already learned from the dex once, a second look adds nothing
   if (dexArt.has(name.toLowerCase())) { await m.react('✅').catch(() => {}); return true; }
+  // the picture is kept for colour checks and the claim card. Its classifier reading isn't stored: a form and its
+  // species read almost the same there, which made every plain Grimer look like the Alolan one
   const art = await download(url);
-  if (!art) return true;
-  let n = 0;
-  for (const pic of await dressUp(art).catch(() => [] as Buffer[])) {
-    const cls = await classify(pic).catch(() => null);
-    if (cls) { remember(store, cls.vec, name); n++; }
-  }
-  if (!n) return true;
-  if (baseOf(name).toLowerCase() !== name.toLowerCase()) {
-    keepForm(store, name);
-  }
+  if (!art || !(await artColours(art))) return true;
+  if (baseOf(name).toLowerCase() !== name.toLowerCase()) keepForm(store, name);
   dexArt.set(name.toLowerCase(), url);
   store.setKv('p2:dexart', JSON.stringify([...dexArt]));
-  console.log(`pokedex: learned ${name} (${n})`);
+  console.log(`pokedex: learned ${name}`);
   await m.react('✅').catch(() => {});
   return true;
+}
+
+// the classifier and memory name the species well but not its colour forms, so when the species has forms with a
+// known picture, the colours in the spawn decide between them
+const colourCache = new Map<string, Float32Array | null>();
+async function coloursOf(url: string) {
+  if (!colourCache.has(url)) { const b = await download(url); colourCache.set(url, b ? await artColours(b) : null); }
+  return colourCache.get(url) ?? null;
+}
+async function settleForm(image: Buffer | null, g: Guess | null): Promise<Guess | null> {
+  if (!image || !g || g.how === 'picture') return g;
+  const base = baseOf(g.name);
+  const forms = formsOf(base).filter((f) => dexArt.has(f.toLowerCase()) && !/^(gigantamax|mega|eternamax|primal)/i.test(f));
+  if (!forms.length) return g;
+  const id = idOf(base);
+  const options: [string, string][] = [...(id ? [[base, dexArt.get(base.toLowerCase()) ?? `https://cdn.poketwo.net/images/${id}.png`] as [string, string]] : []), ...forms.map((f) => [f, dexArt.get(f.toLowerCase())!] as [string, string])];
+  const scene = await sceneColours(image);
+  if (!scene) return g;
+  const scored: { name: string; fit: number }[] = [];
+  for (const [name, url] of options) {
+    const h = await coloursOf(url);
+    if (h) scored.push({ name, fit: colourFit(h, scene) });
+  }
+  scored.sort((a, b) => b.fit - a.fit);
+  const best = scored[0];
+  if (!best || best.name === g.name || best.fit - (scored.find((x) => x.name === g.name)?.fit ?? 0) < 0.08) return g;
+  return { ...g, name: best.name, others: [g.name, ...g.others.filter((o) => o !== best.name)].slice(0, 4) };
 }
 
 // reply "tz dexit" to a Pokétwo dex message and its picture is learned. Bot owner only
@@ -285,9 +308,9 @@ const dexit: Command = {
     if (ctx.userId !== ownerId) return ctx.reply({ content: 'That one is only for the bot owner.', temp: true });
     const ref = await ctx.replyTo?.();
     if (!ref || ref.author.id !== POKETWO_ID || !ref.embeds[0]?.image) return ctx.reply({ content: 'Reply to a Pokétwo dex message with `tz dexit`.', temp: true });
-    const before = memorySize(store);
+    const had = dexArt.size;
     const ok = await fromDex(store, ref);
-    const added = memorySize(store) - before;
+    const added = dexArt.size - had;
     if (!ok) return ctx.reply({ content: 'That doesn\'t look like a dex page I can read.', temp: true });
     return ctx.reply({ content: added ? '✅ Learned.' : '✅ Already knew that one, or it was a shiny picture. Nothing new added.', temp: true });
   },
@@ -402,7 +425,7 @@ async function onSpawn(store: Store, m: Message) {
       await show(store, m, nw, nw.confirmed);
       return;
     }
-    const pick = decide(store, cls, seen);
+    const pick = await settleForm(nw.image, decide(store, cls, seen));
     nw.guess = pick ? { name: pick.name, p: pick.p, how: pick.how } : null;
     // a weak guess from the model alone is often one of Pokétwo's own event forms, so it's shown as a maybe and pings nobody
     nw.unsure = !!pick && pick.how === 'model' && pick.p < 0.6;

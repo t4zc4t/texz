@@ -118,6 +118,53 @@ export async function classify(image: Buffer): Promise<{ top: { name: string; p:
   };
 }
 
+// colour fingerprints: a form often differs from its species only in colour (Alolan Grimer is green, Grimer purple),
+// which the classifier barely notices. 512 colour bins, the art counts only its own pixels, the spawn its middle
+const bin = (r: number, g: number, b: number) => ((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5);
+export async function artColours(buf: Buffer): Promise<Float32Array | null> {
+  try {
+    const img = await loadImage(buf);
+    const c = createCanvas(128, 128);
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, 128, 128);
+    const px = ctx.getImageData(0, 0, 128, 128).data;
+    const h = new Float32Array(512);
+    let total = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      if (px[i + 3] < 200) continue;
+      // near white and near black are outlines and shine, every pokémon has them
+      const max = Math.max(px[i], px[i + 1], px[i + 2]);
+      const min = Math.min(px[i], px[i + 1], px[i + 2]);
+      if (max < 40 || min > 225) continue;
+      h[bin(px[i], px[i + 1], px[i + 2])]++;
+      total++;
+    }
+    if (!total) return null;
+    for (let i = 0; i < 512; i++) h[i] /= total;
+    return h;
+  } catch { return null; }
+}
+export async function sceneColours(buf: Buffer): Promise<Float32Array | null> {
+  try {
+    const img = await loadImage(buf);
+    const c = createCanvas(160, 100);
+    const ctx = c.getContext('2d');
+    // the middle of the spawn, where the pokémon stands
+    ctx.drawImage(img, img.width * 0.25, img.height * 0.15, img.width * 0.5, img.height * 0.8, 0, 0, 160, 100);
+    const px = ctx.getImageData(0, 0, 160, 100).data;
+    const h = new Float32Array(512);
+    for (let i = 0; i < px.length; i += 4) h[bin(px[i], px[i + 1], px[i + 2])]++;
+    for (let i = 0; i < 512; i++) h[i] /= px.length / 4;
+    return h;
+  } catch { return null; }
+}
+// how much of the art's colouring shows up in the spawn, 0 to 1
+export function colourFit(art: Float32Array, scene: Float32Array) {
+  let fit = 0;
+  for (let i = 0; i < 512; i++) if (art[i] > 0) fit += art[i] * Math.min(1, scene[i] / (art[i] * 0.25));
+  return fit;
+}
+
 // a Pokédex picture has no background, so it's put on a few that look like spawn ones before the classifier sees it:
 // a plain dark one, a plain light one, and the edges of saved spawns stretched out so their colours fill the frame
 export async function dressUp(art: Buffer): Promise<Buffer[]> {
