@@ -111,7 +111,7 @@ texz watches the game bots people play and keeps track for them. It never plays 
 
 ## Moderation
 
-`tz warn`, `tz timeout @someone 10m`, `tz kick`, `tz ban` (`tz ban @someone 3d` lifts itself), `tz unban`, `tz purge 20`, `tz lock` and `tz slow 10s`. Every action is a numbered case with a DM to the person and `tz case` searches them. Admins can move xp with `tz xp give/take/level @someone` and yen with `tz money give/take/set @someone 500`. Automod (invites, spam, mass mentions), logs, tickets and a staff role that can use Port Mafia HQ are set from `/setup`.
+`tz warn`, `tz timeout @someone 10m`, `tz kick`, `tz ban` (`tz ban @someone 3d` lifts itself), `tz unban`, `tz purge 20`, `tz lock` and `tz slow 10s`. Every action is a numbered case with a DM to the person and `tz case` searches them. Voice gets the same: `tz vc mute`, `deafen`, `kick` (disconnect), `move @someone #room`, `moveall #room`, `ban @someone 1h` (keeps them out of every voice room, pulled out the moment they join) and `lock` or `unlock` for a room, each with an un- version, and joins, leaves and room hops go to the surveillance log. Admins can move xp with `tz xp give/take/level @someone` and yen with `tz money give/take/set @someone 500`. Automod (invites, spam, mass mentions), logs, tickets and a staff role that can use Port Mafia HQ are set from `/setup`.
 
 ## Outside the server
 

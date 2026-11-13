@@ -38,7 +38,7 @@ export const menu: Record<string, [string, string, string?]> = {
   predict: ['🔮', 'Predictions', 'Call the podium and big matches, right calls pay yen'], predtop: ['🏆', 'Best predictors'],
   'football.today': ['⚽', 'Today\'s matches'], 'football.fav': ['⭐', 'Add or remove a club'], 'football.favs': ['📋', 'Favourite clubs'],
   warn: ['⚠️', 'Warn'], timeout: ['🔇', 'Timeout'], kick: ['👢', 'Kick'], ban: ['🔨', 'Ban'], unban: ['🕊️', 'Unban'],
-  purge: ['🧹', 'Purge messages'], lock: ['🔒', 'Lock or unlock'], slowmode: ['🐢', 'Slowmode'],
+  purge: ['🧹', 'Purge messages'], lock: ['🔒', 'Lock or unlock'], slowmode: ['🐢', 'Slowmode'], 'vc.mute': ['🔇', 'Voice mute'], 'vc.unmute': ['🔊', 'Voice unmute'], 'vc.deafen': ['🙉', 'Deafen'], 'vc.undeafen': ['👂', 'Undeafen'], 'vc.kick': ['📵', 'Disconnect from voice'], 'vc.move': ['➡️', 'Move to a room'], 'vc.moveall': ['🚚', 'Move a whole room'], 'vc.ban': ['🚫', 'Ban from voice'], 'vc.unban': ['🎙️', 'Lift a voice ban'], 'vc.lock': ['🔒', 'Lock a voice room'], 'vc.unlock': ['🔓', 'Unlock a voice room'],
   'case.view': ['📂', 'Open a case'], 'case.list': ['🗄️', 'Case archive'], 'case.reason': ['✏️', 'Edit a case reason'], 'case.delete': ['🗑️', 'Delete a case'],
   rolepicker: ['🎭', 'Role picker'], 'giveaway.start': ['🎁', 'Start a giveaway'], 'giveaway.end': ['⏹️', 'End one now'],
   'giveaway.reroll': ['🔁', 'Reroll winners'], 'giveaway.cancel': ['✖️', 'Cancel one'], 'giveaway.list': ['📋', 'Running giveaways'],
@@ -50,6 +50,7 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
   admin: {
     sections: [
       ['⚖️ Deal with someone', ['warn', 'timeout', 'kick', 'ban', 'unban']],
+      ['🎙️ Voice', ['vc.mute', 'vc.unmute', 'vc.deafen', 'vc.undeafen', 'vc.kick', 'vc.move', 'vc.moveall', 'vc.ban', 'vc.unban', 'vc.lock', 'vc.unlock']],
       ['🧹 This channel', ['purge', 'lock', 'slowmode']],
       ['🗄️ Case files', ['case.list', 'case.view', 'case.reason', 'case.delete']],
       ['🎁 Giveaways and roles', ['giveaway.start', 'giveaway.list', 'giveaway.end', 'giveaway.reroll', 'rolepicker']],

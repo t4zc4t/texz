@@ -37,7 +37,7 @@ export async function log(client: Client, store: Store, guildId: string, e: Embe
 }
 
 // the person running the command needs the permission, and both they and Texz must sit above the target
-async function target(ctx: Ctx, perm: PermissionResolvable, need = true): Promise<{ me: GuildMember; them: GuildMember | null } | string> {
+export async function target(ctx: Ctx, perm: PermissionResolvable, need = true): Promise<{ me: GuildMember; them: GuildMember | null } | string> {
   if (!ctx.guild || !ctx.member) return 'That only works inside a server.';
   if (!ctx.member.permissions.has(perm)) return 'You don\'t have the authority for that, partner.';
   const me = await ctx.guild.members.fetchMe();
@@ -54,7 +54,7 @@ async function target(ctx: Ctx, perm: PermissionResolvable, need = true): Promis
 }
 
 // the reply in chat is one short line, the full card goes to the log channel
-function brief(e: EmbedBuilder) {
+export function brief(e: EmbedBuilder) {
   const d = e.toJSON();
   const f = (name: string) => d.fields?.find((x) => x.name.includes(name))?.value;
   const parts = [f('Who') && `${f('Who')}`, f('Until') && `until ${f('Until')}`, f('Back') && `back ${f('Back')}`, f('Warnings') && f('Warnings')].filter(Boolean);
@@ -62,7 +62,7 @@ function brief(e: EmbedBuilder) {
   return { content: `**${d.title}**${parts.length ? ` · ${parts.join(' · ')}` : ''}${why && why !== '-' ? `\n-# ${why}` : ''}`, temp: false };
 }
 
-function actionCard(kind: Kind, title: string, emoji: string, who: string, by: string, reason: string, extra: { name: string; value: string; inline?: boolean }[] = []) {
+export function actionCard(kind: Kind, title: string, emoji: string, who: string, by: string, reason: string, extra: { name: string; value: string; inline?: boolean }[] = []) {
   return card({
     kind, title, emoji, color: RED,
     fields: [
@@ -74,7 +74,7 @@ function actionCard(kind: Kind, title: string, emoji: string, who: string, by: s
   });
 }
 
-async function tellThem(them: GuildMember, text: string) {
+export async function tellThem(them: GuildMember, text: string) {
   await them.send(text).catch(() => {});
 }
 
@@ -402,6 +402,6 @@ export function startModTimers(client: Client, store: Store) {
 export const moderation: Module = {
   name: 'moderation',
   label: 'Moderation',
-  about: 'Warn, timeout, kick, bans (temporary too), purge, lock and slowmode, every action filed as a numbered case. Logs and automod are in /setup',
+  about: 'Warn, timeout, kick, bans (temporary too), purge, lock, slowmode and voice moderation, every action filed as a numbered case. Logs and automod are in /setup',
   commands: [warn, cases, timeout, untimeout, kick, ban, unban, purge, lock, slowmode],
 };

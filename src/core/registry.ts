@@ -16,6 +16,7 @@ import { bulletins, onBulletinButton } from '../modules/bulletins.js';
 import { onWatchlist } from '../modules/watchlist.js';
 import { onAvatarButton, onPollButton, utility } from '../modules/utility.js';
 import { moderation, onCaseComponent } from '../modules/moderation.js';
+import { vc } from '../modules/voicemod.js';
 import { onRoleButton, welcomeModule } from '../modules/welcome.js';
 import { levelsModule } from '../modules/levels.js';
 import { giveaways, onGiveawayButton } from '../modules/giveaways.js';
@@ -42,6 +43,8 @@ import { isStaff } from './staff.js';
 import { fixText, setupButton, usualPerms } from './fixes.js';
 import { askModal, entriesOf, homePage, needsInput, refPage, refPageOf, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
 
+// voice moderation lives in its own file but belongs with the rest of moderation
+if (!moderation.commands.includes(vc)) moderation.commands.push(vc);
 export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule, community, actions];
 allModules.push(...modules);
 useModules(modules);
@@ -63,7 +66,7 @@ const groups: Record<string, Group> = {
 
 // where each command sits and the short name it goes by inside its dashboard, "/admin view:mute" or "tz admin mute"
 const place: Record<string, [string, string?]> = {
-  warn: ['admin'], case: ['admin'], timeout: ['admin', 'mute'], kick: ['admin'], ban: ['admin'], unban: ['admin'], purge: ['admin'], lock: ['admin'], slowmode: ['admin', 'slow'],
+  warn: ['admin'], case: ['admin'], timeout: ['admin', 'mute'], kick: ['admin'], ban: ['admin'], unban: ['admin'], purge: ['admin'], lock: ['admin'], slowmode: ['admin', 'slow'], vc: ['admin', 'vc'],
   act: ['fun'], bonds: ['profile'], movie: ['anime'],
   rolepicker: ['admin', 'roles'], xp: ['admin'], giveaway: ['admin', 'gaw'], announce: ['admin', 'post'], serverstats: ['admin', 'stats'], backup: ['admin'],
   reminders: ['owo', 'timers'],

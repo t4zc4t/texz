@@ -78,6 +78,16 @@ export function wireEvents(client: Client, store: Store) {
     }
   });
 
+  // who came, went and hopped between voice rooms, for the surveillance room
+  client.on(Events.VoiceStateUpdate, (before, after) => {
+    const m = after.member ?? before.member;
+    if (!m || m.user.bot || before.channelId === after.channelId || !logOn(store, m.guild.id)) return;
+    const [title, emoji, where] = !before.channelId ? ['Joined voice', '🎙️', `<#${after.channelId}>`]
+      : !after.channelId ? ['Left voice', '📴', `<#${before.channelId}>`]
+      : ['Switched voice', '🔀', `<#${before.channelId}> → <#${after.channelId}>`];
+    void log(client, store, m.guild.id, card({ kind: 'logs', title, emoji, gif: 'off', fields: [{ name: '👤 Who', value: `<@${m.id}> · ${m.user.username}`, inline: true }, { name: '📍 Room', value: where, inline: true }] }), 'server');
+  });
+
   client.on(Events.MessageDelete, (m) => {
     if (!logOn(store, m.guildId) || m.author?.bot || !m.content) return;
     void log(client, store, m.guildId!, card({
