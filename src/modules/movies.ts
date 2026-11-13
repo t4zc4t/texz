@@ -214,8 +214,11 @@ export function startMovieDay(client: import('discord.js').Client, store: Store)
       const ch = await guild.channels.fetch(id).catch(() => null);
       if (!ch?.isSendable()) continue;
       const mood = MOODS[now.getUTCDay()];
-      const picks = await pickSome({ genres: mood, decade: null, score: 7, lang: null, length: 'any' }, 1).catch(() => [] as Film[]);
+      // no repeats within the last couple of months
+      const seen: string[] = JSON.parse(store.getKv(`movieday:seen:${guild.id}`) ?? '[]');
+      const picks = await pickSome({ genres: mood, decade: null, score: 7.5, lang: null, length: 'any' }, 1, new Set(seen)).catch(() => [] as Film[]);
       if (!picks.length) continue;
+      store.setKv(`movieday:seen:${guild.id}`, JSON.stringify([...seen, picks[0].slug].slice(-60)));
       const out = await movieCard(picks[0].slug).catch(() => null);
       if (!out) continue;
       await ch.send({ ...out, content: `🎬 **Movie of the day** · ${mood.map(genreName).join(' and ')} night. Anyone in for a watch party? \`tz movie\` rolls something else.` }).catch(() => {});

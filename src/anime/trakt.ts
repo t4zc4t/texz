@@ -24,19 +24,19 @@ async function get<T>(path: string, q: Record<string, string | number | undefine
 interface Raw {
   title: string; year: number | null; ids: { slug: string; trakt: number; imdb?: string; tmdb?: number };
   overview?: string; tagline?: string; rating?: number; votes?: number; runtime?: number; genres?: string[]; trailer?: string | null;
-  certification?: string | null; language?: string; original_title?: string; colors?: { poster?: string[] };
+  certification?: string | null; language?: string; country?: string; original_title?: string; colors?: { poster?: string[] };
   images?: { poster?: string[]; fanart?: string[]; thumb?: string[] };
 }
 export interface Film {
   slug: string; title: string; original: string | null; year: number | null; overview: string; tagline: string; rating: number; votes: number;
-  runtime: number | null; genres: string[]; trailer: string | null; certification: string | null; poster: string | null; fanart: string | null; color: number | null; imdb: string | null;
+  runtime: number | null; genres: string[]; trailer: string | null; certification: string | null; poster: string | null; fanart: string | null; color: number | null; imdb: string | null; country: string | null;
 }
 const img = (a?: string[]) => (a?.[0] ? `https://${a[0]}` : null);
 const film = (m: Raw): Film => ({
   slug: m.ids.slug, title: m.title, original: m.original_title && m.original_title !== m.title ? m.original_title : null, year: m.year,
   overview: m.overview ?? '', tagline: m.tagline ?? '', rating: m.rating ?? 0, votes: m.votes ?? 0, runtime: m.runtime || null, genres: m.genres ?? [],
   trailer: m.trailer ?? null, certification: m.certification ?? null, poster: img(m.images?.poster), fanart: img(m.images?.fanart),
-  color: m.colors?.poster?.[0] ? Number.parseInt(m.colors.poster[0].slice(1), 16) : null, imdb: m.ids.imdb ?? null,
+  color: m.colors?.poster?.[0] ? Number.parseInt(m.colors.poster[0].slice(1), 16) : null, imdb: m.ids.imdb ?? null, country: m.country ?? null,
 });
 const ext = 'full,images';
 
@@ -70,11 +70,20 @@ const query = (f: Filters) => ({
   runtimes: f.length === 'short' ? '1-100' : f.length === 'long' ? '140-400' : undefined,
 });
 
-// a few random picks that fit, from anywhere in the first ten pages of what's popular
-export async function pickSome(f: Filters, n: number): Promise<Film[]> {
-  const first = await get<Raw[]>('/movies/popular', { ...query(f), limit: 20, page: 1 });
+// a few random picks that fit, from the films most people have actually watched, so they're known and liked worldwide.
+// Indian films only turn up now and then, and only the well rated ones, unless an Indian language was asked for
+const INDIAN = new Set(['hi', 'ta', 'te', 'ml', 'kn', 'bn', 'mr', 'pa', 'gu']);
+export async function pickSome(f: Filters, n: number, skip: Set<string> = new Set()): Promise<Film[]> {
+  const wantIndian = !!f.lang && INDIAN.has(f.lang);
+  const fits = (m: Film) => !skip.has(m.slug) && (wantIndian || m.country !== 'in' || (m.rating >= 7.8 && Math.random() < 0.15));
+  const list = async (page: number) => (await get<{ movie: Raw }[]>('/movies/watched/all', { ...query(f), limit: 20, page })).data.map((x) => film(x.movie));
+  const first = await get<{ movie: Raw }[]>('/movies/watched/all', { ...query(f), limit: 20, page: 1 });
   if (!first.data.length) return [];
-  const page = 1 + Math.floor(Math.random() * Math.min(first.pages, 10));
-  const pool = page === 1 ? first.data : (await get<Raw[]>('/movies/popular', { ...query(f), limit: 20, page })).data;
-  return [...pool].map(film).sort(() => Math.random() - 0.5).slice(0, n);
+  const pages = Math.min(first.pages, 25);
+  for (let tries = 0; tries < 3; tries++) {
+    const page = 1 + Math.floor(Math.random() * pages);
+    const pool = (page === 1 ? first.data.map((x) => film(x.movie)) : await list(page)).filter(fits);
+    if (pool.length) return pool.sort(() => Math.random() - 0.5).slice(0, n);
+  }
+  return first.data.map((x) => film(x.movie)).filter(fits).slice(0, n);
 }

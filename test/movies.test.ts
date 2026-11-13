@@ -11,6 +11,7 @@ test('movie search, likes and the picker answer with Trakt data', async () => {
     const u = String(url);
     if (u.includes('/search/movie')) return new Response(JSON.stringify([{ movie: raw }]));
     if (u.includes('/related')) return new Response(JSON.stringify([{ ...raw, title: 'Looper', ids: { slug: 'looper-2012', trakt: 1 } }]));
+    if (u.includes('/movies/watched/all')) return new Response(JSON.stringify([{ watcher_count: 1, movie: raw }]));
     if (u.includes('/movies/popular')) return new Response(JSON.stringify([raw]));
     if (u.includes('/people')) return new Response(JSON.stringify({ cast: [{ person: { name: 'Leonardo DiCaprio' } }], crew: { directing: [{ jobs: ['Director'], person: { name: 'Christopher Nolan' } }] } }));
     return new Response(JSON.stringify(raw));
