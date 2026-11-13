@@ -105,7 +105,10 @@ const baseOf = (name: string) => nameIn(name) ?? name;
 
 // the name people actually caught a form with, learned from catches, else the species name
 const catchAs = new Map<string, string>();
-const catchFor = (name: string) => catchAs.get(name.toLowerCase()) ?? baseOf(name);
+// regional forms catch by the species name, but event forms like Rotten Applin may not, so those keep their full name
+const REGIONAL = /^(alolan|galarian|hisuian|paldean)\s/i;
+const isEventForm = (name: string) => baseOf(name).toLowerCase() !== name.toLowerCase() && !REGIONAL.test(name);
+const catchFor = (name: string) => catchAs.get(name.toLowerCase()) ?? (isEventForm(name) ? name : baseOf(name));
 
 // Pokétwo's own name for what was caught, trusted as is, so its event forms like Mosslax get learned too
 export function catchName(text: string): string | null {
@@ -263,7 +266,7 @@ async function onSpawn(store: Store, m: Message) {
       // what the catcher typed is a name Pokétwo takes for this one, worth knowing for forms
       if (name && m.reference?.messageId) {
         const typed = await m.channel.messages.fetch(m.reference.messageId).then((x) => /\b(?:c|catch)\s+(.+)$/i.exec(x.content)?.[1].trim() ?? null).catch(() => null);
-        if (typed && typed.toLowerCase() !== name.toLowerCase()) catchAs.set(name.toLowerCase(), typed), store.setKv('p2:catchas', JSON.stringify([...catchAs]));
+        if (typed && name.toLowerCase() !== baseOf(name).toLowerCase() && catchAs.get(name.toLowerCase()) !== typed) catchAs.set(name.toLowerCase(), typed), store.setKv('p2:catchas', JSON.stringify([...catchAs]));
       }
       const catcher = /<@!?(\d+)>/.exec(m.content)?.[1];
       if (name && catcher) {
@@ -402,7 +405,8 @@ export async function onCatchCopy(i: Interaction) {
 // the PC version: a code block with its own copy button on desktop, and the artwork
 function pcCopy(name: string) {
   // forms like East Sea Gastrodon catch fine by the species name, which is shorter and never wrong
-  const id = idOf(baseOf(name));
+  // an event form looks nothing like the species art, so it goes without a picture rather than the wrong one
+  const id = isEventForm(name) ? null : idOf(baseOf(name));
   const e = new EmbedBuilder().setColor(rarityOf(name) ? 0xf1c40f : 0xe3350d).setDescription(`🖥️ **Click to copy**\n\`\`\`${catchLine(catchFor(name))}\`\`\``);
   if (id) e.setThumbnail(artwork(id));
   return e;
