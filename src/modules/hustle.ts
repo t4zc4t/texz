@@ -275,23 +275,81 @@ const roulette: Command = {
   },
 };
 
-// ---------- scratch cards, the prize is hidden under spoilers ----------
-const SCRATCH: [string, number, number][] = [['🍙', 30, 2], ['🦀', 22, 3], ['🔔', 14, 5], ['💎', 6, 20], ['🖤', 2, 100]];
+// ---------- scratch cards: a 3×3 ticket you scratch cell by cell, three alike wins, and it expires if left alone ----------
+const PRICE = 100;
+const TICKET_LIFE = 90_000;
+// symbol, chance of being the winning one on a ticket, how many tickets it pays
+const PRIZES: [string, number, number][] = [['🍙', 0.15, 2], ['🦀', 0.08, 3], ['🔔', 0.04, 5], ['💎', 0.008, 20], ['🖤', 0.001, 100]];
+interface Ticket { guild: string; user: string; cells: string[]; open: boolean[]; win: string | null; at: number; done: boolean; msg?: import('discord.js').Message }
+const tickets = new Map<string, Ticket>();
+
+// the outcome is settled when the ticket is bought, the board is laid out to match it:
+// a win puts the symbol down three times, everything else shows at most twice so there's no second line
+function printTicket(): { cells: string[]; win: string | null } {
+  let r = Math.random();
+  const win = PRIZES.find((p) => (r -= p[1]) < 0)?.[0] ?? null;
+  const pool = PRIZES.map((p) => p[0]).filter((x) => x !== win);
+  const cells: string[] = win ? [win, win, win] : [];
+  const count = new Map<string, number>();
+  while (cells.length < 9) {
+    const x = pick(pool);
+    if ((count.get(x) ?? 0) >= 2) continue;
+    count.set(x, (count.get(x) ?? 0) + 1);
+    cells.push(x);
+  }
+  return { cells: cells.sort(() => Math.random() - 0.5), win };
+}
+const payOf = (sym: string | null) => (sym ? PRICE * (PRIZES.find((p) => p[0] === sym)?.[2] ?? 0) : 0);
+
+function ticketView(t: Ticket, key: string, end: 'won' | 'lost' | 'expired' | null) {
+  const left = t.open.filter((o) => !o).length;
+  const pay = payOf(t.win);
+  const line = end === 'won' ? `🎉 **Three ${t.win}!** You win **${fmt(pay)}** (${fmt(pay - PRICE)} after the ticket).`
+    : end === 'lost' ? `No three alike. Better luck on the next one, **−${fmt(PRICE)}**.`
+    : end === 'expired' ? `⌛ **Ticket expired.** The silver ink dried before you finished, the bar keeps your **${fmt(PRICE)}**.${t.win ? ` There were three ${t.win} under there worth ${fmt(pay)}.` : ''}`
+    : `Tap the cells to scratch them, three alike wins.\n**${left}** left to scratch · expires <t:${Math.floor((t.at + TICKET_LIFE) / 1000)}:R>`;
+  const e = card('🎟️ Lupin Lucky Three', `${line}\n-# 🍙2× 🦀3× 🔔5× 💎20× 🖤100× the ticket price · ${fmt(PRICE)} a ticket`, end === 'won' ? WIN : end === 'expired' ? LOSE : PLAY);
+  const rows = [0, 1, 2].map((r) => row(...[0, 1, 2].map((c) => {
+    const i = r * 3 + c;
+    const shown = t.open[i] || end !== null;
+    const b = new ButtonBuilder().setCustomId(`sc|${key}|${i}`);
+    if (!shown) return b.setLabel('░░').setStyle(ButtonStyle.Secondary);
+    const lucky = end === 'won' && t.cells[i] === t.win;
+    // what you didn't scratch in time shows faded
+    return b.setEmoji(t.cells[i]).setStyle(lucky ? ButtonStyle.Success : ButtonStyle.Secondary).setDisabled(true);
+  })));
+  if (!end) rows.push(row(new ButtonBuilder().setCustomId(`sc|${key}|all`).setLabel('Scratch the rest').setEmoji('🪙').setStyle(ButtonStyle.Primary)));
+  return { embeds: [e], components: rows };
+}
+
+const expire = (key: string) => {
+  const t = tickets.get(key);
+  if (!t || t.done) return;
+  t.done = true;
+  tickets.delete(key);
+  void t.msg?.edit(ticketView(t, key, 'expired')).catch(() => {});
+};
+
 const scratch: Command = {
   name: 'scratch',
   cooldown: 10,
-  data: new SlashCommandBuilder().setName('scratch').setDescription('Buy a ¥100 scratch card, three alike wins').toJSON(),
-    run: async (ctx, store) => {
+  data: new SlashCommandBuilder().setName('scratch').setDescription(`Buy a ${fmt(PRICE)} scratch card and scratch it yourself, three alike wins`).toJSON(),
+  text: { aliases: ['scratchcard', 'lotto'] },
+  run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
-    if (wallet(store, ctx.guildId, ctx.userId) < 100) return ctx.reply({ content: `A card costs ${fmt(100)}.`, temp: true });
-    const total = SCRATCH.reduce((s, x) => s + x[1], 0) + 26;
-    const draw = () => { let r = Math.random() * total; return SCRATCH.find((x) => (r -= x[1]) < 0)?.[0] ?? '🥢'; };
-    const cells = [draw(), draw(), draw()];
-    const three = cells[0] === cells[1] && cells[1] === cells[2] ? SCRATCH.find((x) => x[0] === cells[0]) : undefined;
-    const prize = three ? 100 * three[2] : 0;
-    store.pay(ctx.guildId, ctx.userId, prize - 100);
-    const result = prize ? `||**Three ${cells[0]}! +${fmt(prize - 100)}**||` : '||No match this time. −¥100||';
-    return ctx.reply({ embeds: [card('🎟️ Lupin scratch card', `Scratch it:\n# ||${cells[0]}|| ||${cells[1]}|| ||${cells[2]}||\n${result}\n-# 🍙2× 🦀3× 🔔5× 💎20× 🖤100× · wallet ${fmt(wallet(store, ctx.guildId, ctx.userId))}`, PLAY)], public: true });
+    if ([...tickets.values()].some((t) => t.user === ctx.userId && t.guild === ctx.guildId && !t.done)) return ctx.reply({ content: 'Finish scratching the ticket you have first.', temp: true });
+    if (wallet(store, ctx.guildId, ctx.userId) < PRICE) return ctx.reply({ content: `A ticket costs ${fmt(PRICE)}.`, temp: true });
+    // paid at the counter, before a single cell is scratched
+    store.pay(ctx.guildId, ctx.userId, -PRICE);
+    const { cells, win } = printTicket();
+    const key = `${ctx.userId}-${Date.now().toString(36)}`;
+    const t: Ticket = { guild: ctx.guildId, user: ctx.userId, cells, open: Array(9).fill(false), win, at: Date.now(), done: false };
+    tickets.set(key, t);
+    const sent = await ctx.reply({ ...ticketView(t, key, null), public: true }) as unknown;
+    const msg = (sent as { resource?: { message?: import('discord.js').Message } })?.resource?.message ?? (sent as import('discord.js').Message | undefined);
+    if (msg && typeof (msg as { edit?: unknown }).edit === 'function') t.msg = msg;
+    setTimeout(() => expire(key), TICKET_LIFE).unref?.();
+    return sent;
   },
 };
 
@@ -397,6 +455,22 @@ export async function onHustle(store: Store, i: Interaction): Promise<boolean> {
     } else {
       await i.update(heistView(h, `🚨 ${pick(['Chuuya was waiting inside', 'Kunikida had the place staked out', 'Dazai sold you out for a laugh', 'Fyodor saw it coming'])}. Everyone loses their **${fmt(ENTRY)}**.`));
     }
+    return true;
+  }
+  if (i.customId.startsWith('sc|')) {
+    const [, key, cell] = i.customId.split('|');
+    const t = tickets.get(key);
+    if (!t || t.done) { await i.update({ components: [] }).catch(() => {}); return true; }
+    if (i.user.id !== t.user) { await i.reply({ content: 'That\'s someone else\'s ticket. Buy your own with `tz scratch`.', flags: MessageFlags.Ephemeral }); return true; }
+    t.msg ??= i.message;
+    if (Date.now() - t.at > TICKET_LIFE) { expire(key); await i.deferUpdate().catch(() => {}); return true; }
+    if (cell === 'all') t.open.fill(true); else t.open[Number(cell)] = true;
+    if (t.open.every(Boolean)) {
+      t.done = true;
+      tickets.delete(key);
+      if (t.win) store.pay(t.guild, t.user, payOf(t.win));
+      await i.update(ticketView(t, key, t.win ? 'won' : 'lost'));
+    } else await i.update(ticketView(t, key, null));
     return true;
   }
   if (i.customId.startsWith('rps|')) {
