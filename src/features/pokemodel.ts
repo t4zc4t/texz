@@ -118,6 +118,38 @@ export async function classify(image: Buffer): Promise<{ top: { name: string; p:
   };
 }
 
+// a Pokédex picture has no background, so it's put on a few that look like spawn ones before the classifier sees it:
+// a plain dark one, a plain light one, and the edges of saved spawns stretched out so their colours fill the frame
+export async function dressUp(art: Buffer): Promise<Buffer[]> {
+  const a = await loadImage(art);
+  const W = 800;
+  const H = 500;
+  const backs: ((ctx: import('@napi-rs/canvas').SKRSContext2D) => Promise<void>)[] = [
+    async (ctx) => { ctx.fillStyle = '#2d4a3a'; ctx.fillRect(0, 0, W, H); },
+    async (ctx) => { ctx.fillStyle = '#c9d6c2'; ctx.fillRect(0, 0, W, H); },
+  ];
+  const saved = existsSync(spawnDir) ? readdirSync(spawnDir).filter((f) => f.endsWith('.png')) : [];
+  for (const f of saved.sort(() => Math.random() - 0.5).slice(0, 2)) {
+    backs.push(async (ctx) => {
+      const s = await loadImage(readFileSync(`${spawnDir}${f}`));
+      // the left fifth of a spawn is only background, stretched it gives the colours without the old pokémon
+      ctx.drawImage(s, 0, 0, s.width / 5, s.height, 0, 0, W, H);
+    });
+  }
+  const out: Buffer[] = [];
+  for (const back of backs) {
+    const c = createCanvas(W, H);
+    const ctx = c.getContext('2d');
+    try { await back(ctx); } catch { continue; }
+    // about the size Pokétwo draws them, in the middle and a little low
+    const h = H * 0.62;
+    const w = (a.width / a.height) * h;
+    ctx.drawImage(a, (W - w) / 2, H * 0.24, w, h);
+    out.push(c.toBuffer('image/png'));
+  }
+  return out;
+}
+
 // the first time memory is empty, the pictures already saved with their names teach it
 export async function seedMemory(add: (vec: [number, number][], name: string) => void, empty: boolean) {
   if (!empty || !existsSync(spawnDir)) return;

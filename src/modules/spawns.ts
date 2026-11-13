@@ -11,7 +11,7 @@ import { fixText } from '../core/fixes.js';
 import { picksOf, savePicks } from './profile.js';
 import { TYPES, addExtra, allSpecies, artwork, catchLine, formsOf, hintOf, idOf, nameIn, rarityOf, regionOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
 import { decide, download, fingerprint, knownCount, learn, logSpawn, memorySize, recognise, remember, type Sparse } from '../features/pokeid.js';
-import { classify, keepSpawn, seedMemory } from '../features/pokemodel.js';
+import { classify, dressUp, keepSpawn, seedMemory } from '../features/pokemodel.js';
 import { teamDot } from '../feeds/f1.js';
 
 export const POKETWO_ID = '716390085896962058';
@@ -83,6 +83,7 @@ export function watchSpawns(client: Client, store: Store) {
   setInterval(() => void raceTick(client, store).catch(() => {}), 3600_000).unref?.();
   for (const [k, v] of JSON.parse(store.getKv('p2:catchas') ?? '[]') as [string, string][]) catchAs.set(k, v);
   addExtra(JSON.parse(store.getKv('p2:extra') ?? '[]') as string[]);
+  for (const [k, v] of JSON.parse(store.getKv('p2:dexart') ?? '[]') as [string, string][]) dexArt.set(k, v);
   void seedMemory((vec, name) => remember(store, vec, name), memorySize(store) === 0);
   client.on(Events.MessageCreate, (m) => void onSpawn(store, m).catch(() => {}));
 }
@@ -214,6 +215,39 @@ async function confirm(store: Store, m: Message, w: Waiting, name: string, how: 
   if (how !== 'catch') await show(store, m, w, name);
 }
 
+// someone ran "@Pokétwo dex <name>": the picture in Pokétwo's answer teaches the identifier that name, forms included,
+// so a form nobody has caught yet can still be recognised. A ✅ on Pokétwo's message says it was learned
+const dexArt = new Map<string, string>();
+async function fromDex(store: Store, m: Message): Promise<boolean> {
+  const e = m.embeds[0];
+  const title = e?.title ?? '';
+  const url = e?.image?.url;
+  const head = /^#\s*\d+\s*[—–-]\s*(.+)$/.exec(title.trim());
+  if (!head || !url) return false;
+  // shiny pictures are coloured differently, they'd teach the wrong look
+  if (/✨|shiny/i.test(`${title} ${e.description ?? ''}`)) return true;
+  const raw = head[1].replace(/[^\p{L}\p{N}'’.: -]/gu, ' ').replace(/\s+/g, ' ').trim();
+  const name = raw && (nameIn(raw) === raw ? raw : raw.split(' ').length <= 4 ? raw : nameIn(raw));
+  if (!name) return true;
+  const art = await download(url);
+  if (!art) return true;
+  let n = 0;
+  for (const pic of await dressUp(art).catch(() => [] as Buffer[])) {
+    const cls = await classify(pic).catch(() => null);
+    if (cls) { remember(store, cls.vec, name); n++; }
+  }
+  if (!n) return true;
+  if (baseOf(name).toLowerCase() !== name.toLowerCase()) {
+    const list = JSON.parse(store.getKv('p2:extra') ?? '[]') as string[];
+    if (!list.includes(name)) { list.push(name); store.setKv('p2:extra', JSON.stringify(list)); addExtra([name]); }
+  }
+  dexArt.set(name.toLowerCase(), url);
+  store.setKv('p2:dexart', JSON.stringify([...dexArt]));
+  console.log(`pokedex: learned ${name} (${n})`);
+  await m.react('✅').catch(() => {});
+  return true;
+}
+
 async function onSpawn(store: Store, m: Message) {
   if (!m.guild || !m.author.bot || m.author.id === m.client.user.id) return;
   const which = m.author.id === POKETWO_ID ? 'p2' : m.author.id === SHOOB_ID ? 'shoob' : null;
@@ -226,6 +260,7 @@ async function onSpawn(store: Store, m: Message) {
     }
     return;
   }
+  if (which === 'p2' && await fromDex(store, m)) return;
   if (which === 'p2') {
     // someone tried the name on the card and Pokétwo said no: cross it out and offer the next one
     if (w && w.sent && !w.confirmed && /wrong pok[eé]mon/i.test(m.content) && m.reference?.messageId) {
@@ -404,11 +439,12 @@ export async function onCatchCopy(i: Interaction) {
 
 // the PC version: a code block with its own copy button on desktop, and the artwork
 function pcCopy(name: string) {
-  // forms like East Sea Gastrodon catch fine by the species name, which is shorter and never wrong
-  // an event form looks nothing like the species art, so it goes without a picture rather than the wrong one
+  // an event form looks nothing like the species art: its own Pokédex picture if someone looked it up, else none
+  const art = isEventForm(name) ? dexArt.get(name.toLowerCase()) : undefined;
   const id = isEventForm(name) ? null : idOf(baseOf(name));
   const e = new EmbedBuilder().setColor(rarityOf(name) ? 0xf1c40f : 0xe3350d).setDescription(`🖥️ **Click to copy**\n\`\`\`${catchLine(catchFor(name))}\`\`\``);
   if (id) e.setThumbnail(artwork(id));
+  else if (art) e.setThumbnail(art);
   return e;
 }
 
