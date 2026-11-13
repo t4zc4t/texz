@@ -96,7 +96,7 @@ export function watchSpawns(client: Client, store: Store) {
   // once: the forms looked up twice before repeats were skipped keep just one look's worth
   if (store.firstTime('global', 'p2:dexdedupe')) trimMemory(store, [...dexArt.keys()], 4);
   // once: the readings made from dex pictures for forms go, the colour check does that job now
-  if (store.firstTime('global', 'p2:dexvecs')) trimMemory(store, [...dexArt.keys()].filter((k) => baseOf(k).toLowerCase() !== k), 0);
+  if (store.firstTime('global', 'p2:dexvecs2')) trimMemory(store, [...dexArt.keys()].filter((k) => baseOf(k).toLowerCase() !== k || REGIONAL.test(k)), 0);
   void seedMemory((vec, name) => remember(store, vec, name), memorySize(store) === 0);
   client.on(Events.MessageCreate, (m) => void onSpawn(store, m).catch(() => {}));
 }
