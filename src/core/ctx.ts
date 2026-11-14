@@ -136,7 +136,9 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
         const buttons = rows.flatMap((r) => ('components' in r ? (r as { components: { data?: { custom_id?: string; label?: string } }[] }).components : []).map((c) => c.data ?? {}));
         const hasBack = !!target && buttons.some((b) => b.label?.startsWith('Back') || b.custom_id?.startsWith(`nav|${target}|`));
         if (target && target !== 'none' && !hasBack && rows.length < 5 && (target !== ctx.self || !!opts.sub)) {
-          const carry = opts.backuser ? `,user=${opts.backuser}` : '';
+          // the same person goes back with you, from backuser or the page's own user
+          const who = opts.backuser ?? opts.user;
+          const carry = who ? `,user=${who}` : '';
           const nav = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
             new ButtonBuilder().setCustomId(`nav|${target}|owner=${opts.owner ?? i.user.id}${carry}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
           );

@@ -151,7 +151,7 @@ const user: Command = {
     }).setThumbnail(m.displayAvatarURL({ size: 256, forceStatic: false }));
     const banner = u.bannerURL({ size: 1024, forceStatic: false });
     if (banner) e.setImage(banner);
-    const av = new ButtonBuilder().setCustomId(`nav|avatar|owner=${ctx.userId},user=${m.id},back=user,backuser=${m.id}`).setEmoji('🖼️').setLabel('Avatar').setStyle(ButtonStyle.Secondary);
+    const av = new ButtonBuilder().setCustomId(`nav|avatar|owner=${ctx.userId},user=${m.id},back=user`).setEmoji('🖼️').setLabel('Avatar').setStyle(ButtonStyle.Secondary);
     return ctx.reply({ embeds: [e], components: [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(av)], private: false });
   },
 };
