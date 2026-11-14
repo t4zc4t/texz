@@ -93,6 +93,7 @@ export function watchSpawns(client: Client, store: Store) {
     foldMemory(store);
   }
   for (const [k, v] of JSON.parse(store.getKv('p2:dexart') ?? '[]') as [string, string][]) dexArt.set(k, v);
+  for (const [k, v] of JSON.parse(store.getKv('p2:dexinfo') ?? '[]') as [string, { types?: string[]; region?: string }][]) dexInfo.set(k, v);
   // once: the forms looked up twice before repeats were skipped keep just one look's worth
   if (store.firstTime('global', 'p2:dexdedupe')) trimMemory(store, [...dexArt.keys()], 4);
   // once: the readings made from dex pictures for forms go, the colour check does that job now
@@ -162,9 +163,10 @@ function maybeText(name: string, guess?: { p: number; others: string[] }, wrong:
 function claimText(name: string, roles: string[], guess?: { p: number; others: string[] }, fresh = false) {
   const base = baseOf(name);
   const rare = rarityOf(base);
-  const types = typesOf(base);
+  const info = dexInfo.get(name.toLowerCase());
+  const types = info?.types ?? typesOf(base);
   const why = [rare && rareMark[rare], ...types].filter(Boolean).join(' · ');
-  const region = regionOf(name);
+  const region = info?.region ?? regionOf(name);
   const forms = guess ? guess.others.filter((o) => formsOf(base).includes(o)) : [];
   return [
     roles.length ? `${roles.map((r) => `<@&${r}>`).join(' ')} ${why} spawn, be quick` : null,
@@ -239,7 +241,9 @@ async function confirm(store: Store, m: Message, w: Waiting, name: string, how: 
 // a Pokétwo dex answer: its picture teaches the identifier that name, forms included, so a form nobody has caught yet
 // can still be recognised. Only the bot owner can feed it, by replying "tz dexit" to the dex message
 const dexArt = new Map<string, string>();
-export async function fromDex(store: Store, m: Message): Promise<boolean> {
+// region and types read off a dex page, for forms the built-in Pokédex doesn't know
+const dexInfo = new Map<string, { types?: string[]; region?: string }>();
+export async function fromDex(store: Store, m: Message, quiet = false): Promise<boolean> {
   const e = m.embeds[0];
   const title = e?.title ?? '';
   const url = e?.image?.url;
@@ -250,8 +254,16 @@ export async function fromDex(store: Store, m: Message): Promise<boolean> {
   const raw = canonical(head[1].replace(/[^\p{L}\p{N}'’.: -]/gu, ' ').replace(/\s+/g, ' ').trim());
   const name = raw && (nameIn(raw) === raw ? raw : raw.split(' ').length <= 4 ? raw : nameIn(raw));
   if (!name) return true;
-  // already learned from the dex once, a second look adds nothing
-  if (dexArt.has(name.toLowerCase())) { await m.react('✅').catch(() => {}); return true; }
+  // the region and the types, straight from Pokétwo's own page, so forms show their real ones
+  const field = (n: string) => e.fields.find((f) => f.name.toLowerCase() === n)?.value ?? '';
+  const types = TYPES.filter((t) => new RegExp(`\\b${t}\\b`, 'i').test(field('types')));
+  const region = field('region').replace(/<[^>]+>|[*_`]/g, '').trim().split('\n')[0] || undefined;
+  const key = name.toLowerCase();
+  const before = JSON.stringify(dexInfo.get(key) ?? {});
+  if (types.length || region) dexInfo.set(key, { types: types.length ? types : undefined, region });
+  if (JSON.stringify(dexInfo.get(key) ?? {}) !== before) store.setKv('p2:dexinfo', JSON.stringify([...dexInfo]));
+  // already learned from the dex once, a second look only refreshes the details above
+  if (dexArt.has(key)) { if (!quiet) await m.react('✅').catch(() => {}); return true; }
   // the picture is kept for colour checks and the claim card. Its classifier reading isn't stored: a form and its
   // species read almost the same there, which made every plain Grimer look like the Alolan one
   const art = await download(url);
@@ -260,7 +272,7 @@ export async function fromDex(store: Store, m: Message): Promise<boolean> {
   dexArt.set(name.toLowerCase(), url);
   store.setKv('p2:dexart', JSON.stringify([...dexArt]));
   console.log(`pokedex: learned ${name}`);
-  await m.react('✅').catch(() => {});
+  if (!quiet) await m.react('✅').catch(() => {});
   return true;
 }
 
@@ -298,6 +310,7 @@ const dexit: Command = {
   group: 'poketwo',
   hidden: true,
   data: new SlashCommandBuilder().setName('dexit').setDescription('Learn a Pokétwo dex picture').toJSON(),
+  text: { args: ['what'] },
   run: async (ctx, store) => {
     const client = ctx.guild?.client;
     if (client && !ownerId) {
@@ -306,8 +319,24 @@ const dexit: Command = {
       ownerId = o && 'ownerId' in o ? o.ownerId ?? null : o?.id ?? null;
     }
     if (ctx.userId !== ownerId) return ctx.reply({ content: 'That one is only for the bot owner.', temp: true });
+    // "tz dexit scan" reads back through this channel for dex pages already asked for
+    if ((ctx.str('what') ?? '').toLowerCase() === 'scan') {
+      const ch = ctx.guild ? await ctx.guild.channels.fetch(ctx.channelId).catch(() => null) : null;
+      if (!ch?.isTextBased()) return ctx.reply({ content: 'Run it in a text channel.', temp: true });
+      let before: string | undefined;
+      let seen = 0;
+      let read = 0;
+      const art = dexArt.size;
+      for (let n = 0; n < 15; n++) {
+        const batch = await ch.messages.fetch({ limit: 100, before }).catch(() => null);
+        if (!batch?.size) break;
+        for (const msg of batch.values()) if (msg.author.id === POKETWO_ID && msg.embeds[0]?.image && /^#\s*\d+/.test(msg.embeds[0].title ?? '')) { seen++; if (await fromDex(store, msg, true)) read++; }
+        before = batch.last()?.id;
+      }
+      return ctx.reply({ content: `🔎 Found **${seen}** dex pages here, read ${read}. ${dexArt.size - art} new pictures, region and types saved for ${dexInfo.size} forms.`, temp: false });
+    }
     const ref = await ctx.replyTo?.();
-    if (!ref || ref.author.id !== POKETWO_ID || !ref.embeds[0]?.image) return ctx.reply({ content: 'Reply to a Pokétwo dex message with `tz dexit`.', temp: true });
+    if (!ref || ref.author.id !== POKETWO_ID || !ref.embeds[0]?.image) return ctx.reply({ content: 'Reply to a Pokétwo dex message with `tz dexit`, or run `tz dexit scan` to read back through this channel.', temp: true });
     const had = dexArt.size;
     const ok = await fromDex(store, ref);
     const added = dexArt.size - had;
@@ -506,9 +535,9 @@ export async function onCatchCopy(i: Interaction) {
 
 // the PC version: a code block with its own copy button on desktop, and the artwork
 function pcCopy(name: string) {
-  // an event form looks nothing like the species art: its own Pokédex picture if someone looked it up, else none
-  const art = isEventForm(name) ? dexArt.get(name.toLowerCase()) : undefined;
-  const id = isEventForm(name) ? null : idOf(baseOf(name));
+  // Pokétwo's own picture when it's been looked up; a form without one gets none rather than the plain species
+  const art = dexArt.get(name.toLowerCase());
+  const id = art || isEventForm(name) || REGIONAL.test(name) ? null : idOf(baseOf(name));
   const e = new EmbedBuilder().setColor(rarityOf(name) ? 0xf1c40f : 0xe3350d).setDescription(`🖥️ **Click to copy**\n\`\`\`${catchLine(catchFor(name))}\`\`\``);
   if (id) e.setThumbnail(artwork(id));
   else if (art) e.setThumbnail(art);
