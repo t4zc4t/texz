@@ -27,6 +27,8 @@ export interface RankCardData {
   need: number;
   nextRank: string | null;
   boost: number;
+  // what the next rank opens up in chat, like "threads, polls"
+  nextUnlock?: string | null;
 }
 
 // cuts long names with an ellipsis so they never run into the stats
@@ -156,8 +158,26 @@ export async function rankCard(d: RankCardData): Promise<Buffer> {
   ctx.fillStyle = '#c9ccd4';
   ctx.fillText(`${short(d.into)} / ${short(d.need)} xp  ·  ${short(d.totalXp)} total`, left, by + bh + 32);
   ctx.textAlign = 'right';
-  ctx.fillStyle = d.boost > 1 ? '#f0b85a' : '#8b8f9a';
-  ctx.fillText(d.boost > 1 ? `${+d.boost.toFixed(2)}x boost active` : d.nextRank ? `next: ${d.nextRank}` : 'top of the Agency', right, by + bh + 32);
+  ctx.fillStyle = SAND;
+  ctx.fillText(d.nextRank ? `next: ${d.nextRank}` : 'top of the Agency', right, by + bh + 32);
+  // what the next rank unlocks, quietly underneath
+  if (d.nextRank && d.nextUnlock) {
+    ctx.font = '400 15px "Texz Sans", sans-serif';
+    ctx.fillStyle = '#8b8f9a';
+    ctx.fillText(fit(ctx, `unlocks ${d.nextUnlock}`, bw * 0.6), right, by + bh + 56);
+  }
+  // an xp boost shows as a pill by the agency mark
+  if (d.boost > 1) {
+    ctx.font = '700 14px "Texz Sans Bold", sans-serif';
+    const tag = `${+d.boost.toFixed(2)}× XP BOOST`;
+    const tw = ctx.measureText(tag).width + 24;
+    rounded(ctx, right - tw, 18, tw, 26, 13);
+    ctx.fillStyle = 'rgba(240,184,90,0.16)';
+    ctx.fill();
+    ctx.fillStyle = '#f0b85a';
+    ctx.textAlign = 'center';
+    ctx.fillText(tag, right - tw / 2, 36);
+  }
 
   // a quiet signature in the corner
   ctx.textAlign = 'left';
@@ -192,6 +212,8 @@ export interface ProfileData {
   medalCount?: { won: number; total: number };
   // favourite team, club, anime and manga drawn as glowing tiles with their logo or cover
   favs?: Fav[];
+  // level progress, a thin bar under the bio
+  progress?: { into: number; need: number; next: string | null };
 }
 
 export interface Fav { label: string; name: string; image?: string | null; color?: string | null; kind: 'badge' | 'crest' | 'cover' }
@@ -360,6 +382,30 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
   ctx.font = '400 21px "Texz Sans", sans-serif';
   const lines = wrap(ctx, d.bio || 'No bio yet. A person of mystery.', right - left, 3);
   lines.forEach((l, i) => ctx.fillText(l, left, 214 + i * 30));
+
+  // how far into the level, right under the bio
+  if (d.progress && d.progress.need) {
+    const py = Math.min(300, 214 + lines.length * 30 + 6);
+    const pw = right - left;
+    rounded(ctx, left, py, pw, 10, 5);
+    ctx.fillStyle = '#262933';
+    ctx.fill();
+    const pct = Math.min(1, d.progress.into / d.progress.need);
+    if (pct > 0) {
+      const g = ctx.createLinearGradient(left, 0, left + pw, 0);
+      g.addColorStop(0, '#9c8358');
+      g.addColorStop(1, SAND);
+      rounded(ctx, left, py, Math.max(10, pw * pct), 10, 5);
+      ctx.fillStyle = g;
+      ctx.fill();
+    }
+    ctx.font = '400 15px "Texz Sans", sans-serif';
+    ctx.fillStyle = '#8b8f9a';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${short(d.progress.into)} / ${short(d.progress.need)} xp to the next level`, left, py + 28);
+    if (d.progress.next) { ctx.textAlign = 'right'; ctx.fillStyle = SAND; ctx.fillText(fit(ctx, `next rank: ${d.progress.next}`, pw * 0.5), right, py + 28); }
+    ctx.textAlign = 'left';
+  }
 
   // chips along the bottom
   let x = 50;

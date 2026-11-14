@@ -49,12 +49,19 @@ export const SET: Record<string, [string, string]> = {
 
 // Pokémon types, each in its own colour, kept apart in assets/types-line
 export const TYPES: Record<string, [string, string]> = {
-  normal: ['circle', '#B5B48C'], fire: ['flame', '#EE8130'], water: ['droplet', '#6390F0'], grass: ['leaf', '#7AC74C'],
-  electric: ['zap', '#F7D02C'], ice: ['snowflake', '#96D9D6'], fighting: ['hand-fist', '#E0504A'], poison: ['flask-conical', '#C266C0'],
-  ground: ['mountain', '#E2BF65'], flying: ['feather', '#A98FF3'], psychic: ['eye', '#F95587'], bug: ['bug', '#A6B91A'],
-  rock: ['gem', '#B6A136'], ghost: ['ghost', '#9A7CC4'], dragon: ['crown', '#8C63FF'], dark: ['moon', '#A08670'],
-  steel: ['cog', '#B7B7CE'], fairy: ['sparkles', '#D685AD'],
+  normal: ['circle-dot', '#9FA19F'], fire: ['flame', '#EE8130'], water: ['droplet', '#6390F0'], grass: ['leaf', '#7AC74C'],
+  electric: ['zap', '#E6B800'], ice: ['snowflake', '#5FC8C4'], fighting: ['hand-fist', '#C22E28'], poison: ['flask-conical', '#A33EA1'],
+  ground: ['mountain', '#C9A24A'], flying: ['feather', '#8A70E0'], psychic: ['eye', '#F95587'], bug: ['bug', '#A6B91A'],
+  rock: ['gem', '#A8932E'], ghost: ['ghost', '#735797'], dragon: ['crown', '#6F35FC'], dark: ['moon', '#705746'],
+  steel: ['cog', '#8E9AAD'], fairy: ['sparkles', '#D46BA8'],
 };
+
+// lighter or darker by a fraction, for the badge gradient
+function shade(hex: string, by: number) {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const f = (v: number) => Math.round(Math.min(255, Math.max(0, by > 0 ? v + (255 - v) * by : v * (1 + by))));
+  return `rgb(${f(n >> 16)}, ${f((n >> 8) & 255)}, ${f(n & 255)})`;
+}
 
 const dir = process.argv[2];
 mkdirSync('assets/icons', { recursive: true });
@@ -74,12 +81,22 @@ for (const [name, [icon, colour]] of Object.entries(SET)) {
   c.getContext('2d').drawImage(img, 4, 4, 120, 120);
   writeFileSync(`assets/icons/${name}.png`, c.toBuffer('image/png'));
 }
+// each type is a finished badge: a disc in the type's colour with a soft light from the top, the symbol in white
 mkdirSync('assets/types-line', { recursive: true });
 for (const [name, [icon, colour]] of Object.entries(TYPES)) {
-  const svg = readFileSync(`${dir}/${icon}.svg`, 'utf8').replace(/<!--.*?-->/s, '').replace(/currentColor/g, colour).replace(/stroke-width="2"/, 'stroke-width="2.25"').replace(/width="24"\s+height="24"/, 'width="128" height="128"');
-  const img = await loadImage(Buffer.from(svg));
   const c = createCanvas(128, 128);
-  c.getContext('2d').drawImage(img, 4, 4, 120, 120);
+  const x = c.getContext('2d');
+  const disc = x.createLinearGradient(0, 8, 0, 120);
+  disc.addColorStop(0, shade(colour, 0.18));
+  disc.addColorStop(1, shade(colour, -0.22));
+  x.fillStyle = disc;
+  x.beginPath(); x.arc(64, 64, 58, 0, Math.PI * 2); x.fill();
+  // a thin darker rim keeps it crisp on light and dark themes
+  x.lineWidth = 4; x.strokeStyle = shade(colour, -0.35);
+  x.beginPath(); x.arc(64, 64, 56, 0, Math.PI * 2); x.stroke();
+  const svg = readFileSync(`${dir}/${icon}.svg`, 'utf8').replace(/<!--.*?-->/s, '').replace(/currentColor/g, '#FFFFFF').replace(/stroke-width="2"/, 'stroke-width="2.4"').replace(/width="24"\s+height="24"/, 'width="128" height="128"');
+  const img = await loadImage(Buffer.from(svg));
+  x.drawImage(img, 30, 30, 68, 68);
   writeFileSync(`assets/types-line/${name}.png`, c.toBuffer('image/png'));
 }
 console.log(Object.keys(SET).length, 'icons,', Object.keys(TYPES).length, 'types');

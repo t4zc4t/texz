@@ -255,7 +255,8 @@ const rank: Command = {
       name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, level: l.level, rank: r.name,
       avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null,
       position: store.xpPosition(ctx.guild.id, xp), totalXp: xp, into: l.into, need: l.need,
-      nextRank: next ? `${next.name} at ${next.at}` : null, boost: boost.total,
+      nextRank: next ? `${next.name} at level ${next.at}` : null, boost: boost.total,
+      nextUnlock: next ? (unlocks[next.name] ?? []).map(([, l]) => l).join(', ') || null : null,
     });
     // perks and the leaderboard used to be their own commands, now they hang off the rank card
     const nav = (cmd: string, emoji: string, label: string) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId}`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary);

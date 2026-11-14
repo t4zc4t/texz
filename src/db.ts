@@ -341,6 +341,7 @@ export class Store {
         channel_id TEXT NOT NULL,
         author_id TEXT NOT NULL,
         content TEXT NOT NULL,
+        files TEXT NOT NULL DEFAULT '[]',
         at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS recent_at ON recent_messages(at);
@@ -394,6 +395,8 @@ export class Store {
         PRIMARY KEY (user_id, what)
       );
     `);
+    // older copies of the message table have no files column
+    try { this.db.exec("ALTER TABLE recent_messages ADD COLUMN files TEXT NOT NULL DEFAULT '[]'"); } catch { /* already there */ }
     // warnings used to live in their own table, they're cases now
     const old = this.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'warnings'").get();
     if (old) {
@@ -702,11 +705,15 @@ export class Store {
   // ---------- server stats ----------
 
   // the last few days of messages, so an edit or delete can still be logged after a restart wiped the cache
-  keepMessage(id: string, guildId: string, channelId: string, authorId: string, content: string) {
-    this.db.prepare('INSERT OR REPLACE INTO recent_messages (id, guild_id, channel_id, author_id, content, at) VALUES (?, ?, ?, ?, ?, ?)').run(id, guildId, channelId, authorId, content.slice(0, 2000), Date.now());
+  // files: what was attached, by name, with the copy kept on disk
+  keepMessage(id: string, guildId: string, channelId: string, authorId: string, content: string, files: { name: string; path: string }[] = []) {
+    const had = this.recallMessage(id);
+    this.db.prepare('INSERT OR REPLACE INTO recent_messages (id, guild_id, channel_id, author_id, content, files, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(id, guildId, channelId, authorId, content.slice(0, 2000), JSON.stringify(files.length || !had ? files : had.files), had?.at ?? Date.now());
   }
-  recallMessage(id: string): { guild_id: string; channel_id: string; author_id: string; content: string; at: number } | undefined {
-    return this.db.prepare('SELECT guild_id, channel_id, author_id, content, at FROM recent_messages WHERE id = ?').get(id) as never;
+  recallMessage(id: string): { guild_id: string; channel_id: string; author_id: string; content: string; files: { name: string; path: string }[]; at: number } | undefined {
+    const r = this.db.prepare('SELECT guild_id, channel_id, author_id, content, files, at FROM recent_messages WHERE id = ?').get(id) as { files: string } | undefined;
+    return r ? { ...r, files: JSON.parse(r.files || '[]') } as never : undefined;
   }
   forgetMessage(id: string) { this.db.prepare('DELETE FROM recent_messages WHERE id = ?').run(id); }
   dropOldMessages(days = 3) { return Number(this.db.prepare('DELETE FROM recent_messages WHERE at < ?').run(Date.now() - days * 86_400_000).changes); }

@@ -212,7 +212,7 @@ const announce: Command = {
     const ch = await ctx.guild.channels.fetch(chId).catch(() => null);
     if (!ch?.isSendable()) return ctx.reply('I can\'t post in that channel.');
     const id = store.addSchedule({ guild_id: ctx.guild.id, channel_id: ch.id, text, next_at: at, every_ms: repeats[repeat] ?? 0, by_id: ctx.userId });
-    return ctx.reply(`🗓️ Post #${id} goes out in <#${ch.id}> <t:${unix(at)}:R>${repeat !== 'once' ? `, then ${repeat}` : ''}. Times like 18:30 use your timezone from \`tz settings\`.`);
+    return ctx.reply(`🗓️ Post #${id} goes out in <#${ch.id}> <t:${unix(at)}:R>${repeat !== 'once' ? `, then ${repeat}` : ''}. Times like 18:30 use your timezone, set in \`tz reminders\`.`);
   },
 };
 

@@ -12,7 +12,7 @@ export const menu: Record<string, [string, string, string?]> = {
   'onthisday~topic=f1': ['📅', 'On this day in F1'], 'onthisday~topic=football': ['📅', 'On this day in football'], 'onthisday~topic=anime': ['📅', 'On this day in anime'],
   mission: ['🕵️', 'Today\'s mission', 'A daily challenge for bonus yen'],
   spawns: ['🔎', 'Claim help status', 'What Texz reads, the helper switch and your rare and type pings'], pokemon: ['🧩', 'Solve a hint', 'Type the hint, get the names that fit'],
-  pings: ['🔔', 'Pings and reminders', 'Every ping and reminder Texz can send you, in one place'], remind: ['⏰', 'Remind me', 'A one-off reminder, like 2h drink water'], reminders: ['🎛️', 'OwO reminders', 'Which OwO timers ping you, where and when'],
+  pings: ['🔔', 'Pings and reminders', 'Every ping and reminder Texz can send you, in one place'], remind: ['⏰', 'Remind me', 'Plain words: in 2h stretch, at 9pm call mum, tomorrow 8am gym'], reminders: ['🎛️', 'OwO timers and timezone', 'Which OwO timers ping you, where, and your timezone'],
   quote: ['🖼️', 'Make it a quote', 'Frame a message as a picture, reply with tz quote or paste a link'],
   'wish.list': ['💝', 'My Shoob wishlist'], 'wish.add': ['➕', 'Wish for a character'], 'wish.remove': ['➖', 'Drop a wish'],
   dex: ['📕', 'Server Pokédex', 'What\'s been caught here and what\'s missing'], race: ['🏃', 'Catch race', 'Who catches the most this week'],

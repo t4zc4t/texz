@@ -1,5 +1,7 @@
 import { report } from './ops.js';
-import { MessageType, Events, PermissionFlagsBits, type Client, type Message } from 'discord.js';
+import { AttachmentBuilder, MessageType, Events, PermissionFlagsBits, type Client, type EmbedBuilder, type Message } from 'discord.js';
+import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { Store } from './db.js';
 import { log } from './modules/moderation.js';
 import { giveXp } from './modules/levels.js';
@@ -88,23 +90,33 @@ export function wireEvents(client: Client, store: Store) {
     void log(client, store, m.guild.id, card({ kind: 'logs', title, emoji, gif: 'off', fields: [{ name: '👤 Who', value: `<@${m.id}> · ${m.user.username}`, inline: true }, { name: '📍 Room', value: where, inline: true }] }), 'server');
   });
 
-  // messages are kept for three days on disk, a restart no longer means an edit or delete goes unlogged
+  // messages are kept for three days on disk, pictures and files too, so a restart or a deleted upload still gets logged
   client.on(Events.MessageCreate, (m) => {
-    if (m.guildId && !m.author.bot && m.content && logOn(store, m.guildId)) store.keepMessage(m.id, m.guildId, m.channelId, m.author.id, m.content);
+    if (!m.guildId || m.author.bot || (!m.content && !m.attachments.size) || !logOn(store, m.guildId)) return;
+    store.keepMessage(m.id, m.guildId, m.channelId, m.author.id, m.content ?? '');
+    if (m.attachments.size) void keepFiles(m.id, [...m.attachments.values()]).then((files) => { if (files.length) store.keepMessage(m.id, m.guildId!, m.channelId, m.author.id, m.content ?? '', files); });
   });
-  setInterval(() => store.dropOldMessages(3), 3_600_000).unref();
+  setInterval(() => { store.dropOldMessages(3); dropOldFiles(3); }, 3_600_000).unref();
+
+  const filesOf = (kept: { files: { name: string; path: string }[] } | undefined) => (kept?.files ?? []).filter((f) => existsSync(f.path)).map((f) => new AttachmentBuilder(f.path, { name: f.name }));
 
   client.on(Events.MessageDelete, (m) => {
     const kept = store.recallMessage(m.id);
     store.forgetMessage(m.id);
     const guildId = m.guildId ?? kept?.guild_id ?? null;
-    const content = m.content || kept?.content;
+    const content = m.content || kept?.content || '';
     const author = m.author?.id ?? kept?.author_id;
-    if (!logOn(store, guildId) || m.author?.bot || !content || !author) return;
-    void log(client, store, guildId!, card({
-      kind: 'logs', title: 'Message deleted', emoji: '', gif: 'off',
-      fields: [{ name: 'Author', value: `<@${author}>`, inline: true }, { name: 'Where', value: `<#${m.channelId}>`, inline: true }, { name: 'Sent', value: kept ? `<t:${Math.floor(kept.at / 1000)}:R>` : 'recently', inline: true }, { name: 'It said', value: content.slice(0, 1000), inline: false }],
-    }), 'server');
+    const files = filesOf(kept);
+    if (!logOn(store, guildId) || m.author?.bot || (!content && !files.length) || !author) return;
+    const e = card({
+      kind: 'logs', title: files.length && !content ? 'Upload deleted' : 'Message deleted', emoji: '', gif: 'off',
+      fields: [
+        { name: 'Author', value: `<@${author}>`, inline: true }, { name: 'Where', value: `<#${m.channelId}>`, inline: true }, { name: 'Sent', value: kept ? `<t:${Math.floor(kept.at / 1000)}:R>` : 'recently', inline: true },
+        ...(content ? [{ name: 'It said', value: content.slice(0, 1000), inline: false }] : []),
+        ...(files.length ? [{ name: files.length === 1 ? 'Attached' : `Attached · ${files.length}`, value: (kept?.files ?? []).map((f) => f.name).join('\n').slice(0, 1000), inline: false }] : []),
+      ],
+    });
+    void logWithFiles(client, store, guildId!, e, files);
   });
 
   client.on(Events.MessageBulkDelete, (msgs, ch) => {
@@ -114,7 +126,8 @@ export function wireEvents(client: Client, store: Store) {
       store.forgetMessage(m.id);
       const content = m.content || kept?.content;
       const author = m.author?.id ?? kept?.author_id;
-      if (content && author && !m.author?.bot) lines.push(`<@${author}>: ${content.replace(/\n/g, ' ').slice(0, 120)}`);
+      const n = kept?.files.length ?? m.attachments.size;
+      if ((content || n) && author && !m.author?.bot) lines.push(`<@${author}>: ${(content ?? '').replace(/\n/g, ' ').slice(0, 120)}${n ? ` · ${n} file${n === 1 ? '' : 's'}` : ''}`);
     }
     if (!lines.length || !logOn(store, ch.guildId)) return;
     void log(client, store, ch.guildId, card({ kind: 'logs', title: `${msgs.size} messages swept`, emoji: '', gif: 'off', body: `In <#${ch.id}>\n${lines.slice(0, 25).join('\n').slice(0, 3800)}${lines.length > 25 ? `\n-# and ${lines.length - 25} more` : ''}` }), 'server');
@@ -122,17 +135,24 @@ export function wireEvents(client: Client, store: Store) {
 
   client.on(Events.MessageUpdate, (old, m) => {
     const kept = store.recallMessage(m.id);
-    const before = old.content || kept?.content;
+    const before = old.content || kept?.content || '';
     const guildId = m.guildId ?? kept?.guild_id ?? null;
-    if (m.content && guildId && !m.author?.bot) store.keepMessage(m.id, guildId, m.channelId, m.author?.id ?? kept?.author_id ?? '', m.content);
-    if (!logOn(store, guildId) || m.author?.bot || !before || before === m.content) return;
-    void log(client, store, guildId!, card({
-      kind: 'logs', title: 'Message edited', emoji: '', gif: 'off',
+    if (!guildId || m.author?.bot) return;
+    // files taken off in the edit: anything kept that the message no longer has
+    const now = new Set([...m.attachments.values()].map((a) => a.name));
+    const gone = (kept?.files ?? []).filter((f) => !now.has(f.name));
+    store.keepMessage(m.id, guildId, m.channelId, m.author?.id ?? kept?.author_id ?? '', m.content ?? '', (kept?.files ?? []).filter((f) => now.has(f.name)));
+    const textChanged = !!before && before !== (m.content ?? '');
+    if (!logOn(store, guildId) || (!textChanged && !gone.length)) return;
+    const e = card({
+      kind: 'logs', title: textChanged ? 'Message edited' : 'Upload removed in an edit', emoji: '', gif: 'off',
       fields: [
         { name: 'Author', value: `<@${m.author?.id ?? kept?.author_id}>`, inline: true }, { name: 'Where', value: `[jump](${m.url})`, inline: true },
-        { name: 'Before', value: before.slice(0, 1000), inline: false }, { name: 'After', value: (m.content ?? '').slice(0, 1000) || '*empty*', inline: false },
+        ...(textChanged ? [{ name: 'Before', value: before.slice(0, 1000), inline: false }, { name: 'After', value: (m.content ?? '').slice(0, 1000) || '*empty*', inline: false }] : []),
+        ...(gone.length ? [{ name: 'Taken off', value: gone.map((f) => f.name).join('\n').slice(0, 1000), inline: false }] : []),
       ],
-    }), 'server');
+    });
+    void logWithFiles(client, store, guildId, e, gone.filter((f) => existsSync(f.path)).map((f) => new AttachmentBuilder(f.path, { name: f.name })));
   });
 
   client.on(Events.GuildBanAdd, (b) => {
@@ -141,4 +161,36 @@ export function wireEvents(client: Client, store: Store) {
   client.on(Events.GuildBanRemove, (b) => {
     if (logOn(store, b.guild.id)) void log(client, store, b.guild.id, card({ kind: 'unban', title: 'Unbanned', emoji: '🕊️', gif: 'off', fields: [{ name: '👤 Who', value: `${b.user.username} (\`${b.user.id}\`)`, inline: true }] }));
   });
+}
+
+// copies of what people upload, kept three days so a deleted picture can still be shown in the log
+const fileDir = fileURLToPath(new URL('../cache/uploads/', import.meta.url));
+const MAX_FILE = 8 * 1024 * 1024;
+async function keepFiles(id: string, list: { url: string; name: string; size: number }[]) {
+  mkdirSync(fileDir, { recursive: true });
+  const out: { name: string; path: string }[] = [];
+  for (const [i, a] of list.slice(0, 4).entries()) {
+    if (a.size > MAX_FILE) continue;
+    const res = await fetch(a.url).catch(() => null);
+    if (!res?.ok) continue;
+    const path = `${fileDir}${id}-${i}-${a.name.replace(/[^\w.-]/g, '_').slice(-60)}`;
+    writeFileSync(path, Buffer.from(await res.arrayBuffer()));
+    out.push({ name: a.name, path });
+  }
+  return out;
+}
+function dropOldFiles(days: number) {
+  if (!existsSync(fileDir)) return;
+  const cutoff = Date.now() - days * 86_400_000;
+  for (const f of readdirSync(fileDir)) { try { if (statSync(`${fileDir}${f}`).mtimeMs < cutoff) unlinkSync(`${fileDir}${f}`); } catch { /* gone already */ } }
+}
+// the log entry with the kept files attached, the first picture shown in the card itself
+async function logWithFiles(client: Client, store: Store, guildId: string, e: EmbedBuilder, files: AttachmentBuilder[]) {
+  if (!files.length) return log(client, store, guildId, e, 'server');
+  const id = store.getKv(`serverlog:${guildId}`) ?? store.guild(guildId).mod.logChannel;
+  const ch = id ? await client.channels.fetch(id).catch(() => null) : null;
+  if (!ch?.isSendable()) return;
+  const pic = files.find((f) => /\.(png|jpe?g|gif|webp)$/i.test(f.name ?? ''));
+  if (pic) e.setImage(`attachment://${pic.name}`);
+  await ch.send({ embeds: [e], files, allowedMentions: { parse: [] } }).catch(() => {});
 }

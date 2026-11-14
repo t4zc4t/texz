@@ -121,7 +121,7 @@ const birthday: Command = {
       store.setBirthday(ctx.userId, date.month, date.day);
       if (ctx.guildId) store.setKv(`bdayin:${ctx.guildId}:${ctx.userId}`, '1');
       const tz = store.settings(ctx.userId).timezone;
-      return ctx.reply({ content: `🎂 **${fmtDate(date.month, date.day)}**, noted. ${say('birthdaySet')}\n-# I go by your timezone (${tz}), \`tz remind\` → Settings changes it.`, temp: true });
+      return ctx.reply({ content: `🎂 **${fmtDate(date.month, date.day)}**, noted. ${say('birthdaySet')}\n-# I go by your timezone (${tz}), \`tz reminders\` changes it.`, temp: true });
     }
     if (sub === 'remove') {
       const had = toldHere(store, ctx.guildId, ctx.userId);

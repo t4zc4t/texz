@@ -8,7 +8,7 @@ import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
 import { card } from '../theme.js';
 import { fetchAvatar, profileCard, type Fav } from '../features/rankcard.js';
-import { levelOf, rankFor } from './levels.js';
+import { levelOf, rankFor, ranks } from './levels.js';
 import { toldHere, fmtDate } from './birthdays.js';
 import { bondsOf } from './actions.js';
 import { currentSeason, searchMedia, titleOf, topMedia, type Media } from '../anime/anilist.js';
@@ -139,9 +139,13 @@ export async function drawProfile(store: Store, id: string, guildId: string | nu
   const show = new Set(p.show);
   const chips: { label: string; value: string; color?: string }[] = [];
   let title = 'Agency visitor';
+  let progress: { into: number; need: number; next: string | null } | undefined;
   if (guildId && store.rules(guildId, 'levels').enabled) {
-    const l = levelOf(store.xpOf(guildId, id).xp).level;
+    const lv = levelOf(store.xpOf(guildId, id).xp);
+    const l = lv.level;
     title = rankFor(l).name;
+    const nextRank = ranks.find((r) => r.at > l);
+    progress = { into: lv.into, need: lv.need, next: nextRank ? `${nextRank.name} at ${nextRank.at}` : null };
     if (show.has('level')) chips.push({ label: 'Level', value: String(l) });
   }
   if (show.has('yen') && guildId && store.rules(guildId, 'economy').enabled) chips.push({ label: 'Yen', value: `¥${store.wallet(guildId, id).yen.toLocaleString()}` });
@@ -157,7 +161,7 @@ export async function drawProfile(store: Store, id: string, guildId: string | nu
   const have = guildId ? badgesOf(store, guildId, id) : [];
   if (show.has('done') && done) chips.push({ label: 'Anime done', value: String(done) });
   return profileCard({
-    name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: p.bio ?? null, chips, accent: p.color, favs,
+    name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: p.bio ?? null, chips, accent: p.color, favs, progress,
     medals: guildId ? shownOf(store, guildId, id, tierOf).map((x) => ({ id: x, earned: true, name: BADGES.find((b) => b.id === x)?.name ?? x })) : undefined,
     medalCount: guildId ? { won: have.length, total: BADGES.length } : undefined,
     avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null,

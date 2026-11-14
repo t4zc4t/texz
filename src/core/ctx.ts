@@ -140,7 +140,7 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
           if (target !== 'help') nav.addComponents(new ButtonBuilder().setCustomId(`nav|help|owner=${opts.owner ?? i.user.id}`).setLabel('All dashboards').setEmoji('🏠').setStyle(ButtonStyle.Secondary));
           rows.push(nav);
         }
-        const page = { content: n.content ?? null, embeds: n.embeds, components: rows, ...(n.files.length ? { files: n.files } : { attachments: [] }) };
+        const page = { content: n.content ?? null, embeds: n.embeds, components: rows, attachments: [], ...(n.files.length ? { files: n.files } : {}) };
         if (i.replied || i.deferred) return i.editReply(page);
         if (i.isModalSubmit()) return i.isFromMessage() ? i.update(page) : (i as ModalSubmitInteraction).reply({ content: n.content, embeds: n.embeds, components: rows, files: n.files, flags: MessageFlags.Ephemeral });
         return i.update(page);

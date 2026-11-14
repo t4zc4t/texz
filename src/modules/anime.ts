@@ -322,8 +322,10 @@ const airing: Command = {
 const daily: Command = {
   name: 'today',
   group: 'anime',
-  data: new SlashCommandBuilder().setName('today').setDescription('Today\'s character of the day').toJSON(),
-  text: { aliases: ['cotd'] },
+  // "today" alone reads like today's episodes, so the menus call it what it is
+  as: 'cotd',
+  data: new SlashCommandBuilder().setName('today').setDescription('The anime character of the day').toJSON(),
+  text: { aliases: ['cotd', 'characteroftheday'] },
   run: async (ctx) => {
     const c = await characterOfDay().catch(() => null);
     if (!c) return ctx.reply('AniList didn\'t answer, try again in a moment.');

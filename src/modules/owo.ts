@@ -339,13 +339,14 @@ const leaderboard: Command = {
 const remind: Command = {
   name: 'remind',
   group: 'you',
-  data: new SlashCommandBuilder().setName('remind').setDescription('Your reminders, or add one straight away')
-    .addIntegerOption((o) => o.setName('minutes').setDescription('Remind me in this many minutes').setMinValue(1).setMaxValue(10080))
+  data: new SlashCommandBuilder().setName('remind').setDescription('Your reminders, or add one in plain words: in 2h, at 9pm, tomorrow 8am')
+    .addStringOption((o) => o.setName('when').setDescription('When: 30, 2h, 1h30m, at 9pm, tomorrow 8am'))
     .addStringOption((o) => o.setName('note').setDescription('What about').setMaxLength(200)).toJSON(),
-  text: { aliases: ['r'], args: ['minutes', 'note'] },
+  text: { aliases: ['r', 'remindme'], args: ['when', 'note'] },
+  example: 'me in 2h to drink water',
   run: (ctx, store) => {
     // plain words work: "tz remind me in 2h to drink water", "tz r 30 huntbot", "tz r at 9pm call mum", "tz r tomorrow 8am gym"
-    const words = `${ctx.str('minutes') ?? ''} ${ctx.str('note') ?? ''}`.trim();
+    const words = `${ctx.str('when') ?? ''} ${ctx.str('note') ?? ''}`.trim();
     const when = whenOf(words, store.settings(ctx.userId).timezone);
     if (when && when.note) {
       const at = new Date(Math.min(when.at, Date.now() + 30 * 86_400_000));

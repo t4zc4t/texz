@@ -623,7 +623,9 @@ const f1: Command = {
   text: { aliases: ['gp'], args: ['view'] },
   run: async (ctx, store) => {
     const view = (ctx.str('view') ?? 'next').toLowerCase();
-    const site = row(link(SITE, 'Parc Fermé'));
+    // the three main pages switch in place, with the site link on the end
+    const tab = (v: string, label: string) => new ButtonBuilder().setCustomId(`nav|f1|owner=${ctx.userId},view=${v}`).setLabel(label).setStyle(view.startsWith(v.slice(0, 4)) ? ButtonStyle.Primary : ButtonStyle.Secondary).setDisabled(view.startsWith(v.slice(0, 4)));
+    const site = row(tab('next', 'Next race'), tab('standings', 'Standings'), tab('last', 'Last race'), link(SITE, 'Parc Fermé'));
     try {
       if (view.startsWith('quiz')) {
         const r = await quizRound(ctx.channelId, !!ctx.guildId && store.rules(ctx.guildId, 'economy').enabled);
