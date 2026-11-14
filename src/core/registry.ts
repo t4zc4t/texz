@@ -323,8 +323,11 @@ export function onText(store: Store, m: Message): boolean {
     ? bySlash.get(`${name} ${next}`) ?? (byText.get(next)?.cmd.group === name ? byText.get(next) : undefined)
     : undefined;
   if (member) { tokens.shift(); name = member.cmd.name; }
-  // "tz fun" on its own opens the dashboard, "tz owo" too
-  const hit = member ?? (groups[name] && !tokens.length ? byName.get(groups[name].dashboard!) : undefined) ?? byText.get(name) ?? (groups[name] ? byName.get(groups[name].dashboard!) : undefined);
+  // "tz fun" on its own opens the dashboard, "tz owo" too. But where a command shares the group's name and works
+  // with nothing after it, like "tz profile", the command is what people mean
+  const same = byText.get(name);
+  const runsBare = !!same && same.cmd.name === name && !(same.cmd.data.options ?? []).some((o) => 'required' in o && o.required);
+  const hit = member ?? (groups[name] && !tokens.length && !runsBare ? byName.get(groups[name].dashboard!) : undefined) ?? byText.get(name) ?? (groups[name] ? byName.get(groups[name].dashboard!) : undefined);
   if (!hit) {
     // a typo after the prefix gets a nudge to the nearest command, plain chat that happens to start with tz doesn't
     if (!/^\s/.test(body)) return false;

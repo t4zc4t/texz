@@ -157,9 +157,10 @@ export async function rankCard(d: RankCardData): Promise<Buffer> {
   ctx.font = '400 20px "Texz Sans", sans-serif';
   ctx.fillStyle = '#c9ccd4';
   ctx.fillText(`${short(d.into)} / ${short(d.need)} xp  ·  ${short(d.totalXp)} total`, left, by + bh + 32);
+  const usedLeft = ctx.measureText(`${short(d.into)} / ${short(d.need)} xp  ·  ${short(d.totalXp)} total`).width;
   ctx.textAlign = 'right';
   ctx.fillStyle = SAND;
-  ctx.fillText(d.nextRank ? `next: ${d.nextRank}` : 'top of the Agency', right, by + bh + 32);
+  ctx.fillText(fit(ctx, d.nextRank ? `next: ${d.nextRank}` : 'top of the Agency', bw - usedLeft - 30), right, by + bh + 32);
   // what the next rank unlocks, quietly underneath
   if (d.nextRank && d.nextUnlock) {
     ctx.font = '400 15px "Texz Sans", sans-serif';
@@ -402,8 +403,17 @@ export async function profileCard(d: ProfileData): Promise<Buffer> {
     ctx.font = '400 15px "Texz Sans", sans-serif';
     ctx.fillStyle = '#8b8f9a';
     ctx.textAlign = 'left';
-    ctx.fillText(`${short(d.progress.into)} / ${short(d.progress.need)} xp to the next level`, left, py + 28);
-    if (d.progress.next) { ctx.textAlign = 'right'; ctx.fillStyle = SAND; ctx.fillText(fit(ctx, `next rank: ${d.progress.next}`, pw * 0.5), right, py + 28); }
+    // the xp on the left, the next rank on the right if there's room, otherwise on its own line underneath
+    const long = `${short(d.progress.into)} / ${short(d.progress.need)} xp to the next level`;
+    const xpText = ctx.measureText(long).width < pw * 0.55 ? long : `${short(d.progress.into)} / ${short(d.progress.need)} xp`;
+    ctx.fillText(xpText, left, py + 28);
+    if (d.progress.next) {
+      const rankText = `next rank: ${d.progress.next}`;
+      const room = pw - ctx.measureText(xpText).width - 24;
+      ctx.fillStyle = SAND;
+      if (ctx.measureText(rankText).width <= room) { ctx.textAlign = 'right'; ctx.fillText(rankText, right, py + 28); }
+      else if (py + 50 < 322) ctx.fillText(fit(ctx, rankText, pw), left, py + 50);
+    }
     ctx.textAlign = 'left';
   }
 
