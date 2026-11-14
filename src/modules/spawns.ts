@@ -640,7 +640,7 @@ const spawns: Command = {
   name: 'spawns',
   group: 'poketwo',
   data: new SlashCommandBuilder().setName('spawns').setDescription('Pokétwo and Shoob spawn pings, and how they\'re doing here').toJSON(),
-  text: { aliases: ['spawn', 'p2', 'shoob'] },
+  text: { aliases: ['spawn', 'p2'] },
   run: async (ctx, store) => {
     if (!ctx.guild) return ctx.reply('Spawn pings live in servers.');
     return ctx.reply(await spawnsPage(store, ctx.guild, ctx.userId));

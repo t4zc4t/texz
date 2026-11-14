@@ -335,6 +335,15 @@ export class Store {
         every_ms INTEGER NOT NULL DEFAULT 0,
         by_id TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS recent_messages (
+        id TEXT PRIMARY KEY,
+        guild_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        author_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS recent_at ON recent_messages(at);
       CREATE TABLE IF NOT EXISTS daystats (
         guild_id TEXT NOT NULL,
         day TEXT NOT NULL,
@@ -691,6 +700,16 @@ export class Store {
   }
 
   // ---------- server stats ----------
+
+  // the last few days of messages, so an edit or delete can still be logged after a restart wiped the cache
+  keepMessage(id: string, guildId: string, channelId: string, authorId: string, content: string) {
+    this.db.prepare('INSERT OR REPLACE INTO recent_messages (id, guild_id, channel_id, author_id, content, at) VALUES (?, ?, ?, ?, ?, ?)').run(id, guildId, channelId, authorId, content.slice(0, 2000), Date.now());
+  }
+  recallMessage(id: string): { guild_id: string; channel_id: string; author_id: string; content: string; at: number } | undefined {
+    return this.db.prepare('SELECT guild_id, channel_id, author_id, content, at FROM recent_messages WHERE id = ?').get(id) as never;
+  }
+  forgetMessage(id: string) { this.db.prepare('DELETE FROM recent_messages WHERE id = ?').run(id); }
+  dropOldMessages(days = 3) { return Number(this.db.prepare('DELETE FROM recent_messages WHERE at < ?').run(Date.now() - days * 86_400_000).changes); }
 
   countDay(guildId: string, kind: string, key: string, by = 1, day = new Date().toISOString().slice(0, 10)) {
     this.db.prepare(`INSERT INTO daystats (guild_id, day, kind, key, n) VALUES (?, ?, ?, ?, ?)

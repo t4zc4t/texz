@@ -363,9 +363,18 @@ function coinView(art: Awaited<ReturnType<typeof prepareCoin>>, owner: string, r
 const coin: Command = {
   name: 'coin',
   group: 'games',
-  data: new SlashCommandBuilder().setName('coin').setDescription('Flip the Lupin coin, call it first to keep a record').toJSON(),
-  text: { aliases: ['flip', 'cf'] },
-  run: async (ctx, store) => ctx.reply({ ...coinView(await prepareCoin(), ctx.userId, null, null, coinRecord(store, ctx.userId)), public: true }),
+  data: new SlashCommandBuilder().setName('coin').setDescription('Flip the Lupin coin, or put yen on it')
+    .addStringOption((o) => o.setName('bet').setDescription('Yen on it, optional: 100, half or all'))
+    .addStringOption((o) => o.setName('side').setDescription('Heads or tails, with a bet').addChoices({ name: 'heads', value: 'heads' }, { name: 'tails', value: 'tails' })).toJSON(),
+  text: { aliases: ['flip', 'cf'], args: ['bet', 'side'] },
+  run: async (ctx, store) => {
+    // with an amount it's the betting flip from the back room, one command for both
+    if (ctx.str('bet')) {
+      const bet = (await import('./casino.js')).casinoCommands.find((c) => c.name === 'coinflip');
+      if (bet) return bet.run(ctx, store);
+    }
+    return ctx.reply({ ...coinView(await prepareCoin(), ctx.userId, null, null, coinRecord(store, ctx.userId)), public: true });
+  },
 };
 const coinRecord = (store: Store, u: string) => ({ w: 0, l: 0, streak: 0, ...JSON.parse(store.getKv(`coincall:${u}`) ?? '{}') }) as { w: number; l: number; streak: number };
 

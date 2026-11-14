@@ -11,7 +11,7 @@ import { anime, onAnimeComponent, onGuess } from '../modules/anime.js';
 import { onF1Quiz } from '../modules/f1quiz.js';
 import { onPredict } from '../modules/predict.js';
 import { onOwnerButton, onOwnerConfirm } from '../modules/servers.js';
-import { economy } from '../modules/economy.js';
+import { economy, onPay } from '../modules/economy.js';
 import { bulletins, onBulletinButton } from '../modules/bulletins.js';
 import { onWatchlist } from '../modules/watchlist.js';
 import { onAvatarButton, onGames, onPollButton, utility } from '../modules/utility.js';
@@ -400,6 +400,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onMovie(store, i)) return;
     if (await onCasino(store, i)) return;
     if (await onHustle(store, i)) return;
+    if (await onPay(store, i)) return;
     if (await onBulletinButton(i, store)) return;
   } catch (e) {
     report('component', e);

@@ -12,6 +12,9 @@ const FILES: Record<string, string> = {
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
 // a local copy first, then the full file, the wiki's own thumbnail if the full one is refused
 async function download(type: string, path: string): Promise<Buffer | null> {
+  // the line icons drawn to match the rest of Texz's set come first
+  const line = fileURLToPath(new URL(`../../assets/types-line/${type.toLowerCase()}.png`, import.meta.url));
+  if (existsSync(line)) return readFileSync(line);
   // a copy kept in assets wins, the archive refuses a few files to bots
   const local = fileURLToPath(new URL(`../../assets/types/${type.toLowerCase()}.png`, import.meta.url));
   if (existsSync(local)) return readFileSync(local);
@@ -23,7 +26,8 @@ async function download(type: string, path: string): Promise<Buffer | null> {
   }
   return null;
 }
-const nameOf = (t: string) => `t_${t.toLowerCase()}`;
+// tl_ for the line set, so the old badges don't get picked up
+const nameOf = (t: string) => `tl_${t.toLowerCase()}`;
 
 // app emoji work in every server, so they are made once and reused
 export async function loadTypeIcons(client: Client, tries = 3): Promise<void> {

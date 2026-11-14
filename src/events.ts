@@ -88,21 +88,49 @@ export function wireEvents(client: Client, store: Store) {
     void log(client, store, m.guild.id, card({ kind: 'logs', title, emoji, gif: 'off', fields: [{ name: '👤 Who', value: `<@${m.id}> · ${m.user.username}`, inline: true }, { name: '📍 Room', value: where, inline: true }] }), 'server');
   });
 
+  // messages are kept for three days on disk, a restart no longer means an edit or delete goes unlogged
+  client.on(Events.MessageCreate, (m) => {
+    if (m.guildId && !m.author.bot && m.content && logOn(store, m.guildId)) store.keepMessage(m.id, m.guildId, m.channelId, m.author.id, m.content);
+  });
+  setInterval(() => store.dropOldMessages(3), 3_600_000).unref();
+
   client.on(Events.MessageDelete, (m) => {
-    if (!logOn(store, m.guildId) || m.author?.bot || !m.content) return;
-    void log(client, store, m.guildId!, card({
-      kind: 'logs', title: 'Message deleted', emoji: '🗑️', gif: 'off',
-      fields: [{ name: '👤 Author', value: `<@${m.author?.id}>`, inline: true }, { name: '📍 Where', value: `<#${m.channelId}>`, inline: true }, { name: '💬 It said', value: m.content.slice(0, 1000), inline: false }],
+    const kept = store.recallMessage(m.id);
+    store.forgetMessage(m.id);
+    const guildId = m.guildId ?? kept?.guild_id ?? null;
+    const content = m.content || kept?.content;
+    const author = m.author?.id ?? kept?.author_id;
+    if (!logOn(store, guildId) || m.author?.bot || !content || !author) return;
+    void log(client, store, guildId!, card({
+      kind: 'logs', title: 'Message deleted', emoji: '', gif: 'off',
+      fields: [{ name: 'Author', value: `<@${author}>`, inline: true }, { name: 'Where', value: `<#${m.channelId}>`, inline: true }, { name: 'Sent', value: kept ? `<t:${Math.floor(kept.at / 1000)}:R>` : 'recently', inline: true }, { name: 'It said', value: content.slice(0, 1000), inline: false }],
     }), 'server');
   });
 
+  client.on(Events.MessageBulkDelete, (msgs, ch) => {
+    const lines: string[] = [];
+    for (const m of msgs.values()) {
+      const kept = store.recallMessage(m.id);
+      store.forgetMessage(m.id);
+      const content = m.content || kept?.content;
+      const author = m.author?.id ?? kept?.author_id;
+      if (content && author && !m.author?.bot) lines.push(`<@${author}>: ${content.replace(/\n/g, ' ').slice(0, 120)}`);
+    }
+    if (!lines.length || !logOn(store, ch.guildId)) return;
+    void log(client, store, ch.guildId, card({ kind: 'logs', title: `${msgs.size} messages swept`, emoji: '', gif: 'off', body: `In <#${ch.id}>\n${lines.slice(0, 25).join('\n').slice(0, 3800)}${lines.length > 25 ? `\n-# and ${lines.length - 25} more` : ''}` }), 'server');
+  });
+
   client.on(Events.MessageUpdate, (old, m) => {
-    if (!logOn(store, m.guildId) || m.author?.bot || !old.content || old.content === m.content) return;
-    void log(client, store, m.guildId!, card({
-      kind: 'logs', title: 'Message edited', emoji: '✏️', gif: 'off',
+    const kept = store.recallMessage(m.id);
+    const before = old.content || kept?.content;
+    const guildId = m.guildId ?? kept?.guild_id ?? null;
+    if (m.content && guildId && !m.author?.bot) store.keepMessage(m.id, guildId, m.channelId, m.author?.id ?? kept?.author_id ?? '', m.content);
+    if (!logOn(store, guildId) || m.author?.bot || !before || before === m.content) return;
+    void log(client, store, guildId!, card({
+      kind: 'logs', title: 'Message edited', emoji: '', gif: 'off',
       fields: [
-        { name: '👤 Author', value: `<@${m.author?.id}>`, inline: true }, { name: '📍 Where', value: `[jump](${m.url})`, inline: true },
-        { name: '⬅️ Before', value: old.content.slice(0, 1000), inline: false }, { name: '➡️ After', value: (m.content ?? '').slice(0, 1000) || '*empty*', inline: false },
+        { name: 'Author', value: `<@${m.author?.id ?? kept?.author_id}>`, inline: true }, { name: 'Where', value: `[jump](${m.url})`, inline: true },
+        { name: 'Before', value: before.slice(0, 1000), inline: false }, { name: 'After', value: (m.content ?? '').slice(0, 1000) || '*empty*', inline: false },
       ],
     }), 'server');
   });

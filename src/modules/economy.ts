@@ -2,7 +2,7 @@ import { mycolour } from './mycolour.js';
 import { casinoCommands, money } from './casino.js';
 import { choresLine, hustleCommands, vaultOf } from './hustle.js';
 import { track } from './missions.js';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, SlashCommandBuilder, type Message, type MessageActionRowComponentBuilder } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type Interaction, type Message, type MessageActionRowComponentBuilder } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
 import { card, pick, say } from '../theme.js';
@@ -112,22 +112,67 @@ const balance: Command = {
 const give: Command = {
   name: 'give',
   group: 'you',
-  data: new SlashCommandBuilder().setName('give').setDescription('Hand some of your yen to someone')
+  data: new SlashCommandBuilder().setName('give').setDescription('Hand some of your yen to someone, with a note if you like')
     .addUserOption((o) => o.setName('user').setDescription('Who').setRequired(true))
-    .addIntegerOption((o) => o.setName('amount').setDescription('How much').setRequired(true).setMinValue(1).setMaxValue(10_000_000)).toJSON(),
-  text: { aliases: ['pay'], args: ['user', 'amount'] },
-  run: (ctx, store) => {
+    .addStringOption((o) => o.setName('amount').setDescription('How much: 500, 2k, half or all').setRequired(true))
+    .addStringOption((o) => o.setName('note').setDescription('What it\'s for').setMaxLength(100)).toJSON(),
+  text: { aliases: ['pay'], args: ['user', 'amount', 'note'] },
+  example: '@someone 2k for the crab',
+  run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
     const to = ctx.user('user');
-    const n = ctx.int('amount');
-    if (!to || !n || n < 1) return ctx.reply('Like this: `tz give @someone 100`');
+    const have = store.wallet(ctx.guildId, ctx.userId).yen;
+    const raw = (ctx.str('amount') ?? '').toLowerCase().replace(/[,¥]/g, '');
+    const n = raw === 'all' ? have : raw === 'half' ? Math.floor(have / 2) : Math.round(Number.parseFloat(raw) * (/k$/.test(raw) ? 1000 : /m$/.test(raw) ? 1_000_000 : 1));
+    if (!to || !Number.isFinite(n) || n < 1) return ctx.reply('Like this: `tz give @someone 500`, `tz give @someone 2k for the crab` or `tz give @someone half`');
     if (to === ctx.userId) return ctx.reply('Paying yourself? That\'s just moving money between pockets.');
-    if (!store.pay(ctx.guildId, ctx.userId, -n)) return ctx.reply(`You don't have ${fmt(n)}.`);
-    store.pay(ctx.guildId, to, n);
-    const extra = [...track(store, ctx.guildId, ctx.userId, 'gave', n), ...track(store, ctx.guildId, to, 'yen', store.wallet(ctx.guildId, to).yen)];
-    return ctx.reply({ content: [`💸 <@${ctx.userId}> gave <@${to}> **${fmt(n)}**.`, ...extra].join('\n'), ping: [to], public: true, temp: !extra.length });
+    const them = await ctx.guild?.members.fetch(to).catch(() => null);
+    if (them?.user.bot) return ctx.reply('Bots don\'t carry wallets. Keep it.');
+    if (n > have) return ctx.reply(`You've got ${fmt(have)}, not ${fmt(n)}.`);
+    const note = ctx.str('note')?.slice(0, 100);
+    // a big transfer asks once before it goes, a slip of the finger shouldn't cost a fortune
+    if (n >= 5000 && n >= have * 0.5) {
+      const row = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+        new ButtonBuilder().setCustomId(`pay|ok|${ctx.userId}|${to}|${n}`).setLabel(`Send ${fmt(n)}`).setEmoji('💴').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`pay|no|${ctx.userId}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary),
+      );
+      if (note) pendingNotes.set(`${ctx.userId}:${to}:${n}`, note);
+      return ctx.reply({ content: `That's **${fmt(n)}** to <@${to}>, ${Math.round((n / have) * 100)}% of your wallet. Sure?`, components: [row], temp: true });
+    }
+    return ctx.reply(sendYen(store, ctx.guildId, ctx.userId, to, n, note));
   },
 };
+const pendingNotes = new Map<string, string>();
+
+// the actual hand-off, with a receipt both sides can see
+function sendYen(store: Store, guild: string, from: string, to: string, n: number, note?: string) {
+  if (!store.pay(guild, from, -n)) return { content: `You don't have ${fmt(n)} any more.`, temp: true };
+  store.pay(guild, to, n);
+  const extra = [...track(store, guild, from, 'gave', n), ...track(store, guild, to, 'yen', store.wallet(guild, to).yen)];
+  const body = [
+    `<@${from}> → <@${to}>`,
+    `## ${fmt(n)}`,
+    note ? `> ${note}` : null,
+    `-# ${fmt(store.wallet(guild, from).yen)} left with the sender · ${fmt(store.wallet(guild, to).yen)} with the receiver`,
+    ...extra,
+  ].filter(Boolean).join('\n');
+  return { embeds: [card({ kind: 'help', title: 'Transfer receipt', emoji: '', gif: 'off', body })], ping: [to], public: true };
+}
+
+export async function onPay(store: Store, i: Interaction): Promise<boolean> {
+  if (!i.isButton() || !i.customId.startsWith('pay|')) return false;
+  const [, what, from, to, amount] = i.customId.split('|');
+  if (i.user.id !== from) { await i.reply({ content: 'Only the sender can decide that.', flags: MessageFlags.Ephemeral }); return true; }
+  if (what === 'no' || !i.guildId) { await i.update({ content: 'Cancelled. Your yen stays put.', components: [] }); return true; }
+  const n = Number(amount);
+  const note = pendingNotes.get(`${from}:${to}:${n}`);
+  pendingNotes.delete(`${from}:${to}:${n}`);
+  const r = sendYen(store, i.guildId, from, to, n, note);
+  await i.update({ content: 'Sent.', components: [] });
+  if ('embeds' in r && i.channel?.isSendable()) await i.channel.send({ embeds: r.embeds, content: `<@${to}>`, allowedMentions: { users: [to] } }).catch(() => {});
+  else await i.followUp({ content: r.content, flags: MessageFlags.Ephemeral }).catch(() => {});
+  return true;
+}
 
 const rich: Command = {
   name: 'rich',

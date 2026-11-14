@@ -47,6 +47,15 @@ export const SET: Record<string, [string, string]> = {
   green: ['dot', GREEN], red: ['dot', RED], yellow: ['dot', '#E0B44C'], black: ['dot', '#6B6460'], white: ['dot', BONE], purple: ['dot', '#9B7AD1'], orange: ['dot', '#E0901F'], blue: ['dot', '#5B8FD1'],
 };
 
+// Pokémon types, each in its own colour, kept apart in assets/types-line
+export const TYPES: Record<string, [string, string]> = {
+  normal: ['circle', '#B5B48C'], fire: ['flame', '#EE8130'], water: ['droplet', '#6390F0'], grass: ['leaf', '#7AC74C'],
+  electric: ['zap', '#F7D02C'], ice: ['snowflake', '#96D9D6'], fighting: ['hand-fist', '#E0504A'], poison: ['flask-conical', '#C266C0'],
+  ground: ['mountain', '#E2BF65'], flying: ['feather', '#A98FF3'], psychic: ['eye', '#F95587'], bug: ['bug', '#A6B91A'],
+  rock: ['gem', '#B6A136'], ghost: ['ghost', '#9A7CC4'], dragon: ['crown', '#8C63FF'], dark: ['moon', '#A08670'],
+  steel: ['cog', '#B7B7CE'], fairy: ['sparkles', '#D685AD'],
+};
+
 const dir = process.argv[2];
 mkdirSync('assets/icons', { recursive: true });
 for (const [name, [icon, colour]] of Object.entries(SET)) {
@@ -65,4 +74,12 @@ for (const [name, [icon, colour]] of Object.entries(SET)) {
   c.getContext('2d').drawImage(img, 4, 4, 120, 120);
   writeFileSync(`assets/icons/${name}.png`, c.toBuffer('image/png'));
 }
-console.log(Object.keys(SET).length, 'icons');
+mkdirSync('assets/types-line', { recursive: true });
+for (const [name, [icon, colour]] of Object.entries(TYPES)) {
+  const svg = readFileSync(`${dir}/${icon}.svg`, 'utf8').replace(/<!--.*?-->/s, '').replace(/currentColor/g, colour).replace(/stroke-width="2"/, 'stroke-width="2.25"').replace(/width="24"\s+height="24"/, 'width="128" height="128"');
+  const img = await loadImage(Buffer.from(svg));
+  const c = createCanvas(128, 128);
+  c.getContext('2d').drawImage(img, 4, 4, 120, 120);
+  writeFileSync(`assets/types-line/${name}.png`, c.toBuffer('image/png'));
+}
+console.log(Object.keys(SET).length, 'icons,', Object.keys(TYPES).length, 'types');
