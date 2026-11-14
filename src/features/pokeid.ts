@@ -93,7 +93,11 @@ let memory: Memory[] | null = null;
 const mem = (store: Store) => (memory ??= JSON.parse(store.getKv('p2:mem') ?? '[]') as Memory[]);
 
 // every confirmed spawn is remembered with what the classifier saw, newest kept when it gets long
+// a pokémon name never has digits or a percent in it; "Axew - 96.61" is another bot's score glued on
+export const junkName = (name: string) => /\d|%/.test(name) || name.trim().length < 3;
+
 export function remember(store: Store, vec: Sparse, name: string) {
+  if (junkName(name)) return;
   const list = mem(store);
   list.push([canonical(name), vec.map(([i, v]) => [i, Math.round(v * 1e4) / 1e4])]);
   if (list.length > 4000) list.splice(0, list.length - 4000);
@@ -101,6 +105,16 @@ export function remember(store: Store, vec: Sparse, name: string) {
 }
 
 export const memorySize = (store: Store) => mem(store).length;
+
+export const memoryNames = (store: Store) => [...new Set(mem(store).map(([n]) => n))];
+
+// entries with another bot's score glued to the name go
+export function dropJunk(store: Store) {
+  const list = mem(store);
+  const kept = list.filter(([n]) => !junkName(n));
+  if (kept.length !== list.length) { memory = kept; store.setKv('p2:mem', JSON.stringify(kept)); }
+  return list.length - kept.length;
+}
 
 // older entries spelled differently are merged into one name, once
 export function foldMemory(store: Store) {

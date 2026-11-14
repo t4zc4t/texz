@@ -10,7 +10,7 @@ import { bar, card } from '../theme.js';
 import { fixText } from '../core/fixes.js';
 import { picksOf, savePicks } from './profile.js';
 import { TYPES, addExtra, canonical, allSpecies, artwork, catchLine, formsOf, hintOf, idOf, nameIn, rarityOf, regionOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
-import { type Guess, decide, download, fingerprint, foldMemory, knownCount, learn, logSpawn, memorySize, recognise, remember, trimMemory, type Sparse } from '../features/pokeid.js';
+import { type Guess, decide, download, dropJunk, memoryNames, fingerprint, foldMemory, junkName, knownCount, learn, logSpawn, memorySize, recognise, remember, trimMemory, type Sparse } from '../features/pokeid.js';
 import { artColours, classify, colourFit, keepSpawn, sceneColours, seedMemory } from '../features/pokemodel.js';
 import { teamDot } from '../feeds/f1.js';
 
@@ -87,8 +87,12 @@ export function watchSpawns(client: Client, store: Store) {
     const raw = JSON.parse(store.getKv('p2:extra') ?? '[]') as string[];
     const seen = new Map<string, string>();
     for (const n of raw) { const k = n.toLowerCase(); const had = seen.get(k); if (!had || (n.match(/[A-Z]/g)?.length ?? 0) > (had.match(/[A-Z]/g)?.length ?? 0)) seen.set(k, n); }
-    const list = [...seen.values()];
+    // and nothing with another bot's score glued on, like "Axew - 96.61"
+    const list = [...seen.values()].filter((n) => !junkName(n));
     if (list.length !== raw.length) store.setKv('p2:extra', JSON.stringify(list));
+    dropJunk(store);
+    // a form only ever met through a catch still belongs in the list, like Yellow Flower Flabébé
+    for (const n of memoryNames(store)) if (!nameIn(n) || nameIn(n)!.toLowerCase() !== n.toLowerCase()) keepForm(store, n);
     addExtra(list);
     foldMemory(store);
   }
@@ -120,6 +124,7 @@ const baseOf = (name: string) => nameIn(name) ?? name;
 // a form name worth knowing for hints and the claim card, stored once whatever its case
 function keepForm(store: Store, raw: string) {
   const name = canonical(raw);
+  if (junkName(name)) return;
   const list = JSON.parse(store.getKv('p2:extra') ?? '[]') as string[];
   if (list.some((n) => n.toLowerCase() === name.toLowerCase())) return;
   list.push(name);
