@@ -70,7 +70,9 @@ export function startBirthdays(client: Client, store: Store) {
     if (!all.length) return;
     for (const guild of client.guilds.cache.values()) {
       const g = store.guild(guild.id);
-      if (!store.rules(guild.id, 'birthdays').enabled || (!g.birthdays.channel && !g.birthdays.role)) continue;
+      // no birthday channel picked: the Agency Office from the layout, so birthdays don't go unnoticed
+      const where = g.birthdays.channel ?? store.getKv(`generalch:${guild.id}`);
+      if (!store.rules(guild.id, 'birthdays').enabled || (!where && !g.birthdays.role)) continue;
       for (const b of all) {
         const today = localDate(store.settings(b.user_id).timezone);
         if (!toldHere(store, guild.id, b.user_id) || !isBirthday(b, today) || store.birthdayDone(guild.id, b.user_id, today.year)) continue;
@@ -78,7 +80,7 @@ export function startBirthdays(client: Client, store: Store) {
         if (!m) continue;
         store.markBirthday(guild.id, b.user_id, today.year, g.birthdays.role ? now + 24 * 3_600_000 : null);
         if (g.birthdays.role) await m.roles.add(g.birthdays.role, 'birthday').catch(() => {});
-        const ch = g.birthdays.channel ? await guild.channels.fetch(g.birthdays.channel).catch(() => null) : null;
+        const ch = where ? await guild.channels.fetch(where).catch(() => null) : null;
         if (!ch?.isSendable()) continue;
         const vars = { user: `<@${m.id}>`, name: m.displayName, server: guild.name };
         const e = card({ kind: 'birthday', title: `Happy birthday, ${m.displayName}!`, emoji: '🎂', vars, line: g.birthdays.message ?? undefined, gif: g.gifs.birthday ?? null });
@@ -148,7 +150,7 @@ const birthday: Command = {
     }
     list.sort((a, b) => a.n - b.n);
     const g = store.guild(ctx.guild.id);
-    const setupHint = !g.birthdays.channel && ctx.member?.permissions.has(PermissionFlagsBits.ManageGuild) ? '\n\n-# No birthday channel yet, set one in `/setup` → Birthdays.' : '';
+    const setupHint = !g.birthdays.channel && !store.getKv(`generalch:${ctx.guildId}`) && ctx.member?.permissions.has(PermissionFlagsBits.ManageGuild) ? '\n\n-# No birthday channel yet, set one in `/setup` → Birthdays.' : '';
     const body = (list.length
       ? list.slice(0, 15).map((b) => `🎂 <@${b.user_id}> · **${fmtDate(b.month, b.day)}** · ${b.n === 0 ? 'today!' : `in ${b.n}d`}`).join('\n')
       : 'Nobody has told me their birthday. `tz bday set 14 feb` to be first.') + setupHint;

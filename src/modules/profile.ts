@@ -8,7 +8,7 @@ import type { Command } from '../core/module.js';
 import { card } from '../theme.js';
 import { fetchAvatar, profileCard, type Fav } from '../features/rankcard.js';
 import { levelOf, rankFor } from './levels.js';
-import { toldHere, fmtDate } from './birthdays.js';
+import { toldHere, fmtDate, parseDate } from './birthdays.js';
 import { bondsOf } from './actions.js';
 import { currentSeason, searchMedia, titleOf, topMedia, type Media } from '../anime/anilist.js';
 
@@ -105,6 +105,7 @@ async function editPanel(store: Store, guildId: string | null, userId: string, l
       row(
         new ButtonBuilder().setCustomId(id('bio')).setLabel('Bio').setEmoji('🖋️').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(id('color')).setLabel('Accent').setEmoji('🎨').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(id('birthday')).setLabel('Birthday').setEmoji('🎂').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(id('preview')).setLabel('Preview my card').setEmoji('🖼️').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(id('ping')).setLabel(`Club pings: ${p.ping === false ? 'off' : 'on'}`).setEmoji('🔔').setStyle(p.ping === false ? ButtonStyle.Secondary : ButtonStyle.Success),
       ),
@@ -231,11 +232,13 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
       await i.editReply({ files: [new AttachmentBuilder(png, { name: 'profile.png' })] });
       return true;
     }
-    const current = what === 'bio' ? p.bio ?? '' : (p as unknown as Record<string, string | undefined>)[what] ?? '';
+    const told = what === 'birthday' && toldHere(store, g, owner) ? store.birthday(owner) : null;
+    const current = what === 'bio' ? p.bio ?? '' : what === 'birthday' ? (told ? fmtDate(told.month, told.day) : '') : (p as unknown as Record<string, string | undefined>)[what] ?? '';
     const labels: Record<string, [string, number, string]> = {
       club: ['Football club (empty removes it)', 40, 'Real Madrid'], anime: ['Anime title, I\'ll look it up', 100, 'Bungo Stray Dogs'],
       manga: ['Manga title, I\'ll look it up', 100, 'Chainsaw Man'], bio: ['About you (empty removes it)', 180, 'A line or two'],
       color: ['Accent colour like #c2a46e (empty = default)', 7, '#c2a46e'],
+      birthday: ['Your birthday, no year (empty forgets it)', 20, '19 Feb'],
     };
     const l = labels[what];
     if (l) await i.showModal(modal(owner, what, l[0], current.slice(0, l[1]), l[1], l[2]));
@@ -245,6 +248,21 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
   const v = i.fields.getTextInputValue('v').trim();
   let note = '';
   if (what === 'bio') p.bio = v || undefined;
+  // the birthday lives with the birthday module, this is just another door to it
+  if (what === 'birthday' && g) {
+    if (!v) {
+      store.setKv(`bdayin:${g}:${owner}`, null);
+      if (!store.kvByPrefix('bdayin:').some(({ key }) => key.endsWith(`:${owner}`))) store.removeBirthday(owner);
+    } else {
+      const d = parseDate(v);
+      if (!d) note = 'That date doesn\'t exist, even in my calendar. Try something like 19 Feb.';
+      else {
+        store.setBirthday(owner, d.month, d.day);
+        store.setKv(`bdayin:${g}:${owner}`, '1');
+        if (!p.show.includes('birthday')) p.show.push('birthday');
+      }
+    }
+  }
   if (what === 'club') {
     // a typed club gets its crest if it matches one in the big leagues
     const c = v ? await findClub(v).catch(() => null) : null;

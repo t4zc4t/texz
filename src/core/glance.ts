@@ -31,7 +31,7 @@ export const menu: Record<string, [string, string, string?]> = {
   bonds: ['🫂', 'Closest people', 'Who you hug, pat and bonk the most here'],
   animehome: ['📺', 'What\'s on today', 'Airing today, your list and alerts at a glance'],
   server: ['🏛️', 'Server info'], afk: ['💤', 'Go afk'], ping: ['📡', 'Bot ping'], setup: ['🛠️', 'Setup desk', 'Features, channels, roles, welcome, logs, all with buttons'],
-  'birthday.set': ['🎂', 'Set my birthday'], 'birthday.remove': ['🗑️', 'Forget my birthday'], 'birthday.list': ['📆', 'Upcoming birthdays'], 'birthday.check': ['🔍', 'Someone\'s birthday'],
+  'birthday.set': ['🎂', 'Set my birthday', 'No year needed, like 19 Feb'], 'birthday.remove': ['🗑️', 'Forget my birthday'], 'birthday.list': ['📆', 'Upcoming birthdays'], 'birthday.check': ['🔍', 'Someone\'s birthday'],
   'f1~view=next': ['🏎️', 'Next Grand Prix', 'Every session with your local times'], 'f1~view=standings': ['🏆', 'F1 standings', 'Drivers and teams'],
   'f1~view=last': ['🏁', 'Last race', 'The top ten and the gaps'], 'f1~view=quiz': ['❓', 'F1 quiz', 'Win yen'],
   'f1~view=trivia': ['🗞️', 'F1 trivia', 'One fact from Parc Fermé'], 'f1~view=today': ['📅', 'On this day', 'F1 history for today\'s date'],
@@ -73,12 +73,12 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
   },
   profile: {
     sections: [
-      ['🪪 Your file', ['profile.view', 'profile.edit', 'achievements', 'mission']],
+      ['🪪 Your file', ['profile.view', 'profile.edit', 'birthday.set', 'achievements', 'mission']],
       ['🎖️ Rank', ['rank', 'levels', 'perks']],
       ['🫂 Bonds', ['bonds']],
-      ['🔔 Pings and birthdays', ['pings', 'birthday.set', 'birthday.list', 'birthday.check']],
+      ['🔔 Pings and birthdays', ['pings', 'birthday.list', 'birthday.check', 'birthday.remove']],
     ],
-    quick: ['profile.view', 'profile.edit', 'rank', 'achievements', 'pings'],
+    quick: ['profile.view', 'profile.edit', 'birthday.set', 'rank', 'pings'],
   },
   yen: {
     sections: [['💴 Your money', ['daily', 'wallet', 'give', 'bank']], ['💼 Earn it', ['work', 'crime', 'fish', 'beg', 'rob', 'heist']], ['🎰 The back room', ['coinflip', 'slots', 'blackjack', 'roulette', 'scratch', 'rps']], ['🛍️ Spend it', ['mycolour.view', 'mycolour.buy', 'mycolour.colour', 'mycolour.name', 'mycolour.icon', 'mycolour.remove', 'roleshop.view', 'roleshop.buy']], ['🏆 Rich list', ['rich']], ['🔧 Shop keeping', ['roleshop.add', 'roleshop.remove']]],
