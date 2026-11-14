@@ -1,3 +1,4 @@
+import { polishText } from '../core/icons.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, type Interaction, type MessageActionRowComponentBuilder, SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder, type Client, type GuildMember, type PermissionResolvable,
 } from 'discord.js';
@@ -235,7 +236,9 @@ const purge: Command = {
     const gone = await ch.bulkDelete(fresh, true).catch(() => null);
     const count = gone?.size ?? 0;
     await log(ctx.guild.client, store, ctx.guild.id, actionCard('purge', 'Messages swept', '🧹', who ? `<@${who}>` : 'everyone', ctx.userId, `${count} in <#${ctx.channelId}>`));
-    const r = await ctx.reply({ content: `🧹 **${count}** message${count === 1 ? '' : 's'} gone. ${say('purge')}`, temp: true });
+    const text = `🧹 **${count}** message${count === 1 ? '' : 's'} gone. ${say('purge')}`;
+    // a typed purge swept its own command away, so the note goes straight into the channel instead of replying to it
+    const r = ctx.viaText && 'send' in ch ? await ch.send({ content: polishText(text), allowedMentions: { parse: [] } }).catch(() => null) : await ctx.reply({ content: text, temp: true });
     // the confirmation tidies itself away too
     if (ctx.viaText && r && 'delete' in (r as object)) setTimeout(() => void (r as { delete: () => Promise<unknown> }).delete().catch(() => {}), 5000);
     return r;
