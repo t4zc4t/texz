@@ -152,6 +152,7 @@ The OwO tests use replies copied from real screens. OwO changes its layout now a
 - Anime from [AniList](https://anilist.co), F1 from [Parc Fermé](https://parc-ferme.pages.dev) and the [Jolpica F1 API](https://github.com/jolpica/jolpica-f1), football from ESPN's public scoreboards, "on this day" from Wikipedia.
 - Pokémon names, types and artwork from [PokeAPI](https://pokeapi.co), spawn recognition with the open [pokedex_project](https://huggingface.co/Sutadasuto/pokedex_project) classifier.
 - Interaction gifs from [nekos.best](https://nekos.best), other gifs from Giphy.
+- The Dragon type badge uses the Sea dragon icon by Lorc from [game-icons.net](https://game-icons.net), under CC BY 3.0.
 - Fonts in `assets/fonts` are Shippori Mincho B1, Zen Kaku Gothic New, JetBrains Mono, Inter, Cinzel and Playfair Display, all under the SIL Open Font License.
 
 ## License

@@ -52,7 +52,7 @@ export const TYPES: Record<string, [string, string]> = {
   normal: ['circle-dot', '#9FA19F'], fire: ['flame', '#EE8130'], water: ['droplet', '#6390F0'], grass: ['leaf', '#7AC74C'],
   electric: ['zap', '#E6B800'], ice: ['snowflake', '#5FC8C4'], fighting: ['hand-fist', '#C22E28'], poison: ['flask-conical', '#A33EA1'],
   ground: ['ground', '#B5784A'], flying: ['flying', '#6FA8EC'], psychic: ['eye', '#F95587'], bug: ['bug', '#A6B91A'],
-  rock: ['rock', '#A8932E'], ghost: ['ghost', '#735797'], dragon: ['dragon', '#6F35FC'], dark: ['moon', '#705746'],
+  rock: ['rock', '#A8932E'], ghost: ['ghost', '#735797'], dragon: ['file:sea-dragon', '#6F35FC'], dark: ['moon', '#705746'],
   steel: ['cog', '#8E9AAD'], fairy: ['sparkles', '#D46BA8'],
 };
 
@@ -67,19 +67,8 @@ const GLYPHS: Record<string, Step[]> = {
     { o: 'M8 20.5 L7.6 10 L11 5.4 L17.6 4.4 L21.6 9 L21.8 17 L19.6 20.5 Z', w: 2.2 },
     { f: 'M8 20.5 L7.6 10 L11 5.4 L17.6 4.4 L21.6 9 L21.8 17 L19.6 20.5 Z' },
     { c: 'M11 5.6 L12.6 11 L11.6 20.5 M12.6 11 L17.6 10 L21.6 9 M17.6 4.6 L17.6 10', w: 1.1 }],
-  dragon: [
-  { f: 'M9.6 7.4 C7.6 5.6 4.6 4.2 0.8 4.0 C3.8 5.0 6.2 6.6 7.8 8.8 Z' },
-  { f: 'M10.6 6.8 C9.4 4.4 7.2 2.4 4.2 1.0 C6.4 3.0 7.8 5.2 8.4 7.6 Z' },
-  { f: 'M8.2 10.4 L3.2 9.6 L7.4 12.0 L2.6 12.8 L7.4 13.6 Z' },
-  { f: 'M7.6 8.2 C9 6.8 11 6.4 13.2 6.6 L15 7.4 L20.4 8.4 L21.4 7.6 L22.6 8.6 L23 10.2 L22.2 10.8 L15.2 11.6 L13.6 12.2 L20.2 13.4 L20.8 14.4 L19.6 14.9 L14.2 15.4 C11.8 16.2 11.2 18.8 13.4 22.6 Q9.6 20.8 6.0 22.6 C4.6 19.6 5.2 15 6.2 12.4 C6.6 10.8 7 9.4 7.6 8.2 Z' },
-  { f: 'M5.2 19.6 L2.4 19.8 L5.1 17.6 L2.8 16.6 L5.6 15.4 Z' },
-  { f: 'M20.6 10.9 L20.1 12.1 L19.6 11.0 Z M18.6 11.2 L18.2 12.3 L17.7 11.3 Z M18.9 13.4 L18.6 12.3 L18.1 13.3 Z' },
-  { c: 'M12.6 8.6 L14.7 9.3', w: 1.1 },
-  { c: 'M8.6 14.4 C8.0 16.6 8.4 19.2 9.4 21.2', w: 0.8 },
-  { c: 'M10.8 15.0 C10.2 16.6 10.4 18.6 11.2 20.2', w: 0.7 },
-  ],
 };
-function glyph(x: any, steps: Step[], ox: number, oy: number, s: number) {
+function glyph(steps: Step[], s: number) {
   const c = createCanvas(Math.ceil(24 * s), Math.ceil(24 * s));
   const k = c.getContext('2d');
   k.scale(s, s); k.fillStyle = '#fff'; k.lineCap = 'round'; k.lineJoin = 'round';
@@ -88,7 +77,17 @@ function glyph(x: any, steps: Step[], ox: number, oy: number, s: number) {
     k.globalCompositeOperation = 'destination-out'; k.lineWidth = st.w;
     k.stroke(new Path2D('c' in st ? st.c : st.o));
   }
-  x.drawImage(c, ox, oy);
+  return c;
+}
+// draws a white glyph so its visible shape sits in the middle of the badge
+function centred(x: any, g: any, fit: number) {
+  const { width: w, height: h } = g;
+  const px = g.getContext('2d').getImageData(0, 0, w, h).data;
+  let l = w, t = h, r = 0, b = 0;
+  for (let y = 0; y < h; y++) for (let i = 0; i < w; i++) if (px[(y * w + i) * 4 + 3] > 24) { l = Math.min(l, i); r = Math.max(r, i); t = Math.min(t, y); b = Math.max(b, y); }
+  const s = fit / Math.max(r - l + 1, b - t + 1);
+  const dw = (r - l + 1) * s, dh = (b - t + 1) * s;
+  x.drawImage(g, l, t, r - l + 1, b - t + 1, 64 - dw / 2, 64 - dh / 2, dw, dh);
 }
 // lighter or darker by a fraction, for the badge gradient
 function shade(hex: string, by: number) {
@@ -128,8 +127,12 @@ for (const [name, [icon, colour]] of Object.entries(TYPES)) {
   // a thin darker rim keeps it crisp on light and dark themes
   x.lineWidth = 4; x.strokeStyle = shade(colour, -0.35);
   x.beginPath(); x.arc(64, 64, 56, 0, Math.PI * 2); x.stroke();
-  if (GLYPHS[icon]) glyph(x, GLYPHS[icon], 28, 28, 3);
-  else {
+  if (GLYPHS[icon]) centred(x, glyph(GLYPHS[icon], 12), 66);
+  else if (icon.startsWith('file:')) {
+    const art = createCanvas(512, 512);
+    art.getContext('2d').drawImage(await loadImage(readFileSync(`assets/glyphs/${icon.slice(5)}.svg`)), 0, 0, 512, 512);
+    centred(x, art, 70);
+  } else {
     const svg = readFileSync(`${dir}/${icon}.svg`, 'utf8').replace(/<!--.*?-->/s, '').replace(/currentColor/g, '#FFFFFF').replace(/stroke-width="2"/, 'stroke-width="2.4"').replace(/width="24"\s+height="24"/, 'width="128" height="128"');
     x.drawImage(await loadImage(Buffer.from(svg)), 30, 30, 68, 68);
   }
