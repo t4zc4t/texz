@@ -69,7 +69,7 @@ client.once(Events.ClientReady, (c) => {
       // servers from before keep only the highest rank now
       if (!store.getKv(`ranks:single:${guild.id}`)) { store.setKv(`ranks:single:${guild.id}`, '1'); g.levels.stack = false; store.saveGuild(guild.id, g); }
       void (async () => {
-        await fixRankOrder(guild, g.levels.rewards);
+        await fixRankOrder(guild, g.levels.rewards, store);
         if (!g.levels.stack) await carryRankPerms(guild, g.levels.rewards);
         await applyPerks(store, guild);
         await tidyRanks(store, guild);

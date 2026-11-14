@@ -369,7 +369,7 @@ export const levelsModule: Module = {
 
 // rank roles in level order, highest rank right under Texz. Discord shifts every role when one moves,
 // so the whole order is worked out first and sent in one go, then checked, and tried once more if it slipped
-export async function fixRankOrder(guild: Guild, rewards: Record<string, string>): Promise<boolean> {
+export async function fixRankOrder(guild: Guild, rewards: Record<string, string>, store?: Store): Promise<boolean> {
   const me = await guild.members.fetchMe().catch(() => null);
   if (!me) return false;
   await guild.roles.fetch().catch(() => null);
@@ -379,12 +379,17 @@ export async function fixRankOrder(guild: Guild, rewards: Record<string, string>
     .sort((a, b) => a.lvl - b.lvl);
   if (ranked.length < 2) return true;
   const ids = new Set(ranked.map((x) => x.role.id));
+  // colour roles and people's own roles stay above the ranks, so their colour is the one that shows
+  const colourIds = new Set(store ? [...store.kvByPrefix(`colour:${guild.id}:`), ...store.kvByPrefix(`myrole:${guild.id}:`)].map((x) => x.value) : []);
+  const colours = [...guild.roles.cache.values()].filter((r) => colourIds.has(r.id) && r.position < ceiling && !ids.has(r.id)).sort((a, b) => a.position - b.position);
+  const lowestColour = () => Math.min(ceiling, ...colours.map((c) => c.position));
   const inOrder = () => ranked.every((x, n) => n === 0 || x.role.position > ranked[n - 1].role.position);
+  const ranksUnderColours = () => ranked.at(-1)!.role.position < lowestColour() && colours.every((c, n) => n === 0 || c.position > colours[n - 1].position);
   for (let attempt = 0; attempt < 2; attempt++) {
-    if (inOrder() && ranked.at(-1)!.role.position === ceiling - 1) return true;
-    // everything below Texz from the bottom up, the rank roles taken out and put back on top in level order
+    if (inOrder() && ranksUnderColours() && ranked.at(-1)!.role.position === (colours.length ? lowestColour() - 1 : ceiling - 1)) return true;
+    // everything below Texz from the bottom up: the other roles, then the ranks in level order, then the colour roles on top
     const below = [...guild.roles.cache.values()].filter((r) => r.position < ceiling && r.id !== guild.id).sort((a, b) => a.position - b.position);
-    const order = [...below.filter((r) => !ids.has(r.id)), ...ranked.map((x) => x.role)];
+    const order = [...below.filter((r) => !ids.has(r.id) && !colourIds.has(r.id)), ...ranked.map((x) => x.role), ...colours];
     await guild.roles.setPositions(order.map((r, n) => ({ role: r.id, position: n + 1 }))).catch(() => null);
     await guild.roles.fetch().catch(() => null);
   }

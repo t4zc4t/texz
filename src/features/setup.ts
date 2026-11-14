@@ -506,7 +506,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       }
       store.saveGuild(i.guild.id, g);
       // highest rank on top, all of them just under Texz, the top ranks shown separately in the member list
-      const ordered = await fixRankOrder(i.guild, g.levels.rewards);
+      const ordered = await fixRankOrder(i.guild, g.levels.rewards, store);
       if (!g.levels.stack) await carryRankPerms(i.guild, g.levels.rewards);
       await applyPerks(store, i.guild);
       const tidied = await tidyRanks(store, i.guild);
