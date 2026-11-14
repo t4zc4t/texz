@@ -12,7 +12,7 @@ import { f1Quiz, f1Today, f1Trivia } from './bulletins.js';
 import { guess } from './anime.js';
 import { crestQuiz } from './f1quiz.js';
 import { quote } from './quote.js';
-import { achievements, mission } from './missions.js';
+import { achievements, medalcase, mission } from './missions.js';
 import { prepareCoin } from '../features/coinart.js';
 import { icEmoji, polishEmbed, polishRows } from '../core/icons.js';
 
@@ -151,7 +151,7 @@ const user: Command = {
     }).setThumbnail(m.displayAvatarURL({ size: 256, forceStatic: false }));
     const banner = u.bannerURL({ size: 1024, forceStatic: false });
     if (banner) e.setImage(banner);
-    const av = new ButtonBuilder().setCustomId(`nav|avatar|owner=${ctx.userId},user=${m.id}`).setEmoji('🖼️').setLabel('Avatar').setStyle(ButtonStyle.Secondary);
+    const av = new ButtonBuilder().setCustomId(`nav|avatar|owner=${ctx.userId},user=${m.id},back=user,backuser=${m.id}`).setEmoji('🖼️').setLabel('Avatar').setStyle(ButtonStyle.Secondary);
     return ctx.reply({ embeds: [e], components: [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(av)], private: false });
   },
 };
@@ -549,5 +549,5 @@ export const utility: Module = {
   name: 'utility',
   label: 'Utility and fun',
   about: 'Avatars, user and server info, polls, choose, dice, coin, 8ball and AFK',
-  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk, guess, f1Quiz, f1Trivia, f1Today, crestQuiz, quote, mission, achievements, booth],
+  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk, guess, f1Quiz, f1Trivia, f1Today, crestQuiz, quote, mission, achievements, medalcase, booth],
 };

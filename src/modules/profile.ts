@@ -293,9 +293,9 @@ export const profile: Command = {
     // the three people they trade the most hugs and bonks with, as a line under the picture
     const close = ctx.guildId ? bondsOf(store, ctx.guildId, id).slice(0, 3) : [];
     // the medals, bonds and editing open from buttons under the card, in the same message
-    const btn = (cmd: string, label: string, emoji: string, extra = '') => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId}${extra}`).setLabel(label).setEmoji(emoji).setStyle(ButtonStyle.Secondary);
+    const btn = (cmd: string, label: string, emoji: string, extra = '') => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId},back=profile,backuser=${id}${extra}`).setLabel(label).setEmoji(emoji).setStyle(ButtonStyle.Secondary);
     const buttons = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      ...(ctx.guildId ? [btn('achievements', 'Medals', '🏅', `,user=${id}`), btn('bonds', 'Closest people', '🤝', `,user=${id}`)] : []),
+      ...(ctx.guildId ? [btn('medalcase', 'Medals', '🏅', `,user=${id}`), btn('bonds', 'Closest people', '🤝', `,user=${id}`)] : []),
       ...(id === ctx.userId ? [btn('profile', 'Edit', '📝', ',sub=edit')] : []),
     );
     return ctx.reply({ content: close.length ? `-# Closest here: ${close.map((b) => `<@${b.id}> (${b.n})`).join(' · ')}` : undefined, files: [new AttachmentBuilder(png, { name: 'profile.png' })], components: buttons.components.length ? [buttons] : [], embeds: [] });

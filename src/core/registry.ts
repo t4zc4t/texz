@@ -435,6 +435,7 @@ export async function onComponent(store: Store, i: Interaction) {
       // the hand made dashboards name the command itself
       if (!found) {
         const hit = key ? byName.get(key) : undefined;
+        if (hit) opts.back ??= groups[hit.cmd.group ?? '']?.dashboard ?? 'help';
         return hit ? run(store, fromComponent(i, opts, edit), hit.mod, hit.cmd, false) : undefined;
       }
       const ctx = fromComponent(i, opts, edit);
@@ -445,6 +446,8 @@ export async function onComponent(store: Store, i: Interaction) {
         return i.showModal(askModal(found.e, i.user.id, opts.back ?? groups[found.hit.cmd.group ?? '']?.dashboard ?? 'help'));
       }
       Object.assign(opts, found.e.fixed ?? {}, found.e.sub ? { sub: found.e.sub } : {});
+      // picked from a dashboard, Back returns to that dashboard
+      opts.back ??= groups[found.hit.cmd.group ?? '']?.dashboard ?? 'help';
       return run(store, fromComponent(i, opts, edit), found.hit.mod, found.hit.cmd, false);
     }
     const hit = byName.get(name0);

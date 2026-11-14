@@ -147,7 +147,7 @@ const help: Command = {
     // the front page is the dashboards, the same map as /owo, /fun and the rest
     const rows = [dashMenu];
     if (ctx.isAdmin && ctx.guildId) rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      new ButtonBuilder().setCustomId(`nav|setup|owner=${ctx.userId}`).setLabel('Setup desk').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`nav|setup|owner=${ctx.userId},back=help`).setLabel('Setup desk').setStyle(ButtonStyle.Secondary),
     ));
     return ctx.reply({ embeds: [card({
       kind: 'help', title: 'The Agency directory', emoji: '', gif,

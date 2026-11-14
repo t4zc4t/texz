@@ -128,16 +128,18 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
       // a one line answer like "+¥150" shows next to the dashboard instead of replacing it
       const quick = !n.embeds.length && !n.files.length && !n.components.length;
       if (edit && !quick && (!i.isModalSubmit() || i.isFromMessage())) {
-        // every page opened by a click gets a way back: to where it came from, or its dashboard, and to help
+        // a page opened from somewhere gets one way back, to exactly that place: the dashboard it was picked from,
+        // or the card or command it was opened from (with the same person on it). Tabs and pages that switch
+        // between themselves don't, they never left
         const rows = [...n.components];
-        const target = opts.back ?? ctx.home ?? 'help';
+        const target = opts.back;
         const buttons = rows.flatMap((r) => ('components' in r ? (r as { components: { data?: { custom_id?: string; label?: string } }[] }).components : []).map((c) => c.data ?? {}));
-        const hasBack = buttons.some((b) => b.label === 'Back' || b.custom_id?.startsWith(`nav|${target}|`));
-        if (!hasBack && rows.length < 5 && target !== ctx.self) {
+        const hasBack = !!target && buttons.some((b) => b.label?.startsWith('Back') || b.custom_id?.startsWith(`nav|${target}|`));
+        if (target && target !== 'none' && !hasBack && rows.length < 5 && (target !== ctx.self || !!opts.sub)) {
+          const carry = opts.backuser ? `,user=${opts.backuser}` : '';
           const nav = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-            new ButtonBuilder().setCustomId(`nav|${target}|owner=${opts.owner ?? i.user.id}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`nav|${target}|owner=${opts.owner ?? i.user.id}${carry}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
           );
-          if (target !== 'help') nav.addComponents(new ButtonBuilder().setCustomId(`nav|help|owner=${opts.owner ?? i.user.id}`).setLabel('All dashboards').setEmoji('🏠').setStyle(ButtonStyle.Secondary));
           rows.push(nav);
         }
         const page = { content: n.content ?? null, embeds: n.embeds, components: rows, attachments: [], ...(n.files.length ? { files: n.files } : {}) };

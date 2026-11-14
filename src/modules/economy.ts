@@ -98,7 +98,7 @@ const balance: Command = {
       // a little character judgement on the bottom line
       `-# ${worth >= 1_000_000 ? 'Mori would like a word about your tax situation.' : worth >= 100_000 ? 'Comfortable. The Guild might try to recruit you.' : worth >= 10_000 ? 'Doing well. Kunikida approves of the budgeting.' : worth >= 1000 ? 'Enough for crab tonight.' : 'Broke, like Dazai. At least you\'re in good company.'}`,
     ].filter(Boolean).join('\n');
-    const btn = (cmd: string, emoji: string, label: string, on = false) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId}`).setEmoji(emoji).setLabel(label).setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary);
+    const btn = (cmd: string, emoji: string, label: string, on = false) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId},back=wallet`).setEmoji(emoji).setLabel(label).setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary);
     const rows = [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
       ...(mine ? [btn('daily', '🎁', ready ? 'Claim daily' : 'Daily', ready)] : []),
       btn('rich', '🏆', 'Richest'),

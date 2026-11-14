@@ -643,3 +643,83 @@ export async function birthdayCard(d: { name: string; avatar: Buffer | null; ser
   ctx.fillText(d.server, 470, 380);
   return c.toBuffer('image/png');
 }
+
+export interface CaseData { name: string; handle: string; avatar: Buffer | null; accent?: string; medals: { id: string; name: string; when?: string }[]; won: number; total: number }
+
+// someone's earned medals, laid out like a display case in the same style as the profile card
+export async function medalCase(d: CaseData): Promise<Buffer> {
+  const SAND = d.accent ?? SAND_DEFAULT;
+  const CW = 1000;
+  const cols = 6;
+  const step = (CW - 100) / cols;
+  const rowsN = Math.max(1, Math.ceil(d.medals.length / cols));
+  const CH = 150 + rowsN * 190 + 30;
+  const c = createCanvas(CW, CH);
+  const ctx = c.getContext('2d');
+  rounded(ctx, 0, 0, CW, CH, 28);
+  ctx.clip();
+  ctx.fillStyle = INK;
+  ctx.fillRect(0, 0, CW, CH);
+  const glow = ctx.createRadialGradient(CW / 2, 0, 10, CW / 2, 0, 700);
+  glow.addColorStop(0, `${SAND}30`);
+  glow.addColorStop(1, `${SAND}00`);
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, CW, CH);
+  ctx.fillStyle = SAND;
+  ctx.fillRect(0, 0, CW, 6);
+
+  // a small avatar and the name, then the count on the right
+  const av = d.avatar ? await loadImage(d.avatar).catch(() => null) : null;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(86, 80, 36, 0, Math.PI * 2); ctx.clip();
+  if (av) ctx.drawImage(av, 50, 44, 72, 72); else { ctx.fillStyle = '#2a2d36'; ctx.fillRect(50, 44, 72, 72); }
+  ctx.restore();
+  ctx.strokeStyle = SAND; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(86, 80, 38, 0, Math.PI * 2); ctx.stroke();
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(194,164,110,0.55)';
+  ctx.font = '700 13px "Texz Serif", serif';
+  ctx.fillText('COMMENDATIONS', 142, 62);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 34px "Texz Sans Bold", sans-serif';
+  ctx.fillText(fit(ctx, d.name, CW - 142 - 260), 142, 100);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = SAND;
+  ctx.font = '700 40px "Texz Sans Bold", sans-serif';
+  ctx.fillText(`${d.won}`, CW - 50, 96);
+  const wonW = ctx.measureText(`${d.won}`).width;
+  ctx.fillStyle = '#8b8f9a';
+  ctx.font = '400 18px "Texz Sans", sans-serif';
+  ctx.fillText(`of ${d.total} earned`, CW - 50, 120);
+  void wonW;
+  ctx.strokeStyle = 'rgba(194,164,110,0.18)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(50, 140); ctx.lineTo(CW - 50, 140); ctx.stroke();
+
+  if (!d.medals.length) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#6f7380';
+    ctx.font = '400 20px "Texz Sans", sans-serif';
+    ctx.fillText('No medals yet. tz achievements shows how to earn them.', CW / 2, 250);
+    return c.toBuffer('image/png');
+  }
+  d.medals.forEach((m, n) => {
+    const r = Math.floor(n / cols);
+    const inRow = Math.min(cols, d.medals.length - r * cols);
+    // a short last row sits centred
+    const startX = CW / 2 - ((inRow - 1) * step) / 2;
+    const x = startX + (n % cols) * step;
+    const top = 160 + r * 190;
+    drawMedal(ctx, m.id, true, x, top, 30);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e8e2d6';
+    ctx.font = '700 15px "Texz Sans Bold", sans-serif';
+    ctx.fillText(fit(ctx, m.name, step - 12), x, top + 152);
+    if (m.when) {
+      ctx.fillStyle = '#8b8f9a';
+      ctx.font = '400 13px "Texz Sans", sans-serif';
+      ctx.fillText(m.when, x, top + 172);
+    }
+  });
+  return c.toBuffer('image/png');
+}

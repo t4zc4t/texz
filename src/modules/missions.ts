@@ -1,8 +1,9 @@
-import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder, type Interaction, type MessageActionRowComponentBuilder } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder, type Interaction, type MessageActionRowComponentBuilder } from 'discord.js';
 import { medalSheet, tierName, tierOf } from '../features/medals.js';
 import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
 import { card } from '../theme.js';
+import { fetchAvatar, medalCase } from '../features/rankcard.js';
 
 // one place every feature reports to: a daily Agency mission for the whole server, and badges that stay on your profile
 
@@ -180,6 +181,32 @@ export const mission: Command = {
 const shortDate = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
 // every medal, how to earn it and how close you are, and the pick of which ones go on the profile card
+// the medals someone has earned as one picture, opened from the Medals button under a profile card
+export const medalcase: Command = {
+  name: 'medalcase',
+  group: 'you',
+  hidden: true,
+  data: new SlashCommandBuilder().setName('medalcase').setDescription('The medals someone has earned, as a picture')
+    .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
+  text: { aliases: ['medalcard', 'case'], args: ['user'] },
+  run: async (ctx, store) => {
+    if (!ctx.guildId) return ctx.reply('Medals are per server.');
+    const id = ctx.user('user') ?? ctx.userId;
+    const have = badgesOf(store, ctx.guildId, id);
+    const at = earnedAt(store, ctx.guildId, id);
+    const m = ctx.guild ? await ctx.guild.members.fetch(id).catch(() => null) : null;
+    const order: Record<string, number> = { relic: 0, gold: 1, silver: 2, bronze: 3 };
+    const medals = BADGES.filter((b) => have.includes(b.id)).sort((a, b) => order[tierOf(a.id)] - order[tierOf(b.id)])
+      .map((b) => ({ id: b.id, name: b.name, when: at[b.id] ? shortDate(at[b.id]) : undefined }));
+    const png = await medalCase({
+      name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, accent: (await import('./profile.js')).picksOf(store, ctx.guildId, id).color ?? undefined,
+      avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 128 })) : null,
+      medals, won: have.length, total: BADGES.length,
+    });
+    return ctx.reply({ files: [new AttachmentBuilder(png, { name: 'medals.png' })], embeds: [] });
+  },
+};
+
 export const achievements: Command = {
   name: 'achievements',
   group: 'you',
@@ -208,10 +235,7 @@ export const achievements: Command = {
       }).join('\n').slice(0, 1024),
       inline: false,
     }));
-    // back to the profile card this page was opened from
-    const rows = [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      new ButtonBuilder().setCustomId(`nav|profile|owner=${ctx.userId},sub=view,user=${id}`).setLabel('Back to profile').setEmoji('🪪').setStyle(ButtonStyle.Secondary),
-    )];
+    const rows: ActionRowBuilder<MessageActionRowComponentBuilder>[] = [];
     const e = card({ kind: 'help', title: mine ? 'Your achievements' : `${member?.displayName ?? 'Their'} achievements`, emoji: '🎖️', gif: 'off', line: '',
       body: `**${have.length} of ${BADGES.length}** earned. Bronze, silver, gold, and purple relics for the rare ones.`, fields })
       .setImage('attachment://achievements.png');
