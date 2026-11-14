@@ -1,7 +1,7 @@
 // draws the icon set Texz uploads as its own emojis. Lucide shapes (ISC), Agency colours
 // run: npx tsx scripts/icons.mts <path to lucide-static/icons>
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { createCanvas, loadImage, Path2D } from '@napi-rs/canvas';
 
 const SAND = '#C8A97E';
 const RED = '#E8475B';
@@ -51,11 +51,37 @@ export const SET: Record<string, [string, string]> = {
 export const TYPES: Record<string, [string, string]> = {
   normal: ['circle-dot', '#9FA19F'], fire: ['flame', '#EE8130'], water: ['droplet', '#6390F0'], grass: ['leaf', '#7AC74C'],
   electric: ['zap', '#E6B800'], ice: ['snowflake', '#5FC8C4'], fighting: ['hand-fist', '#C22E28'], poison: ['flask-conical', '#A33EA1'],
-  ground: ['mountain', '#C9A24A'], flying: ['feather', '#8A70E0'], psychic: ['eye', '#F95587'], bug: ['bug', '#A6B91A'],
-  rock: ['gem', '#A8932E'], ghost: ['ghost', '#735797'], dragon: ['crown', '#6F35FC'], dark: ['moon', '#705746'],
+  ground: ['ground', '#B5784A'], flying: ['flying', '#6FA8EC'], psychic: ['eye', '#F95587'], bug: ['bug', '#A6B91A'],
+  rock: ['rock', '#A8932E'], ghost: ['ghost', '#735797'], dragon: ['dragon', '#6F35FC'], dark: ['moon', '#705746'],
   steel: ['cog', '#8E9AAD'], fairy: ['sparkles', '#D46BA8'],
 };
 
+// drawn glyphs for types that have no clear stock icon
+// a glyph is a list of steps on a 24 grid: fill a shape, or carve a line / outline out of what is drawn
+type Step = { f: string } | { c: string; w: number } | { o: string; w: number };
+const GLYPHS: Record<string, Step[]> = {
+  flying: [{ f: 'M2 11 C5.5 6 12.5 3 22 2 L14.6 6.6 L21.4 6 L13.6 10.2 L20 10.4 L12.2 14 L17.6 14.8 L9 18.4 C5 18.8 2 16 2 11 Z' }],
+  ground: [{ f: 'M1.5 20.5 L8.3 7 L11.3 11.4 L15.1 4.8 L22.5 20.5 Z' },
+    { c: 'M0 12.6 Q6 10.6 12 12.2 T24 11.6', w: 1.5 }, { c: 'M0 16.8 Q6 15 12 16.6 T24 16', w: 1.5 }],
+  rock: [{ f: 'M2.2 20.5 L2.6 14.2 L5.4 10.8 L9 12 L9 20.5 Z' },
+    { o: 'M8 20.5 L7.6 10 L11 5.4 L17.6 4.4 L21.6 9 L21.8 17 L19.6 20.5 Z', w: 2.2 },
+    { f: 'M8 20.5 L7.6 10 L11 5.4 L17.6 4.4 L21.6 9 L21.8 17 L19.6 20.5 Z' },
+    { c: 'M11 5.6 L12.6 11 L11.6 20.5 M12.6 11 L17.6 10 L21.6 9 M17.6 4.6 L17.6 10', w: 1.1 }],
+  dragon: [{ f: 'M4 22.5 L3.5 19 L1.2 18.2 L3.7 16.4 L1.5 14.6 L4.6 13.4 C4.9 12.4 5.3 11.5 5.8 10.8 Q3 8 0.8 5.5 Q4.5 6.5 7.6 8.3 Q5.5 4.4 5.2 1.2 Q8.5 4 10.2 6.6 C11.3 6.5 12.3 6.6 13.2 6.8 L14.6 5.4 L15.2 7.2 L20.6 8.2 L21.6 7.6 L22.8 9.2 L22.6 10.8 L14.8 12.4 L20.4 14.8 L15.8 16.2 L13.8 16.4 C12.2 17.1 11.2 19.5 11.4 22.5 Z' },
+    { f: 'M20.4 11.1 L19.8 12.7 L19.1 11.3 Z M18.4 13.9 L18.6 12.5 L17.4 13.4 Z' },
+    { c: 'M12.8 8.7 L14.5 9.4', w: 1.4 }, { c: 'M6.4 15 C8 17 8.6 19.5 8.4 22.5', w: 1.1 }],
+};
+function glyph(x: any, steps: Step[], ox: number, oy: number, s: number) {
+  const c = createCanvas(Math.ceil(24 * s), Math.ceil(24 * s));
+  const k = c.getContext('2d');
+  k.scale(s, s); k.fillStyle = '#fff'; k.lineCap = 'round'; k.lineJoin = 'round';
+  for (const st of steps) {
+    if ('f' in st) { k.globalCompositeOperation = 'source-over'; k.fill(new Path2D(st.f)); continue; }
+    k.globalCompositeOperation = 'destination-out'; k.lineWidth = st.w;
+    k.stroke(new Path2D('c' in st ? st.c : st.o));
+  }
+  x.drawImage(c, ox, oy);
+}
 // lighter or darker by a fraction, for the badge gradient
 function shade(hex: string, by: number) {
   const n = Number.parseInt(hex.slice(1), 16);
@@ -94,9 +120,11 @@ for (const [name, [icon, colour]] of Object.entries(TYPES)) {
   // a thin darker rim keeps it crisp on light and dark themes
   x.lineWidth = 4; x.strokeStyle = shade(colour, -0.35);
   x.beginPath(); x.arc(64, 64, 56, 0, Math.PI * 2); x.stroke();
-  const svg = readFileSync(`${dir}/${icon}.svg`, 'utf8').replace(/<!--.*?-->/s, '').replace(/currentColor/g, '#FFFFFF').replace(/stroke-width="2"/, 'stroke-width="2.4"').replace(/width="24"\s+height="24"/, 'width="128" height="128"');
-  const img = await loadImage(Buffer.from(svg));
-  x.drawImage(img, 30, 30, 68, 68);
+  if (GLYPHS[icon]) glyph(x, GLYPHS[icon], 28, 28, 3);
+  else {
+    const svg = readFileSync(`${dir}/${icon}.svg`, 'utf8').replace(/<!--.*?-->/s, '').replace(/currentColor/g, '#FFFFFF').replace(/stroke-width="2"/, 'stroke-width="2.4"').replace(/width="24"\s+height="24"/, 'width="128" height="128"');
+    x.drawImage(await loadImage(Buffer.from(svg)), 30, 30, 68, 68);
+  }
   writeFileSync(`assets/types-line/${name}.png`, c.toBuffer('image/png'));
 }
 console.log(Object.keys(SET).length, 'icons,', Object.keys(TYPES).length, 'types');

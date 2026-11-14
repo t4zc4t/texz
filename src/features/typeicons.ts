@@ -26,8 +26,8 @@ async function download(type: string, path: string): Promise<Buffer | null> {
   }
   return null;
 }
-// tb_ for the badge set, so older uploads don't get picked up
-const nameOf = (t: string) => `tb_${t.toLowerCase()}`;
+// tc_ for the badge set, so older uploads don't get picked up
+const nameOf = (t: string) => `tc_${t.toLowerCase()}`;
 
 // app emoji work in every server, so they are made once and reused
 export async function loadTypeIcons(client: Client, tries = 3): Promise<void> {
