@@ -179,7 +179,7 @@ test('grouped commands keep the slash list short and work typed too', async () =
 test('quick typed answers are queued for cleanup, cards are not', async () => {
   const store = new Store(':memory:');
   const sent: string[] = [];
-  const a = fake('tz coin');
+  const a = fake('tz afk');
   (a.m as unknown as { reply: (p: unknown) => Promise<unknown> }).reply = async () => { sent.push('x'); return { id: 'm1', channelId: 'c1' }; };
   onText(store, a.m);
   await tick();

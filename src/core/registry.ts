@@ -14,7 +14,7 @@ import { onOwnerButton, onOwnerConfirm } from '../modules/servers.js';
 import { economy } from '../modules/economy.js';
 import { bulletins, onBulletinButton } from '../modules/bulletins.js';
 import { onWatchlist } from '../modules/watchlist.js';
-import { onAvatarButton, onPollButton, utility } from '../modules/utility.js';
+import { onAvatarButton, onGames, onPollButton, utility } from '../modules/utility.js';
 import { moderation, onCaseComponent } from '../modules/moderation.js';
 import { vc } from '../modules/voicemod.js';
 import { onRoleButton, welcomeModule } from '../modules/welcome.js';
@@ -378,6 +378,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onAnimeComponent(store, i)) return;
     if (await onWatchlist(store, i)) return;
     if (await onPollButton(store, i)) return;
+    if (await onGames(store, i)) return;
     if (await onAvatarButton(i)) return;
     if (await onRoleButton(store, i)) return;
     if (await onCaseComponent(store, i)) return;

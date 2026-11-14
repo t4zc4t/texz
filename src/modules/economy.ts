@@ -1,11 +1,11 @@
 import { mycolour } from './mycolour.js';
 import { casinoCommands, money } from './casino.js';
-import { hustleCommands } from './hustle.js';
+import { choresLine, hustleCommands, vaultOf } from './hustle.js';
 import { track } from './missions.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, SlashCommandBuilder, type Message, type MessageActionRowComponentBuilder } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command, Module } from '../core/module.js';
-import { card, say } from '../theme.js';
+import { card, pick, say } from '../theme.js';
 import { fixText, setupButton } from '../core/fixes.js';
 import { levelOf, perksFor } from './levels.js';
 
@@ -55,13 +55,19 @@ const daily: Command = {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
     const r = claimDaily(store, ctx.guildId, ctx.userId);
     if (!r.ok) return ctx.reply({ content: `⏳ Already collected today. Next one <t:${Math.floor(r.next / 1000)}:R>.`, temp: true });
+    // every seventh day in a row opens a crate on top
+    const crate = r.streak % 7 === 0 ? pick([['🍶', 'a bottle Mori forgot', 400], ['💼', 'a Guild briefcase', 650], ['🦀', 'a crate of crab', 500], ['📜', 'Fukuzawa\'s bonus envelope', 800], ['🎩', 'Chuuya\'s spare hat, pawned', 1200]] as [string, string, number][]) : null;
+    if (crate) store.pay(ctx.guildId, ctx.userId, crate[2]);
     const w = store.wallet(ctx.guildId, ctx.userId);
+    const week = Array.from({ length: 7 }, (_, i) => (i < ((r.streak - 1) % 7) + 1 ? '▰' : '▱')).join('');
     const extra = [
+      `${week} day ${((r.streak - 1) % 7) + 1} of 7${crate ? '' : ` · crate on day 7`}`,
+      ...(crate ? [`${crate[0]} **Day 7 crate:** ${crate[1]}, worth **+${fmt(crate[2])}**`] : []),
       ...track(store, ctx.guildId, ctx.userId, 'daily'),
       ...track(store, ctx.guildId, ctx.userId, 'dailyStreak', r.streak),
       ...track(store, ctx.guildId, ctx.userId, 'yen', w.yen),
     ];
-    return ctx.reply({ content: [`💴 **+${fmt(r.got)}** · day ${r.streak} in a row · you have **${fmt(w.yen)}**`, ...extra, `-# ${say('ecoDaily')}`].join('\n'), temp: !extra.length });
+    return ctx.reply({ content: [`💴 **+${fmt(r.got)}** · day ${r.streak} in a row · you have **${fmt(w.yen)}**`, ...extra, `-# ${say('ecoDaily')}`].join('\n'), temp: !crate });
   },
 };
 
@@ -79,18 +85,27 @@ const balance: Command = {
     const mine = id === ctx.userId;
     const ready = w.daily_day !== today();
     const next = Math.floor((Date.parse(`${today()}T00:00:00Z`) + 86_400_000) / 1000);
+    const vault = vaultOf(store, ctx.guildId, id).yen;
+    const worth = w.yen + vault;
+    const top = store.richest(ctx.guildId, 1000);
+    const place = top.findIndex((r) => r.user_id === id) + 1;
     const lines = [
-      `💴 ${mine ? 'You have' : `<@${id}> has`} **${fmt(w.yen)}**`,
+      `👛 Wallet **${fmt(w.yen)}**${vault ? ` · 🏦 Vault **${fmt(vault)}**` : ''}`,
+      `💎 Net worth **${fmt(worth)}**${place ? ` · #${place} richest here` : ''}`,
       w.streak ? `🔥 ${w.streak} day${w.streak === 1 ? '' : 's'} of daily in a row` : null,
       mine ? (ready ? '🎁 Your daily is **ready**' : `⏳ Next daily <t:${next}:R>`) : null,
+      mine ? `\n${choresLine(store, ctx.guildId, id)}` : null,
+      // a little character judgement on the bottom line
+      `-# ${worth >= 1_000_000 ? 'Mori would like a word about your tax situation.' : worth >= 100_000 ? 'Comfortable. The Guild might try to recruit you.' : worth >= 10_000 ? 'Doing well. Kunikida approves of the budgeting.' : worth >= 1000 ? 'Enough for crab tonight.' : 'Broke, like Dazai. At least you\'re in good company.'}`,
     ].filter(Boolean).join('\n');
     const btn = (cmd: string, emoji: string, label: string, on = false) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId}`).setEmoji(emoji).setLabel(label).setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary);
     const rows = [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
       ...(mine ? [btn('daily', '🎁', ready ? 'Claim daily' : 'Daily', ready)] : []),
       btn('rich', '🏆', 'Richest'),
+      ...(mine ? [btn('bank', '🏦', 'Vault')] : []),
       btn('roleshop.view', '🛍️', 'Role shop'),
     )];
-    return ctx.reply({ embeds: [card({ kind: 'help', title: 'Wallet', emoji: '👛', gif: 'off', body: lines })], components: rows });
+    return ctx.reply({ embeds: [card({ kind: 'help', title: mine ? 'Your ledger' : 'Ledger', emoji: '👛', gif: 'off', body: lines })], components: rows });
   },
 };
 
@@ -123,10 +138,14 @@ const rich: Command = {
   text: { aliases: ['baltop', 'richest'] },
   run: (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
-    const rows = store.richest(ctx.guildId);
     const medal = ['🥇', '🥈', '🥉'];
-    const body = rows.length ? rows.map((r, i) => `${medal[i] ?? `\`#${i + 1}\``} <@${r.user_id}> · **${fmt(r.yen)}**`).join('\n') : 'Everyone is broke. Very relatable.';
-    return ctx.reply({ embeds: [card({ kind: 'ecoTop', title: 'Deepest pockets', emoji: '💴', gif: 'off', body })] });
+    // vaults count too, the list is by everything someone owns
+    const all = store.richest(ctx.guildId, 1000).map((r) => ({ ...r, worth: r.yen + vaultOf(store, ctx.guildId!, r.user_id).yen })).sort((a, b) => b.worth - a.worth);
+    const me = all.findIndex((r) => r.user_id === ctx.userId);
+    const body = all.length ? all.slice(0, 10).map((r, i) => `${medal[i] ?? `\`#${i + 1}\``} <@${r.user_id}> · **${fmt(r.worth)}**${r.user_id === ctx.userId ? ' ← you' : ''}`).join('\n')
+      + (me >= 10 ? `\n⋯\n\`#${me + 1}\` <@${ctx.userId}> · **${fmt(all[me].worth)}** ← you\n-# ${fmt(all[me - 1].worth - all[me].worth)} more to pass #${me}` : '')
+      : 'Everyone is broke. Very relatable.';
+    return ctx.reply({ embeds: [card({ kind: 'ecoTop', title: 'Deepest pockets', emoji: '💴', gif: 'off', body: `${body}\n-# wallet plus vault` })] });
   },
 };
 

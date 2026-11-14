@@ -19,7 +19,7 @@ const LOSE = 0xc8283c;
 const PLAY = 0xc8a97e;
 
 // one cooldown per command per person per server, kept in the kv table so restarts don't reset it
-function waitLeft(store: Store, what: string, guild: string, user: string, seconds: number): number {
+export function waitLeft(store: Store, what: string, guild: string, user: string, seconds: number): number {
   const at = Number(store.getKv(`cd:${what}:${guild}:${user}`) ?? 0);
   return Math.max(0, at + seconds * 1000 - Date.now());
 }
@@ -146,7 +146,7 @@ const fish: Command = {
 };
 
 // ---------- the vault: yen in it can't be robbed, and it grows a little every day ----------
-const vaultOf = (store: Store, g: string, u: string) => {
+export const vaultOf = (store: Store, g: string, u: string) => {
   const raw = store.getKv(`bank:${g}:${u}`);
   const v = raw ? (JSON.parse(raw) as { yen: number; day: string }) : { yen: 0, day: new Date().toISOString().slice(0, 10) };
   // interest is added lazily, 1% a day up to ¥250 a day
@@ -501,3 +501,12 @@ export async function onHustle(store: Store, i: Interaction): Promise<boolean> {
 }
 
 export const hustleCommands = [work, crime, beg, fish, bank, rob, roulette, scratch, heist, rps];
+
+// what's ready to do again, for the wallet page
+export const CHORES: [string, string, string, number][] = [
+  ['work', '💼', 'shift', 3600], ['crime', '🖤', 'Mafia job', 7200], ['fish', '🎣', 'fishing', 1200], ['beg', '🥺', 'beg', 600], ['rob', '🫳', 'rob', 7200], ['heist', '🕶️', 'heist', 3600],
+];
+export const choresLine = (store: Store, g: string, u: string) => CHORES.map(([k, e, l, s]) => {
+  const left = waitLeft(store, k, g, u, s);
+  return left ? `${e} ${l} <t:${Math.floor((Date.now() + left) / 1000)}:R>` : `${e} **${l} ready**`;
+}).join(' · ');
