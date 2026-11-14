@@ -1,4 +1,4 @@
-import { ActionRowBuilder, AttachmentBuilder, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder, type Interaction, type MessageActionRowComponentBuilder } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder, type Interaction, type MessageActionRowComponentBuilder } from 'discord.js';
 import { medalSheet, tierName, tierOf } from '../features/medals.js';
 import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
@@ -208,14 +208,12 @@ export const achievements: Command = {
       }).join('\n').slice(0, 1024),
       inline: false,
     }));
-    const shown = shownOf(store, ctx.guildId, id, tierOf);
-    const rows = [];
-    if (mine && have.length) rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      new StringSelectMenuBuilder().setCustomId(`achpick|${ctx.userId}`).setPlaceholder('🎖️ Pick up to 6 for your profile card').setMinValues(0).setMaxValues(Math.min(6, have.length))
-        .addOptions(BADGES.filter((b) => have.includes(b.id)).slice(0, 25).map((b) => ({ label: b.name, value: b.id, emoji: b.emoji, description: `${tierName[tierOf(b.id)]} · ${b.how}`.slice(0, 100), default: shown.includes(b.id) }))),
-    ));
+    // back to the profile card this page was opened from
+    const rows = [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`nav|profile|owner=${ctx.userId},sub=view,user=${id}`).setLabel('Back to profile').setEmoji('🪪').setStyle(ButtonStyle.Secondary),
+    )];
     const e = card({ kind: 'help', title: mine ? 'Your achievements' : `${member?.displayName ?? 'Their'} achievements`, emoji: '🎖️', gif: 'off', line: '',
-      body: `**${have.length} of ${BADGES.length}** earned. Bronze, silver, gold, and purple relics for the rare ones.${mine && have.length ? '\nPick which ones show on your profile card with the menu below.' : ''}`, fields })
+      body: `**${have.length} of ${BADGES.length}** earned. Bronze, silver, gold, and purple relics for the rare ones.`, fields })
       .setImage('attachment://achievements.png');
     return ctx.reply({ embeds: [e], files: [new AttachmentBuilder(png, { name: 'achievements.png' })], components: rows });
   },

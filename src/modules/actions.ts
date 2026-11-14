@@ -209,11 +209,15 @@ const bonds: Command = {
     const id = ctx.user('user') ?? ctx.userId;
     const list = bondsOf(store, ctx.guildId, id).slice(0, 8);
     const name = id === ctx.userId ? 'Your' : `<@${id}>'s`;
-    if (!list.length) return ctx.reply({ content: `${id === ctx.userId ? 'You haven\'t' : 'They haven\'t'} hugged or bonked anyone here yet. Start with \`tz hug @someone\`.`, temp: true });
+    // opened from a profile card, it leads back there
+    const back = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`nav|profile|owner=${ctx.userId},sub=view,user=${id}`).setLabel('Back to profile').setEmoji('🪪').setStyle(ButtonStyle.Secondary),
+    );
+    if (!list.length) return ctx.reply({ content: `${id === ctx.userId ? 'You haven\'t' : 'They haven\'t'} hugged or bonked anyone here yet. Start with \`tz hug @someone\`.`, components: [back], files: [], embeds: [] });
     const medal = ['🥇', '🥈', '🥉'];
     const e = new EmbedBuilder().setColor(0xc8283c).setTitle(`${id === ctx.userId ? 'Your' : 'Their'} closest people here`)
       .setDescription(`${name} file, by every hug, pat and bonk both ways.\n\n${list.map((b, n) => `${medal[n] ?? `\`${n + 1}.\``} <@${b.id}> · **${b.n}** · mostly ${acts[b.top]?.emoji ?? ''} ${b.top}`).join('\n')}`);
-    return ctx.reply({ embeds: [e], public: true });
+    return ctx.reply({ embeds: [e], components: [back], files: [], public: true });
   },
 };
 

@@ -1,5 +1,4 @@
-import { BADGES, badgesOf, shownOf } from './missions.js';
-import { tierOf } from '../features/medals.js';
+import { BADGES, badgesOf } from './missions.js';
 import {
   ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, MessageFlags, ModalBuilder, SlashCommandBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle,
   type Interaction, type MessageActionRowComponentBuilder,
@@ -8,7 +7,7 @@ import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
 import { card } from '../theme.js';
 import { fetchAvatar, profileCard, type Fav } from '../features/rankcard.js';
-import { levelOf, rankFor, ranks } from './levels.js';
+import { levelOf, rankFor } from './levels.js';
 import { toldHere, fmtDate } from './birthdays.js';
 import { bondsOf } from './actions.js';
 import { currentSeason, searchMedia, titleOf, topMedia, type Media } from '../anime/anilist.js';
@@ -144,8 +143,7 @@ export async function drawProfile(store: Store, id: string, guildId: string | nu
     const lv = levelOf(store.xpOf(guildId, id).xp);
     const l = lv.level;
     title = rankFor(l).name;
-    const nextRank = ranks.find((r) => r.at > l);
-    progress = { into: lv.into, need: lv.need, next: nextRank ? `${nextRank.name} at ${nextRank.at}` : null };
+    progress = { into: lv.into, need: lv.need, next: null };
     if (show.has('level')) chips.push({ label: 'Level', value: String(l) });
   }
   if (show.has('yen') && guildId && store.rules(guildId, 'economy').enabled) chips.push({ label: 'Yen', value: `¥${store.wallet(guildId, id).yen.toLocaleString()}` });
@@ -158,12 +156,12 @@ export async function drawProfile(store: Store, id: string, guildId: string | nu
   if (show.has('anime') && p.anime) favs.push({ label: 'Anime', name: p.anime, image: p.animeCover, color: p.animeColor, kind: 'cover' });
   if (show.has('manga') && p.manga) favs.push({ label: 'Manga', name: p.manga, image: p.mangaCover, color: p.mangaColor, kind: 'cover' });
   const done = store.watchlist(id, 'completed').length;
+  // the medal count goes on the card as a chip, the medals themselves have their own page
   const have = guildId ? badgesOf(store, guildId, id) : [];
+  if (guildId && have.length) chips.push({ label: 'Medals', value: `${have.length}/${BADGES.length}` });
   if (show.has('done') && done) chips.push({ label: 'Anime done', value: String(done) });
   return profileCard({
     name: m?.displayName ?? 'Agent', handle: m?.user.username ?? id, title, bio: p.bio ?? null, chips, accent: p.color, favs, progress,
-    medals: guildId ? shownOf(store, guildId, id, tierOf).map((x) => ({ id: x, earned: true, name: BADGES.find((b) => b.id === x)?.name ?? x })) : undefined,
-    medalCount: guildId ? { won: have.length, total: BADGES.length } : undefined,
     avatar: m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null,
   });
 }
@@ -294,6 +292,12 @@ export const profile: Command = {
     const png = await drawProfile(store, id, ctx.guildId, m);
     // the three people they trade the most hugs and bonks with, as a line under the picture
     const close = ctx.guildId ? bondsOf(store, ctx.guildId, id).slice(0, 3) : [];
-    return ctx.reply({ content: close.length ? `-# Closest here: ${close.map((b) => `<@${b.id}> (${b.n})`).join(' · ')} · \`tz bonds\`` : undefined, files: [new AttachmentBuilder(png, { name: 'profile.png' })] });
+    // the medals, bonds and editing open from buttons under the card, in the same message
+    const btn = (cmd: string, label: string, emoji: string, extra = '') => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId}${extra}`).setLabel(label).setEmoji(emoji).setStyle(ButtonStyle.Secondary);
+    const buttons = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      ...(ctx.guildId ? [btn('achievements', 'Medals', '🏅', `,user=${id}`), btn('bonds', 'Closest people', '🤝', `,user=${id}`)] : []),
+      ...(id === ctx.userId ? [btn('profile', 'Edit', '📝', ',sub=edit')] : []),
+    );
+    return ctx.reply({ content: close.length ? `-# Closest here: ${close.map((b) => `<@${b.id}> (${b.n})`).join(' · ')}` : undefined, files: [new AttachmentBuilder(png, { name: 'profile.png' })], components: buttons.components.length ? [buttons] : [], embeds: [] });
   },
 };
