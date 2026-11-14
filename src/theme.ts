@@ -1,3 +1,4 @@
+import { polishEmbed } from './core/icons.js';
 import { EmbedBuilder } from 'discord.js';
 import { cached, momentOf, pickDefault } from './gifs.js';
 
@@ -385,7 +386,7 @@ export function card(o: CardOptions): EmbedBuilder {
   // clean by default: a title, the content, one quiet line at the bottom
   const e = new EmbedBuilder()
     .setColor(o.color ?? COLOR)
-    .setTitle(`${o.emoji ? `${o.emoji}  ` : ''}${o.title}`.slice(0, 256));
+    .setTitle(o.title.slice(0, 256));
   // the content leads, Dazai's line sits quietly in the footer, an empty line means none at all
   const flavour = o.line === '' ? '' : (o.line ? fillVars(o.line, o.vars) : say(o.kind, o.vars));
   e.setDescription((o.body ? o.body : flavour ? `*${flavour}*` : '\u200b').slice(0, 4096))
@@ -395,6 +396,7 @@ export function card(o: CardOptions): EmbedBuilder {
     if (f.value) e.addFields({ name: f.name.slice(0, 256), value: f.value.slice(0, 1024), inline: f.inline });
   }
   // a server's own pick wins, "off" hides it, otherwise the default for that moment
+  polishEmbed(e);
   const gif = o.gif === 'off' ? null : cached(o.gif ?? null) ?? (o.gif === undefined || o.gif === null ? cached(pickDefault(momentOf[o.kind] ?? '')) : null);
   if (gif) e.setImage(gif);
   return e;

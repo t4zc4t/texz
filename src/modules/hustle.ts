@@ -5,15 +5,16 @@ import {
 import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
 import { levelOf, rankFor, ranks } from './levels.js';
+import { polishEmbed, polishRows } from '../core/icons.js';
 
 // ways to earn and lose yen besides the daily: shifts at the Agency, Port Mafia jobs, the river, the vault,
 // robbing each other, roulette, scratch cards, crew heists and rock paper scissors. Buttons edit their own message.
 
 const fmt = (n: number) => `¥${n.toLocaleString()}`;
-const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
+const row = (...c: MessageActionRowComponentBuilder[]) => polishRows([new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c)] as never[])[0] as ActionRowBuilder<MessageActionRowComponentBuilder>;
 const pick = <T>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 const between = (lo: number, hi: number) => lo + Math.floor(Math.random() * (hi - lo + 1));
-const card = (title: string, body: string, colour: number) => new EmbedBuilder().setColor(colour).setTitle(title).setDescription(body);
+const card = (title: string, body: string, colour: number) => polishEmbed(new EmbedBuilder().setColor(colour).setTitle(title).setDescription(body));
 const WIN = 0x3fa76a;
 const LOSE = 0xc8283c;
 const PLAY = 0xc8a97e;
@@ -309,7 +310,8 @@ function ticketView(t: Ticket, key: string, end: 'won' | 'lost' | 'expired' | nu
     : end === 'expired' ? `⌛ **Ticket expired.** The silver ink dried before you finished, the bar keeps your **${fmt(PRICE)}**.${t.win ? ` There were three ${t.win} under there worth ${fmt(pay)}.` : ''}`
     : `Tap the cells to scratch them, three alike wins.\n**${left}** left to scratch · expires <t:${Math.floor((t.at + TICKET_LIFE) / 1000)}:R>`;
   const e = card('🎟️ Lupin Lucky Three', `${line}\n-# 🍙2× 🦀3× 🔔5× 💎20× 🖤100× the ticket price · ${fmt(PRICE)} a ticket`, end === 'won' ? WIN : end === 'expired' ? LOSE : PLAY);
-  const rows = [0, 1, 2].map((r) => row(...[0, 1, 2].map((c) => {
+  // the cells keep their real symbols, so they match the prize list
+  const rows = [0, 1, 2].map((r) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...[0, 1, 2].map((c) => {
     const i = r * 3 + c;
     const shown = t.open[i] || end !== null;
     const b = new ButtonBuilder().setCustomId(`sc|${key}|${i}`);

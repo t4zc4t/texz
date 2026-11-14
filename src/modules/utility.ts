@@ -13,6 +13,8 @@ import { guess } from './anime.js';
 import { crestQuiz } from './f1quiz.js';
 import { quote } from './quote.js';
 import { achievements, mission } from './missions.js';
+import { coinArt } from '../features/coinart.js';
+import { icEmoji, polishEmbed, polishRows } from '../core/icons.js';
 
 const unix = (ms: number) => Math.floor(ms / 1000);
 
@@ -285,7 +287,7 @@ export async function onPollButton(store: Store, i: Interaction) {
 
 // ---------- the little games: each one plays out in its own message and buttons edit it in place ----------
 
-const g = (...c: ButtonBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
+const g = (...c: ButtonBuilder[]) => polishRows([new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c)] as never[])[0] as ActionRowBuilder<MessageActionRowComponentBuilder>;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // a slash reply hands back an interaction response, a typed one the message itself
 const messageOf = (sent: unknown): Message | null => {
@@ -319,7 +321,7 @@ const ballCard = (q: string, v: (typeof VERDICTS)[number] | null, again = 0) => 
   const e = new EmbedBuilder().setTitle('🎱 Ranpo\'s deduction').setColor(v ? TONE[v[1]][0] : 0x2a211b);
   const nag = ['', '\n-# I already told you. The answer doesn\'t change because you blink.', '\n-# Asking twice won\'t change it. Asking three times is just rude.', '\n-# Fine. Same answer. It\'s the same all day, you know.'];
   e.setDescription(`> *${q.slice(0, 200)}*\n\n${v ? `**${TONE[v[1]][1]}** · ${v[0]}${nag[Math.min(again, 3)]}` : '*Ranpo squints at the glasses... the sweets... the evidence...*'}`);
-  return e;
+  return polishEmbed(e);
 };
 const eightball: Command = {
   name: '8ball',
@@ -341,23 +343,28 @@ const eightball: Command = {
   },
 };
 
-// coin: call it first and it keeps your record, or just flip
-const coinFace = (side: 'Heads' | 'Tails') => (side === 'Heads' ? '🌕' : '🌑');
+// coin: the Lupin coin, Agency on heads and Port Mafia on tails. Call it first and it keeps your record, or just flip
 function coinView(owner: string, result: 'Heads' | 'Tails' | null, call: string | null, rec: { w: number; l: number; streak: number }) {
-  const e = new EmbedBuilder().setTitle('🪙 Coin flip').setColor(0xc8a97e);
-  if (!result) e.setDescription('Call it in the air, or just flip.\n-# calling keeps a record of how good your guesses are');
+  const e = new EmbedBuilder().setTitle('The Lupin coin').setColor(0xc8a97e).setImage(`attachment://${result ? result.toLowerCase() : 'heads'}.png`);
+  if (!result) e.setDescription('Heads for the Agency, tails for the Port Mafia. Call it, or just flip.\n-# calling keeps a record of how good your guesses are');
   else {
     const hit = call ? call === result : null;
     e.setColor(hit === null ? 0xc8a97e : hit ? 0x3fa76a : 0xc8283c)
-      .setDescription(`# ${coinFace(result)} ${result}\n${hit === null ? say('coin') : hit ? `You called it. ${rec.streak > 1 ? `**${rec.streak} in a row.**` : ''}` : 'Wrong call. The coin feels nothing.'}${call ? `\n-# your calls: ${rec.w} right, ${rec.l} wrong` : ''}`);
+      .setDescription(`## ${result} · ${result === 'Heads' ? 'the Agency' : 'the Port Mafia'}\n${hit === null ? say('coin') : hit ? `You called it.${rec.streak > 1 ? ` **${rec.streak} in a row.**` : ''}` : 'Wrong call. The coin feels nothing.'}${call ? `\n-# your calls: ${rec.w} right, ${rec.l} wrong` : ''}`);
   }
-  const b = (id: string, label: string, emoji: string) => new ButtonBuilder().setCustomId(`gc|${owner}|${id}`).setLabel(label).setEmoji(emoji).setStyle(ButtonStyle.Secondary);
-  return { embeds: [e], components: [g(b('Heads', 'Heads', '🌕'), b('Tails', 'Tails', '🌑'), b('none', result ? 'Flip again' : 'Just flip', '🪙'))] };
+  const b = (id: string, label: string, icon: string) => new ButtonBuilder().setCustomId(`gc|${owner}|${id}`).setLabel(label).setEmoji(icEmoji(icon) ?? '🪙').setStyle(ButtonStyle.Secondary);
+  const art = coinArt();
+  const side = result ?? 'Heads';
+  return {
+    embeds: [polishEmbed(e)],
+    components: [g(b('Heads', 'Call heads', 'shield'), b('Tails', 'Call tails', 'moon'), b('none', result ? 'Flip again' : 'Just flip', 'coin'))],
+    files: [new AttachmentBuilder(art.still[side], { name: `${side.toLowerCase()}.png` })],
+  };
 }
 const coin: Command = {
   name: 'coin',
   group: 'games',
-  data: new SlashCommandBuilder().setName('coin').setDescription('Flip a coin, call it first to keep a record').toJSON(),
+  data: new SlashCommandBuilder().setName('coin').setDescription('Flip the Lupin coin, call it first to keep a record').toJSON(),
   text: { aliases: ['flip', 'cf'] },
   run: (ctx, store) => ctx.reply({ ...coinView(ctx.userId, null, null, coinRecord(store, ctx.userId)), public: true }),
 };
@@ -394,7 +401,7 @@ function diceView(owner: string, raw: string) {
   const e = new EmbedBuilder().setTitle(`🎲 ${r.label}`).setColor(nat === 20 ? 0x3fa76a : nat === 1 ? 0xc8283c : 0xc8a97e)
     .setDescription(`# ${r.total}\n${r.rolls.map(face).join(' ')}${r.mod ? ` ${r.mod > 0 ? '+' : '−'} ${Math.abs(r.mod)}` : ''}${r.other ? `\n-# the other roll: ${r.other.map(face).join(' ')} · ${r.adv === 'adv' ? 'advantage keeps the higher' : 'disadvantage keeps the lower'}` : ''}\n${flavour}`);
   const again = new ButtonBuilder().setCustomId(`gr|${owner}|${raw.slice(0, 60)}`).setLabel('Roll again').setEmoji('🎲').setStyle(ButtonStyle.Secondary);
-  return { embeds: [e], components: [g(again)] };
+  return { embeds: [polishEmbed(e)], components: [g(again)] };
 }
 const roll: Command = {
   name: 'roll',
@@ -415,7 +422,7 @@ function chooseView(owner: string, options: string[], out: Set<number>, done: bo
   const e = new EmbedBuilder().setTitle(done ? '📓 The ideal is decided' : '📓 Kunikida consults the notebook').setColor(done ? 0x3fa76a : 0xc8a97e)
     .setDescription(`${lines.join('\n')}${done ? `\n\n${say('choose')}` : ''}`);
   const again = new ButtonBuilder().setCustomId(`gch|${owner}`).setLabel('Decide again').setEmoji('📓').setStyle(ButtonStyle.Secondary);
-  return { embeds: [e], components: done ? [g(again)] : [] };
+  return { embeds: [polishEmbed(e)], components: done ? [g(again)] : [] };
 }
 async function playChoose(edit: (v: ReturnType<typeof chooseView>) => Promise<unknown>, owner: string, options: string[]) {
   const out = new Set<number>();
@@ -458,17 +465,19 @@ export async function onGames(store: Store, i: Interaction): Promise<boolean> {
     return true;
   }
   if (kind === 'gc') {
-    // a quick spin in the air before it lands
-    await i.update({ embeds: [new EmbedBuilder().setTitle('🪙 Coin flip').setColor(0xc8a97e).setDescription(`# 🪙 ...\n${arg === 'none' ? 'Up it goes.' : `You called **${arg}**. Up it goes.`}`)], components: [] });
-    await wait(1100);
+    // the toss plays out, then the coin settles on the counter
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
+    const air = new EmbedBuilder().setTitle('The Lupin coin').setColor(0xc8a97e).setImage('attachment://toss.gif')
+      .setDescription(arg === 'none' ? 'Up it goes...' : `You called **${arg.toLowerCase()}**. Up it goes...`);
+    await i.update({ embeds: [air], components: [], files: [new AttachmentBuilder(coinArt().toss[result], { name: 'toss.gif' })], attachments: [] });
+    await wait(1700);
     const rec = coinRecord(store, owner);
     const call = arg === 'none' ? null : arg;
     if (call) {
       if (call === result) { rec.w++; rec.streak++; } else { rec.l++; rec.streak = 0; }
       store.setKv(`coincall:${owner}`, JSON.stringify(rec));
     }
-    await i.editReply(coinView(owner, result, call, rec)).catch(() => {});
+    await i.editReply({ ...coinView(owner, result, call, rec), attachments: [] }).catch(() => {});
     return true;
   }
   if (kind === 'gr') {

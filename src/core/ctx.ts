@@ -1,3 +1,4 @@
+import { polishEmbed, polishRows, polishText } from './icons.js';
 import {
   type Client,
   ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits, type MessageActionRowComponentBuilder,
@@ -43,6 +44,15 @@ export interface Ctx {
 }
 
 function normalise(r: Reply) {
+  const n = shape(r);
+  // every reply gets the clean look: icons in place of stock emoji, no emoji in titles
+  n.embeds.forEach((e) => e instanceof EmbedBuilder && polishEmbed(e));
+  if (n.content) n.content = polishText(n.content);
+  polishRows(n.components as never[]);
+  return n;
+}
+
+function shape(r: Reply) {
   const files = [] as AttachmentBuilder[];
   if (typeof r === 'string') return { content: r, embeds: [] as EmbedBuilder[], public: false, temp: true, ping: [] as string[], components: [] as Row[], files };
   if (r instanceof EmbedBuilder) return { content: undefined, embeds: [r], public: false, temp: false, ping: [] as string[], components: [] as Row[], files };

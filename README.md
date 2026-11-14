@@ -157,3 +157,5 @@ The OwO tests use replies copied from real screens. OwO changes its layout now a
 ## License
 
 MIT
+
+Texz's own emoji set is drawn from [Lucide](https://lucide.dev) icons (ISC, see `assets/icons/LICENSE-lucide.txt`) in the Agency colours. It uploads them as the app's emojis on start and uses them in place of stock ones.

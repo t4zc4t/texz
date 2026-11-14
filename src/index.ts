@@ -28,6 +28,7 @@ import { onQuote, QUOTE_MENU, startQuoteOfWeek } from './modules/quote.js';
 import { settleAll, settleGuild } from './core/settle.js';
 import { cleanBooths, watchBooths } from './modules/booth.js';
 import { watchVoiceBans } from './modules/voicemod.js';
+import { syncIcons } from './core/icons.js';
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) throw new Error('DISCORD_TOKEN is missing, copy .env.example to .env and fill it in');
@@ -50,6 +51,7 @@ const client = new Client({
 });
 
 client.once(Events.ClientReady, (c) => {
+  void syncIcons(c);
   console.log(`texz online as ${c.user.tag}`);
   look.avatar = c.user.displayAvatarURL();
   // new servers start switched off, the home server keeps everything
