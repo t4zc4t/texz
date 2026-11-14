@@ -3,13 +3,37 @@ import gifenc from 'gifenc';
 import { fileURLToPath } from 'node:url';
 
 // the Lupin coin: the Agency on one side, the Port Mafia on the other, tossed on the bar counter
-const { GIFEncoder, applyPalette, quantize } = gifenc;
+const { GIFEncoder, quantize } = gifenc;
+
+// every pixel to its nearest palette colour, remembered across frames so a colour never changes between frames
+function mapper(palette: number[][]) {
+  const seen = new Map<number, number>();
+  return (px: Uint8ClampedArray) => {
+    const out = new Uint8Array(px.length / 4);
+    for (let i = 0, j = 0; i < px.length; i += 4, j++) {
+      const key = (px[i] << 16) | (px[i + 1] << 8) | px[i + 2];
+      let best = seen.get(key);
+      if (best === undefined) {
+        let d = Infinity;
+        best = 0;
+        for (let k = 0; k < palette.length; k++) {
+          const c = palette[k];
+          const e = (c[0] - px[i]) ** 2 + (c[1] - px[i + 1]) ** 2 + (c[2] - px[i + 2]) ** 2;
+          if (e < d) { d = e; best = k; }
+        }
+        seen.set(key, best);
+      }
+      out[j] = best;
+    }
+    return out;
+  };
+}
 const fontDir = fileURLToPath(new URL('../../assets/fonts/', import.meta.url));
 GlobalFonts.registerFromPath(`${fontDir}cinzel-latin-700-normal.woff2`, 'Coin Serif');
 
-const W = 320;
-const H = 240;
-const R = 54;
+const W = 360;
+const H = 260;
+const R = 56;
 const INK = '#141010';
 const PANEL = '#1C1716';
 
@@ -64,54 +88,118 @@ function face(ctx: SKRSContext2D, side: Side) {
   }
 }
 
-function scene(ctx: SKRSContext2D, side: Side, squash: number, lift: number, spin: number) {
+// the counter, the coin at height `lift`, turned `turn` radians about its flip axis, tilted `tilt`
+function scene(ctx: SKRSContext2D, faces: Record<Side, CanvasImage>, side: Side, turn: number, lift: number, tilt: number) {
   ctx.fillStyle = INK;
   ctx.fillRect(0, 0, W, H);
-  // the counter
+  // the counter, polished wood with a red edge
+  const top = H - 54;
   ctx.fillStyle = PANEL;
-  ctx.fillRect(0, H - 52, W, 52);
+  ctx.fillRect(0, top, W, H - top);
   ctx.fillStyle = '#c8283c';
-  ctx.fillRect(0, H - 52, W, 2);
-  // shadow shrinks while the coin is up
-  const sh = 1 - Math.min(1, lift / 78) * 0.6;
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.beginPath(); ctx.ellipse(W / 2, H - 34, R * sh, 9 * sh, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.save();
-  ctx.translate(W / 2, H - 34 - R * 0.95 - lift);
-  ctx.rotate(spin);
-  ctx.scale(1, Math.max(0.04, Math.abs(squash)));
-  if (Math.abs(squash) < 0.12) {
-    // edge on: just the rim
-    ctx.fillStyle = '#7a5a2e';
-    ctx.fillRect(-R, -R, R * 2, R * 2);
-  } else face(ctx, side);
-  ctx.restore();
+  ctx.fillRect(0, top, W, 2);
+  const rest = top + 22;
+  // the shadow tightens as the coin comes down
+  const k = 1 - Math.min(1, lift / 90) * 0.65;
+  ctx.fillStyle = `rgba(0,0,0,${0.25 + 0.4 * k})`;
+  ctx.beginPath(); ctx.ellipse(W / 2, rest + 2, R * k, 8 * k, 0, 0, Math.PI * 2); ctx.fill();
+  const drawCoin = (t: number, l: number, alpha: number) => {
+    const c = Math.cos(t);
+    const h = Math.abs(c);
+    const showing: Side = c >= 0 ? side : side === 'Heads' ? 'Tails' : 'Heads';
+    // a coin lying flat sits on its edge's bottom, a flipping one spins about its middle
+    const cy = rest - R * 0.92 - l;
+    const thick = 7 * Math.sqrt(Math.max(0, 1 - h * h));
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(W / 2, cy);
+    ctx.rotate(tilt);
+    // the milled edge shows as a band when the coin is turned
+    if (thick > 0.6) {
+      ctx.fillStyle = showing === 'Tails' ? '#5a0c14' : '#7a5a2e';
+      ctx.beginPath(); ctx.ellipse(0, thick, R, R * h, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillRect(-R, 0, R * 2, thick);
+      ctx.strokeStyle = showing === 'Tails' ? '#3a0509' : '#5a3f1c';
+      ctx.lineWidth = 1;
+      for (let x = -R + 3; x < R; x += 5) { ctx.beginPath(); ctx.moveTo(x, 1); ctx.lineTo(x, thick); ctx.stroke(); }
+    }
+    ctx.scale(1, Math.max(0.03, h));
+    ctx.drawImage(faces[showing], -R, -R, R * 2, R * 2);
+    // light runs across the face as it turns
+    ctx.globalCompositeOperation = 'source-atop';
+    const sheen = ctx.createLinearGradient(-R, -R, R, R);
+    const at = (Math.sin(t * 2) + 1) / 2;
+    sheen.addColorStop(Math.max(0, at - 0.15), 'rgba(255,255,255,0)');
+    sheen.addColorStop(at, `rgba(255,248,230,${0.35 * h})`);
+    sheen.addColorStop(Math.min(1, at + 0.15), 'rgba(255,255,255,0)');
+    ctx.fillStyle = sheen;
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+    // and it darkens edge on
+    ctx.fillStyle = `rgba(0,0,0,${0.45 * (1 - h)})`;
+    ctx.fill();
+    ctx.restore();
+  };
+  drawCoin(turn, lift, 1);
 }
 
-const still = (side: Side) => {
+type CanvasImage = Awaited<ReturnType<typeof faceImage>>;
+async function faceImage(side: Side) {
+  const c = createCanvas(R * 2, R * 2);
+  const ctx = c.getContext('2d');
+  ctx.translate(R, R);
+  face(ctx, side);
+  const { loadImage } = await import('@napi-rs/canvas');
+  return loadImage(c.toBuffer('image/png'));
+}
+
+function frames(faces: Record<Side, CanvasImage>, side: Side): Uint8ClampedArray[] {
+  const out: Uint8ClampedArray[] = [];
+  const shot = (turn: number, lift: number, tilt: number) => {
+    const c = createCanvas(W, H);
+    const ctx = c.getContext('2d');
+    scene(ctx, faces, side, turn, lift, tilt);
+    // copied, the canvas memory goes away with the canvas
+    out.push(new Uint8ClampedArray(ctx.getImageData(0, 0, W, H).data));
+  };
+  // resting on the other face, so the first frame gives nothing away, then a thumb flick
+  const start = Math.PI;
+  for (let i = 0; i < 3; i++) shot(start, 0, 0);
+  // up and down: nine half turns, fast off the thumb, slowing as it falls
+  const air = 34;
+  const spins = 9 * Math.PI;
+  const end = start + spins;
+  for (let f = 1; f <= air; f++) {
+    const t = f / air;
+    const lift = Math.sin(t * Math.PI) * 92;
+    const turn = start + spins * (1 - (1 - t) ** 1.6);
+    shot(turn, lift, Math.sin(t * Math.PI * 2) * 0.08);
+  }
+  // it lands, hops once, then rocks to a stop
+  const hop = 8;
+  for (let f = 1; f <= hop; f++) {
+    const t = f / hop;
+    shot(end + Math.sin(t * Math.PI) * 0.5, Math.sin(t * Math.PI) * 14, Math.sin(t * Math.PI * 3) * 0.06 * (1 - t));
+  }
+  for (let f = 1; f <= 8; f++) {
+    const fade = 1 - f / 8;
+    shot(end + Math.sin(f * 1.6) * 0.35 * fade, 0, Math.sin(f * 1.3) * 0.05 * fade);
+  }
+  return out;
+}
+
+const still = (faces: Record<Side, CanvasImage>, side: Side) => {
   const c = createCanvas(W, H);
-  scene(c.getContext('2d'), side, 1, 0, 0);
+  scene(c.getContext('2d'), faces, side, 0, 0, 0);
   return c.toBuffer('image/png');
 };
 
-// a toss: up, eight half turns, down, landing on `side`
-function toss(side: Side): Buffer {
-  const frames = 30;
+function toss(faces: Record<Side, CanvasImage>, side: Side): Buffer {
+  const shots = frames(faces, side);
   const enc = GIFEncoder();
-  const shots: Uint8ClampedArray[] = [];
-  for (let f = 0; f <= frames; f++) {
-    const t = f / frames;
-    const lift = Math.sin(t * Math.PI) * 78;
-    const turns = 8 * Math.PI * (1 - (1 - t) ** 2);
-    // the face showing flips every half turn, ending on the right one
-    const showing: Side = Math.floor(turns / Math.PI) % 2 === 0 ? side : side === 'Heads' ? 'Tails' : 'Heads';
-    const c = createCanvas(W, H);
-    const ctx = c.getContext('2d');
-    scene(ctx, showing, Math.cos(turns), lift, Math.sin(t * Math.PI) * 0.4);
-    shots.push(ctx.getImageData(0, 0, W, H).data);
-  }
-  const palette = quantize(shots[Math.floor(frames / 2)].length ? concat([shots[0], shots[8], shots[frames]]) : shots[0], 128);
-  shots.forEach((px, i) => enc.writeFrame(applyPalette(px, palette), W, H, { palette, delay: i === shots.length - 1 ? 1500 : 40, repeat: -1 }));
+  // one palette from frames across the whole toss keeps the colours steady
+  const palette = quantize(concat([shots[0], shots[10], shots[20], shots[30], shots[shots.length - 1]]), 256);
+  const map = mapper(palette);
+  shots.forEach((px, i) => enc.writeFrame(map(px), W, H, { palette, delay: i === shots.length - 1 ? 2000 : i < 3 ? 60 : 30, repeat: -1 }));
   enc.finish();
   return Buffer.from(enc.bytes());
 }
@@ -122,9 +210,12 @@ const concat = (parts: Uint8ClampedArray[]) => {
   return out;
 };
 
-// drawn once, the first time someone flips
+// drawn once at start, ready for the first flip
 let made: { still: Record<Side, Buffer>; toss: Record<Side, Buffer> } | null = null;
-export function coinArt() {
-  made ??= { still: { Heads: still('Heads'), Tails: still('Tails') }, toss: { Heads: toss('Heads'), Tails: toss('Tails') } };
+export async function prepareCoin() {
+  if (made) return made;
+  const faces = { Heads: await faceImage('Heads'), Tails: await faceImage('Tails') };
+  made = { still: { Heads: still(faces, 'Heads'), Tails: still(faces, 'Tails') }, toss: { Heads: toss(faces, 'Heads'), Tails: toss(faces, 'Tails') } };
   return made;
 }
+export const coinArt = () => made;

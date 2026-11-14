@@ -13,7 +13,7 @@ import { guess } from './anime.js';
 import { crestQuiz } from './f1quiz.js';
 import { quote } from './quote.js';
 import { achievements, mission } from './missions.js';
-import { coinArt } from '../features/coinart.js';
+import { prepareCoin } from '../features/coinart.js';
 import { icEmoji, polishEmbed, polishRows } from '../core/icons.js';
 
 const unix = (ms: number) => Math.floor(ms / 1000);
@@ -344,7 +344,7 @@ const eightball: Command = {
 };
 
 // coin: the Lupin coin, Agency on heads and Port Mafia on tails. Call it first and it keeps your record, or just flip
-function coinView(owner: string, result: 'Heads' | 'Tails' | null, call: string | null, rec: { w: number; l: number; streak: number }) {
+function coinView(art: Awaited<ReturnType<typeof prepareCoin>>, owner: string, result: 'Heads' | 'Tails' | null, call: string | null, rec: { w: number; l: number; streak: number }) {
   const e = new EmbedBuilder().setTitle('The Lupin coin').setColor(0xc8a97e).setImage(`attachment://${result ? result.toLowerCase() : 'heads'}.png`);
   if (!result) e.setDescription('Heads for the Agency, tails for the Port Mafia. Call it, or just flip.\n-# calling keeps a record of how good your guesses are');
   else {
@@ -353,7 +353,6 @@ function coinView(owner: string, result: 'Heads' | 'Tails' | null, call: string 
       .setDescription(`## ${result} · ${result === 'Heads' ? 'the Agency' : 'the Port Mafia'}\n${hit === null ? say('coin') : hit ? `You called it.${rec.streak > 1 ? ` **${rec.streak} in a row.**` : ''}` : 'Wrong call. The coin feels nothing.'}${call ? `\n-# your calls: ${rec.w} right, ${rec.l} wrong` : ''}`);
   }
   const b = (id: string, label: string, icon: string) => new ButtonBuilder().setCustomId(`gc|${owner}|${id}`).setLabel(label).setEmoji(icEmoji(icon) ?? '🪙').setStyle(ButtonStyle.Secondary);
-  const art = coinArt();
   const side = result ?? 'Heads';
   return {
     embeds: [polishEmbed(e)],
@@ -366,7 +365,7 @@ const coin: Command = {
   group: 'games',
   data: new SlashCommandBuilder().setName('coin').setDescription('Flip the Lupin coin, call it first to keep a record').toJSON(),
   text: { aliases: ['flip', 'cf'] },
-  run: (ctx, store) => ctx.reply({ ...coinView(ctx.userId, null, null, coinRecord(store, ctx.userId)), public: true }),
+  run: async (ctx, store) => ctx.reply({ ...coinView(await prepareCoin(), ctx.userId, null, null, coinRecord(store, ctx.userId)), public: true }),
 };
 const coinRecord = (store: Store, u: string) => ({ w: 0, l: 0, streak: 0, ...JSON.parse(store.getKv(`coincall:${u}`) ?? '{}') }) as { w: number; l: number; streak: number };
 
@@ -469,15 +468,15 @@ export async function onGames(store: Store, i: Interaction): Promise<boolean> {
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
     const air = new EmbedBuilder().setTitle('The Lupin coin').setColor(0xc8a97e).setImage('attachment://toss.gif')
       .setDescription(arg === 'none' ? 'Up it goes...' : `You called **${arg.toLowerCase()}**. Up it goes...`);
-    await i.update({ embeds: [air], components: [], files: [new AttachmentBuilder(coinArt().toss[result], { name: 'toss.gif' })], attachments: [] });
-    await wait(1700);
+    await i.update({ embeds: [air], components: [], files: [new AttachmentBuilder((await prepareCoin()).toss[result], { name: 'toss.gif' })], attachments: [] });
+    await wait(2000);
     const rec = coinRecord(store, owner);
     const call = arg === 'none' ? null : arg;
     if (call) {
       if (call === result) { rec.w++; rec.streak++; } else { rec.l++; rec.streak = 0; }
       store.setKv(`coincall:${owner}`, JSON.stringify(rec));
     }
-    await i.editReply({ ...coinView(owner, result, call, rec), attachments: [] }).catch(() => {});
+    await i.editReply({ ...coinView(await prepareCoin(), owner, result, call, rec), attachments: [] }).catch(() => {});
     return true;
   }
   if (kind === 'gr') {
