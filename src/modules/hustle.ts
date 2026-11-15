@@ -6,7 +6,7 @@ import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
 import { levelOf, rankFor, ranks } from './levels.js';
 import { polishEmbed, polishRows } from '../core/icons.js';
-import { banner, nameOf, pause, playOut, shortOf } from './casino.js';
+import { banner, messageOf, nameOf, pause, playOut, shortOf } from './casino.js';
 import { casinoEmoji as art } from '../features/slotart.js';
 
 // ways to earn and lose yen besides the daily: shifts at the Agency, Port Mafia jobs, the river, the vault,
@@ -136,9 +136,19 @@ const CATCH: [string, string, number, number][] = [
   ['🦈', 'a small shark', 600, 10],
   ['🧥', 'Dazai. He was enjoying the float. He tipped you for the trouble', 1500, 4],
 ];
+// a cast: the float sits, then a bite, and you have a moment to reel it in
+interface Cast { guild: string; user: string; name: string; hit: (typeof CATCH)[number]; bite: number; state: 'wait' | 'bite' | 'done'; msg?: { edit: (v: unknown) => Promise<unknown> } }
+const casts = new Map<string, Cast>();
+const REEL_WINDOW = 2500;
+function castView(c: Cast, key: string, line: string) {
+  const top = banner('THE YOKOHAMA RIVER');
+  const btn = new ButtonBuilder().setCustomId(`fs|${key}`).setLabel(c.state === 'bite' ? 'Reel it in!' : 'Reel in').setEmoji('🎣')
+    .setStyle(c.state === 'bite' ? ButtonStyle.Success : ButtonStyle.Secondary);
+  return { content: `${top}\n**${c.name}** casts a line\n${line}`, components: c.state === 'done' ? [] : [row(btn)] };
+}
 const fish: Command = {
   name: 'fish',
-  data: new SlashCommandBuilder().setName('fish').setDescription('Cast a line in the Yokohama river, every twenty minutes').toJSON(),
+  data: new SlashCommandBuilder().setName('fish').setDescription('Cast a line in the Yokohama river and reel in when it bites, every twenty minutes').toJSON(),
   text: { aliases: ['cast'] },
   run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
@@ -147,15 +157,24 @@ const fish: Command = {
     stamp(store, 'fish', ctx.guildId, ctx.userId);
     let r = Math.random() * CATCH.reduce((s, c) => s + c[3], 0);
     const hit = CATCH.find((c) => (r -= c[3]) < 0) ?? CATCH[1];
-    if (hit[2]) store.pay(ctx.guildId, ctx.userId, hit[2]);
-    const rare = hit[2] >= 600;
-    const top = banner('THE YOKOHAMA RIVER');
-    const who = `**${nameOf(ctx)}** casts a line`;
-    await playOut(ctx, [
-      `${top}\n${who}\n🎣 the float bobs on the water...`,
-      `${top}\n${who}\n🎣 something's tugging${rare ? ', hard' : ''}...`,
-      `${top}\n${who}\n${hit[0]} and reels in **${hit[1]}**${hit[2] ? `, sold for **${fmt(hit[2])}**` : '. Worth nothing, Kunikida makes you bin it.'}${rare ? '\n-# a rare catch' : ''}`,
-    ], [1400, 1100]);
+    const key = `${ctx.userId}-${Date.now().toString(36)}`;
+    const c: Cast = { guild: ctx.guildId, user: ctx.userId, name: nameOf(ctx), hit, bite: 0, state: 'wait' };
+    casts.set(key, c);
+    const sent = await ctx.reply({ ...castView(c, key, '🎣 the float bobs on the water... wait for the bite'), public: true, temp: false });
+    c.msg = messageOf(sent) ?? undefined;
+    // the bite comes after a few seconds, and goes again if nobody reels
+    setTimeout(() => {
+      if (c.state !== 'wait') return;
+      c.state = 'bite';
+      c.bite = Date.now();
+      void c.msg?.edit(castView(c, key, `‼️ **Something's biting${hit[2] >= 600 ? ', and it\'s heavy' : ''}!** Reel it in!`)).catch(() => {});
+      setTimeout(() => {
+        if (c.state !== 'bite') return;
+        c.state = 'done';
+        casts.delete(key);
+        void c.msg?.edit(castView(c, key, `💨 Too slow. ${hit[2] >= 600 ? 'Something big' : 'It'} slipped off the hook and swam away.`)).catch(() => {});
+      }, REEL_WINDOW);
+    }, between(1800, 4500));
   },
 };
 
@@ -456,6 +475,21 @@ const rps: Command = {
 
 export async function onHustle(store: Store, i: Interaction): Promise<boolean> {
   if (!i.isButton()) return false;
+  if (i.customId.startsWith('fs|')) {
+    const key = i.customId.slice(3);
+    const c = casts.get(key);
+    if (!c || c.state === 'done') { await i.update({ components: [] }).catch(() => {}); return true; }
+    if (i.user.id !== c.user) { await i.reply({ content: 'That\'s someone else\'s line. Cast your own with `tz fish`.', flags: MessageFlags.Ephemeral }); return true; }
+    const was = c.state;
+    c.state = 'done';
+    casts.delete(key);
+    if (was === 'wait') { await i.update(castView(c, key, '🌊 You yanked too early and scared the fish off. Patience, Kunikida would say.')); return true; }
+    const [icon, what, yen] = c.hit;
+    if (yen) store.pay(c.guild, c.user, yen);
+    const quick = Date.now() - c.bite < 700;
+    await i.update(castView(c, key, `${icon} ${quick ? 'Lightning reflexes, you' : 'You'} reeled in **${what}**${yen ? ` and sold it for **${fmt(yen)}**` : '. Worth nothing, Kunikida makes you bin it.'}${yen >= 600 ? '\n-# a rare catch' : ''}`));
+    return true;
+  }
   if (i.customId.startsWith('hs|')) {
     const [, what, leader] = i.customId.split('|');
     const h = heists.get(leader);
