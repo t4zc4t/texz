@@ -223,7 +223,7 @@ const stats: Command = {
   admin: true,
   data: new SlashCommandBuilder().setName('serverstats').setDescription('Messages, busiest channels and people, joins and leaves')
     .addIntegerOption((o) => o.setName('days').setDescription('How far back, 7 if empty').setMinValue(1).setMaxValue(90)).toJSON(),
-  text: { aliases: ['activity'], args: ['days'] },
+  text: { aliases: ['activity', 'stats'], args: ['days'] },
   run: (ctx, store) => {
     if (!ctx.guild) return ctx.reply('Server only.');
     const days = Math.min(Math.max(ctx.int('days') ?? 7, 1), 90);

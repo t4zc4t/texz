@@ -50,7 +50,7 @@ const daily: Command = {
   group: 'you',
   hidden: true,
   data: new SlashCommandBuilder().setName('daily').setDescription('Collect your daily yen, more for each day in a row').toJSON(),
-  text: { aliases: ['yen'] },
+  text: { aliases: ['yen', 'd'] },
   run: (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
     const r = claimDaily(store, ctx.guildId, ctx.userId);
@@ -116,7 +116,7 @@ const give: Command = {
     .addUserOption((o) => o.setName('user').setDescription('Who').setRequired(true))
     .addStringOption((o) => o.setName('amount').setDescription('How much: 500, 2k, half or all').setRequired(true))
     .addStringOption((o) => o.setName('note').setDescription('What it\'s for').setMaxLength(100)).toJSON(),
-  text: { aliases: ['pay'], args: ['user', 'amount', 'note'] },
+  text: { aliases: ['pay', 'g'], args: ['user', 'amount', 'note'] },
   example: '@someone 2k for the crab',
   run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
@@ -208,7 +208,7 @@ const shop: Command = {
     .addSubcommand((s) => s.setName('remove').setDescription('Take an item off sale (admins)')
       .addIntegerOption((o) => o.setName('id').setDescription('Item number').setRequired(true).setMinValue(1)))
     .toJSON(),
-  text: { aliases: ['market'], sub: true, subArgs: { buy: ['id'], add: ['role', 'price'], remove: ['id'] } },
+  text: { aliases: ['market', 'shop'], sub: true, subArgs: { buy: ['id'], add: ['role', 'price'], remove: ['id'] } },
   run: async (ctx, store) => {
     if (!ctx.guild) return ctx.reply('Yen lives in servers.');
     const sub = ctx.sub() ?? 'view';

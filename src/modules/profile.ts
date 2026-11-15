@@ -325,7 +325,7 @@ export const profile: Command = {
       .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')))
     .addSubcommand((s) => s.setName('edit').setDescription('Pick your club, F1 team, anime, manga, bio, colour and what shows')).toJSON(),
   // tz profile, tz profile @user, tz profile edit
-  text: { aliases: ['pf', 'card'], sub: true, subArgs: { view: ['user'] } },
+  text: { aliases: ['pf', 'card', 'p'], sub: true, subArgs: { view: ['user'] } },
   run: async (ctx, store) => {
     let sub = ctx.sub() ?? 'view';
     let who = ctx.user('user');

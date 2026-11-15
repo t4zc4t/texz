@@ -6,7 +6,8 @@ export interface Command {
   name: string;
   data: RESTPostAPIChatInputApplicationCommandsJSONBody;
   // text form: extra names after the prefix and the order of positional args
-  text?: { aliases?: string[]; args?: string[]; sub?: boolean; subArgs?: Record<string, string[]> };
+  // noName: only the aliases are typed, the name itself is left free for other commands
+  text?: { aliases?: string[]; args?: string[]; sub?: boolean; subArgs?: Record<string, string[]>; noName?: boolean };
   admin?: boolean;
   // seconds between uses for one person, see cooldownOf in the registry
   cooldown?: number;

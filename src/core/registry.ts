@@ -53,7 +53,7 @@ useModules(modules);
 type Group = GroupInfo & { description: string; perms?: bigint; anywhere?: boolean; dashboard?: string; staff?: boolean; old: string[] };
 const groups: Record<string, Group> = {
   admin: { label: 'Port Mafia HQ', emoji: '☠️', about: '*The executives\' floor. Discipline, rewards and the building itself.*\nAdmins and the staff role only.', description: 'Admins only: moderation, giveaways, role pickers, posts, xp and setup', staff: true, perms: PermissionFlagsBits.ManageMessages, old: ['staff', 'mod', 'tools', 'hq', 'mafia'], extra: ['setup'] },
-  owo: { label: 'Stray Dogs Den', emoji: '🐾', about: '', description: 'OwO: huntbot, gems, zoo, weapons, quests, timers and the shop', anywhere: true, old: [] },
+  owo: { label: 'Stray Dogs Den', emoji: '🐾', about: '', description: 'OwO: huntbot, gems, zoo, weapons, quests, timers and the shop', anywhere: true, old: ['w'] },
   poketwo: { label: 'Pokédex Bureau', emoji: '🔴', about: '*Every creature on file, every catch accounted for.*\nClaim help, hints, the server Pokédex and the weekly race.', description: 'Pokétwo: claim help, hints, the Pokédex and the catch race', old: ['p2', 'pokétwo'], extra: ['pings'] },
   shoob: { label: 'Card Vault', emoji: '🃏', about: '*Some cards are worth waiting for.*\nRare drop pings and a wishlist for the characters you want.', description: 'Shoob: rare drop pings and your character wishlist', old: [], extra: ['spawns', 'pings'] },
   anime: { label: 'Literary Annex', emoji: '📚', about: '', description: 'Anime, manga and movies: what\'s airing, search, your list, movie night, watch parties', anywhere: true, old: ['annex'], extra: ['animehome'] },
@@ -103,7 +103,7 @@ for (const mod of modules) for (const cmd of mod.commands) {
   if (!cmd.hidden) bySlash.set(slashPath(cmd), { mod, cmd });
   // typed "tz owo huntbot" mirrors "/owo view:huntbot"
   if (cmd.group && !bySlash.has(`${cmd.group} ${cmd.as ?? cmd.name}`)) bySlash.set(`${cmd.group} ${cmd.as ?? cmd.name}`, { mod, cmd });
-  for (const name of [cmd.name, ...(cmd.text?.aliases ?? [])]) byText.set(name, { mod, cmd });
+  for (const name of [...(cmd.text?.noName ? [] : [cmd.name]), ...(cmd.text?.aliases ?? [])]) byText.set(name, { mod, cmd });
 }
 
 // the menu lines of a group, its own commands first, then borrowed ones
@@ -308,7 +308,7 @@ export function isEnabled(store: Store, guildId: string | null, module: string) 
 // names a typo can be matched to: everything people can type, minus the dashboard homes
 const typoTargets = () => [...byText.entries()].filter(([, h]) => !dashNames.has(h.cmd.name) && !h.cmd.name.endsWith('home') && h.cmd.name !== 'servers').map(([k]) => k);
 
-// "tz status", "tz hb", "tzstatus" all work, case doesn't matter
+// "tz ws", "tz whb", "tzstatus" all work, case doesn't matter
 export function onText(store: Store, m: Message): boolean {
   const prefix = m.guildId ? store.guild(m.guildId).prefix : 'tz';
   const text = m.content.trim();
@@ -326,7 +326,7 @@ export function onText(store: Store, m: Message): boolean {
   // "tz mod warn @x" works like "/mod warn", but "tz anime frieren" is still a search
   const next = tokens[0]?.toLowerCase();
   const member = groups[name] && next
-    ? bySlash.get(`${name} ${next}`) ?? (byText.get(next)?.cmd.group === name ? byText.get(next) : undefined)
+    ? bySlash.get(`${name} ${next}`) ?? (byText.get(next)?.cmd.group === name ? byText.get(next) : undefined) ?? (name === 'owo' && byText.get(`w${next}`)?.cmd.group === 'owo' ? byText.get(`w${next}`) : undefined)
     : undefined;
   if (member) { tokens.shift(); name = member.cmd.name; }
   // "tz fun" on its own opens the dashboard, "tz owo" too. But where a command shares the group's name and works
@@ -464,7 +464,7 @@ export async function onComponent(store: Store, i: Interaction) {
   const arm = parseArmId(i.customId);
   if (!arm) return;
   if (i.user.id !== arm.userId) {
-    return i.reply({ content: 'That\'s someone else\'s case file. Open your own with `tz a all`.', flags: MessageFlags.Ephemeral });
+    return i.reply({ content: 'That\'s someone else\'s case file. Open your own with `tz wa all`.', flags: MessageFlags.Ephemeral });
   }
   let { page, filter, sort } = arm;
   if (i.isStringSelectMenu()) {

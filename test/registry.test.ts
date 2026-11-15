@@ -37,12 +37,12 @@ test('every slash command has a unique name', () => {
 
 test('prefix commands and aliases', async () => {
   const store = new Store(':memory:');
-  const a = fake('tz status');
+  const a = fake('tz ws');
   assert.equal(onText(store, a.m), true);
   await tick();
   assert.match(said(a.replies[0]), /Stray Dogs Den/);
 
-  const b = fake('TZ hb');
+  const b = fake('TZ whb');
   assert.equal(onText(store, b.m), true);
   await tick();
   assert.match(said(b.replies[0]), /owo hb/);
@@ -64,7 +64,7 @@ test('features switch off and stay admin only to change', async () => {
   await tick();
   assert.equal(store.rules('g1', 'owo').enabled, false);
 
-  const blocked = fake('tz status');
+  const blocked = fake('tz ws');
   onText(store, blocked.m);
   await tick();
   assert.match(said(blocked.replies[0]), /locked here|switched it off|Closed for today/);
@@ -76,23 +76,23 @@ test('channel and role limits', async () => {
   await tick();
   assert.deepEqual(store.rules('g1', 'owo').channels, ['222222222222222222']);
 
-  const wrong = fake('tz status', { channel: 'c1' });
+  const wrong = fake('tz ws', { channel: 'c1' });
   onText(store, wrong.m);
   await tick();
   assert.match(said(wrong.replies[0]), /<#222222222222222222>/);
 
-  const right = fake('tz status', { channel: '222222222222222222' });
+  const right = fake('tz ws', { channel: '222222222222222222' });
   onText(store, right.m);
   await tick();
   assert.match(said(right.replies[0]), /Stray Dogs Den/);
 
   onText(store, fake('tz config role owo add <@&333333333333333333>', { admin: true }).m);
   await tick();
-  const noRole = fake('tz status', { channel: '222222222222222222' });
+  const noRole = fake('tz ws', { channel: '222222222222222222' });
   onText(store, noRole.m);
   await tick();
   assert.match(said(noRole.replies[0]), /role|select few/);
-  const withRole = fake('tz status', { channel: '222222222222222222', roles: ['333333333333333333'] });
+  const withRole = fake('tz ws', { channel: '222222222222222222', roles: ['333333333333333333'] });
   onText(store, withRole.m);
   await tick();
   assert.match(said(withRole.replies[0]), /Stray Dogs Den/);
@@ -103,7 +103,7 @@ test('custom prefix', async () => {
   onText(store, fake('tz config prefix d', { admin: true }).m);
   await tick();
   assert.equal(store.guild('g1').prefix, 'd');
-  assert.equal(onText(store, fake('tz status').m), false);
+  assert.equal(onText(store, fake('tz ws').m), false);
   assert.equal(onText(store, fake('d status').m), true);
 });
 
@@ -114,10 +114,10 @@ test('help for one command', async () => {
   await tick();
   assert.match(said(a.replies[0]), /tz setup/);
   assert.doesNotMatch(said(a.replies[0]), /At your service/);
-  const b = fake('tz help hb');
+  const b = fake('tz help whb');
   onText(store, b.m);
   await tick();
-  assert.match(said(b.replies[0]), /tz huntbot/);
+  assert.match(said(b.replies[0]), /tz whuntbot/);
 });
 
 test('reminder panel buttons', async () => {
@@ -184,7 +184,7 @@ test('quick typed answers are queued for cleanup, cards are not', async () => {
   onText(store, a.m);
   await tick();
   assert.equal(store.dueDeletes(Date.now() + 31_000).length, 1);
-  const b = fake('tz status');
+  const b = fake('tz ws');
   (b.m as unknown as { reply: (p: unknown) => Promise<unknown> }).reply = async () => ({ id: 'm2', channelId: 'c1' });
   onText(store, b.m);
   await tick();

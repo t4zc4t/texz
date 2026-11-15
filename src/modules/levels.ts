@@ -270,7 +270,7 @@ const levels: Command = {
   hidden: true,
   as: 'top',
   data: new SlashCommandBuilder().setName('levels').setDescription('The server\'s top 10 by level').toJSON(),
-  text: { aliases: ['ranks', 'xplb'] },
+  text: { aliases: ['ranks', 'xplb', 'lb', 'top'] },
   run: (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Ranks live in servers.');
     const rows = store.xpBoard(ctx.guildId);

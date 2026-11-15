@@ -149,7 +149,7 @@ function castView(c: Cast, key: string, line: string) {
 const fish: Command = {
   name: 'fish',
   data: new SlashCommandBuilder().setName('fish').setDescription('Cast a line in the Yokohama river and reel in when it bites, every twenty minutes').toJSON(),
-  text: { aliases: ['cast'] },
+  text: { aliases: ['cast', 'f'] },
   run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
     const left = waitLeft(store, 'fish', ctx.guildId, ctx.userId, 1200);
@@ -198,7 +198,7 @@ const bank: Command = {
   data: new SlashCommandBuilder().setName('bank').setDescription('Your Agency vault: safe from robbers, earns 1% a day')
     .addStringOption((o) => o.setName('action').setDescription('Put in or take out').addChoices({ name: 'deposit', value: 'deposit' }, { name: 'withdraw', value: 'withdraw' }))
     .addStringOption((o) => o.setName('amount').setDescription('How much, or half / all')).toJSON(),
-  text: { aliases: ['vault', 'dep', 'with'], args: ['action', 'amount'] },
+  text: { aliases: ['vault', 'dep', 'with', 'b'], args: ['action', 'amount'] },
   example: 'deposit all',
   run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
@@ -382,7 +382,7 @@ const scratch: Command = {
   name: 'scratch',
   cooldown: 10,
   data: new SlashCommandBuilder().setName('scratch').setDescription(`Buy a ${fmt(PRICE)} scratch card and scratch it yourself, three alike wins`).toJSON(),
-  text: { aliases: ['scratchcard', 'lotto'] },
+  text: { aliases: ['scratchcard', 'lotto', 'sc'] },
   run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
     if ([...tickets.values()].some((t) => t.user === ctx.userId && t.guild === ctx.guildId && !t.done)) return ctx.reply({ content: 'Finish scratching the ticket you have first.', temp: true });

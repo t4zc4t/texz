@@ -349,7 +349,7 @@ export const medalcase: Command = {
   hidden: true,
   data: new SlashCommandBuilder().setName('medalcase').setDescription('The medals someone has earned, as a picture')
     .addUserOption((o) => o.setName('user').setDescription('Whose, yours if empty')).toJSON(),
-  text: { aliases: ['medalcard', 'case'], args: ['user'] },
+  text: { aliases: ['medalcard'], args: ['user'] },
   run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Medals are per server.');
     const id = ctx.user('user') ?? ctx.userId;

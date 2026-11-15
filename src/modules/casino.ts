@@ -118,7 +118,7 @@ const slots: Command = {
   cooldown: 5,
   data: new SlashCommandBuilder().setName('slots').setDescription('Pull No Longer Human, the slot machine, for yen')
     .addStringOption((o) => o.setName('bet').setDescription('How much, or half / all').setRequired(true)).toJSON(),
-  text: { aliases: ['slot'], args: ['bet'] },
+  text: { aliases: ['slot', 's'], args: ['bet'] },
   example: '200',
   run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Bets live in servers.');

@@ -94,7 +94,7 @@ Every day the server gets one Agency mission that pays yen (`tz mission`), and `
 
 texz watches the game bots people play and keeps track for them. It never plays for anyone.
 
-- **OwO**: reminders for huntbot, pray, curse, vote and the daily reset (to DM or the channel), a last call before reset with whatever's still open, a ping on captchas, and advice from the screens you open: which huntbot trait to upgrade, gem sets that run out together, weapons and team, zoo, the best weapon per pet and what's safe to dismantle. `tz buddy join` and `tz ask pray` find quest buddies.
+- **OwO**: reminders for huntbot, pray, curse, vote and the daily reset (to DM or the channel), a last call before reset with whatever's still open, a ping on captchas, and advice from the screens you open: which huntbot trait to upgrade, gem sets that run out together, weapons and team, zoo, the best weapon per pet and what's safe to dismantle. `tz wbuddy join` and `tz wask pray` find quest buddies. Every OwO command is typed with a w in front, like `tz ws`, `tz whb` or `tz wz`.
 - **Pokétwo**: every spawn gets a reply with the name, region and the catch line (tap to copy on phones, a copy box on PC). It reads the picture with an open 1,025 species classifier and learns every spawn confirmed by a catch or a hint, so Pokétwo's own forms come out right after the first one, and solves hints too (`tz hint p_k_ch_`). Legendaries, mythicals and ultra beasts ping their role, get pinned until caught and get filed in the Agency files. `tz dex` is the server's Pokédex and `tz race` the weekly catch race.
 - **Shoob**: only tier 5 and 6 drops ping, tier 6 gets filed in the Agency files, and `tz wish add Gojo` pings you when that character drops at any tier.
 

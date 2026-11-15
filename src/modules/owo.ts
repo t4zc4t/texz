@@ -85,7 +85,7 @@ const status: Command = {
     const queued = store.userReminders(ctx.userId).filter((r) => !['reset', 'lastcall'].includes(r.kind));
     if (queued.length) glance.push(`⏰ ${queued.length} reminder${queued.length === 1 ? '' : 's'} queued, next <t:${Math.floor(Math.min(...queued.map((r) => r.due_at)) / 1000)}:R>`);
     const shopSnap = store.snapshot<{ until: number | null }>('*', 'shop');
-    if (shopSnap && (!shopSnap.data.until || shopSnap.data.until > Date.now())) glance.push('🛒 today\'s weapon shop is on file, `tz shop`');
+    if (shopSnap && (!shopSnap.data.until || shopSnap.data.until > Date.now())) glance.push('🛒 today\'s weapon shop is on file, `tz wshop`');
     if (glance.length) fields.push({ name: '🧭 At a glance', value: glance.join('\n'), inline: false });
     const nav = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
       ...[['huntbot', '🤖', 'Huntbot'], ['armoury', '⚔️', 'Armoury'], ['zoo', '🦁', 'Zoo'], ['pings', '🔔', 'Pings and reminders']]
@@ -186,7 +186,7 @@ const armoury: Command = {
   text: { aliases: ['armory', 'arm', 'a'], args: ['filter'] },
   run: (ctx, store) => {
     if (!store.snapshot(ctx.userId, 'armoury')) return missing(ctx, store, 'owo weapon', 'Armoury');
-    // "tz a", "tz a mythic", "tz a held", "tz a junk" all open the same screen
+    // "tz wa", "tz wa mythic", "tz wa held", "tz wa junk" all open the same screen
     const nick: Record<string, string> = {
       all: 'all', mythic: 'top', mythical: 'top', legendary: 'top', fabled: 'top', equipped: 'held', unequipped: 'free',
       emp: 'empowered', physical: 'str', magic: 'mag', tank: 'support', dismantle: 'junk', trash: 'junk', scrap: 'junk',
@@ -397,7 +397,7 @@ const buddy: Command = {
     if (sub === 'join') { store.setBuddy(ctx.guildId, ctx.userId, true); return ctx.reply({ content: `🕵️ You're on the network, I'll ping you when someone needs a cookie, pray, curse or battle. ${say('buddyJoin')}`, temp: true }); }
     if (sub === 'leave') { store.setBuddy(ctx.guildId, ctx.userId, false); return ctx.reply({ content: `🚪 Off the network. ${say('buddyLeave')}`, temp: true }); }
     const list = store.buddies(ctx.guildId);
-    return show(ctx, store, { kind: 'buddyJoin', title: `The network · ${list.length}`, emoji: '🕵️', body: list.length ? list.map((u) => `<@${u}>`).join(' ') : 'Nobody yet, `tz buddy join` to start.' });
+    return show(ctx, store, { kind: 'buddyJoin', title: `The network · ${list.length}`, emoji: '🕵️', body: list.length ? list.map((u) => `<@${u}>`).join(' ') : 'Nobody yet, `tz wbuddy join` to start.' });
   },
 };
 
@@ -416,7 +416,7 @@ const ask: Command = {
     const last = store.cooldowns(ctx.userId).get('ask') ?? 0;
     if (Date.now() - last < 30 * 60_000) return ctx.reply(say('askCooldown'));
     const others = store.buddies(ctx.guildId).filter((u) => u !== ctx.userId);
-    if (!others.length) return ctx.reply('No other quest buddies here yet. Get a friend to run `tz buddy join`.');
+    if (!others.length) return ctx.reply('No other quest buddies here yet. Get a friend to run `tz wbuddy join`.');
     store.setCooldown(ctx.userId, 'ask', new Date());
     const icon: Record<string, string> = { cookie: '🍪', pray: '🙏', curse: '🧿', battle: '⚔️' };
     // buddies have to see this one, so it's public even from slash
@@ -427,6 +427,12 @@ const ask: Command = {
     });
   },
 };
+
+// OwO commands are typed with a w in front, tz ws, tz whb, tz wz, so the short names stay free for Texz's own
+for (const c of [status, huntbot, gems, zoo, armoury, shop, team, weapon, stats, leaderboard, buddy, ask]) {
+  c.call = `w${c.name}`;
+  c.text = { ...c.text, noName: true, aliases: [`w${c.name}`, ...(c.text?.aliases ?? []).map((a) => `w${a}`)] };
+}
 
 export const owo: Module = {
   name: 'owo',
