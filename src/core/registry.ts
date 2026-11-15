@@ -27,7 +27,7 @@ import { RED, card, type Kind } from '../theme.js';
 import { countUse, report } from '../ops.js';
 import { quoteCommand } from '../modules/quote.js';
 import { onProfileEdit } from '../modules/profile.js';
-import { onAchPick } from '../modules/missions.js';
+import { onAchPick, track } from '../modules/missions.js';
 import { community, onConfess, onCountButton } from '../modules/community.js';
 import { actions, onAct } from '../modules/actions.js';
 import { onMovie } from '../modules/movies.js';
@@ -72,7 +72,7 @@ const place: Record<string, [string, string?]> = {
   reminders: ['owo', 'timers'],
   poll: ['fun'], choose: ['fun', 'pick'], roll: ['fun'], coin: ['fun', 'flip'], ship: ['fun'], '8ball': ['fun'], guess: ['fun'], quiz: ['fun'], trivia: ['fun'],
   onthisday: ['fun', 'otd'], crestquiz: ['fun', 'crest'], quote: ['fun'], confess: ['fun'],
-  profile: ['profile', 'card'], achievements: ['profile', 'medals'], rank: ['profile'], levels: ['profile', 'top'], perks: ['profile'], mission: ['profile'], birthday: ['profile', 'bday'], pings: ['profile'],
+  profile: ['profile', 'card'], achievements: ['profile', 'medals'], rank: ['profile'], levels: ['profile', 'top'], perks: ['profile'], quests: ['profile'], birthday: ['profile', 'bday'], pings: ['profile'],
   daily: ['yen'], mycolour: ['yen', 'mycolour'], coinflip: ['yen', 'flip'], slots: ['yen'], blackjack: ['yen', 'bj'], money: ['admin'], wallet: ['yen', 'bal'], give: ['yen'], rich: ['yen', 'top'], roleshop: ['yen', 'shop'], work: ['yen'], crime: ['yen'], beg: ['yen'], fish: ['yen'], bank: ['yen'], rob: ['yen'], roulette: ['yen'], scratch: ['yen'], heist: ['yen'], rps: ['yen'],
   booth: ['misc'], user: ['misc'], avatar: ['misc', 'av'], server: ['misc'], afk: ['misc'], remind: ['misc'],
 };
@@ -247,6 +247,12 @@ async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command, cool = tru
   countUse(cmd.name);
   try {
     await cmd.run(ctx, store);
+    // a command that was really used counts towards any quest that asks for it
+    if (cool && ctx.guildId && ctx.guild) {
+      const lines = track(store, ctx.guildId, ctx.userId, `cmd:${cmd.name}`);
+      const ch = ctx.guild.channels.cache.get(ctx.channelId);
+      if (lines.length && ch?.isSendable()) await ch.send({ content: lines.join('\n'), allowedMentions: { users: [ctx.userId] } }).catch(() => {});
+    }
   } catch (e) {
     // Discord said no because of a permission, say which one instead of a shrug
     if ((e as { code?: number }).code === 50013 && ctx.guild) {

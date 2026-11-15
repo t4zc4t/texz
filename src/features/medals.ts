@@ -44,6 +44,9 @@ export const medalOf: Record<string, { tier: Tier; mark: Mark }> = {
   recorder: { tier: 'gold', mark: 'cup' },
   mission7: { tier: 'gold', mark: 'hat' },
   mission30: { tier: 'gold', mark: 'folder' },
+  quest250: { tier: 'relic', mark: 'scroll' },
+  rare1: { tier: 'gold', mark: 'sparkle' },
+  rare10: { tier: 'relic', mark: 'crystal' },
 };
 export const tierOf = (id: string): Tier => medalOf[id]?.tier ?? 'bronze';
 export const tierName: Record<Tier, string> = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold', relic: 'Relic' };

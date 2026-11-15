@@ -2,7 +2,7 @@ import type { Store } from '../db.js';
 import type { Ctx } from './ctx.js';
 import { levelOf, perksFor, rankFor } from '../modules/levels.js';
 import { winsOf } from '../modules/f1quiz.js';
-import { missionOf } from '../modules/missions.js';
+import { questGlance } from '../modules/missions.js';
 
 // how each menu line reads: emoji, a plain name, and a better description where the command's own is too general
 export const menu: Record<string, [string, string, string?]> = {
@@ -10,7 +10,7 @@ export const menu: Record<string, [string, string, string?]> = {
   ship: ['💞', 'Ship test'], '8ball': ['🎱', 'Magic 8ball'], guess: ['🔎', 'Guess the anime', 'A picture, four names, first right answer wins yen'],
   quiz: ['🏁', 'F1 quiz', '20 seconds, one try each, harder questions pay more'], trivia: ['🗞️', 'F1 trivia'], onthisday: ['📅', 'On this day', 'F1, football and anime history for today'],
   'onthisday~topic=f1': ['📅', 'On this day in F1'], 'onthisday~topic=football': ['📅', 'On this day in football'], 'onthisday~topic=anime': ['📅', 'On this day in anime'],
-  mission: ['🕵️', 'Today\'s mission', 'A daily challenge for bonus yen'],
+  quests: ['📜', 'Quests', 'Daily, weekly and rare quests with streaks'],
   spawns: ['🔎', 'Claim help status', 'What Texz reads, the helper switch and your rare and type pings'], pokemon: ['🧩', 'Solve a hint', 'Type the hint, get the names that fit'],
   pings: ['🔔', 'Pings and reminders', 'Every ping and reminder Texz can send you, in one place'], remind: ['⏰', 'Remind me', 'Plain words: in 2h stretch, at 9pm call mum, tomorrow 8am gym'], reminders: ['🎛️', 'OwO timers and timezone', 'Which OwO timers ping you, where, and your timezone'],
   quote: ['🖼️', 'Make it a quote', 'Frame a message as a picture, reply with tz quote or paste a link'],
@@ -73,7 +73,7 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
   },
   profile: {
     sections: [
-      ['🪪 Your file', ['profile.view', 'profile.edit', 'birthday.set', 'achievements', 'mission']],
+      ['🪪 Your file', ['profile.view', 'profile.edit', 'birthday.set', 'achievements', 'quests']],
       ['🎖️ Rank', ['rank', 'levels', 'perks']],
       ['🫂 Bonds', ['bonds']],
       ['🔔 Pings and birthdays', ['pings', 'birthday.list', 'birthday.check', 'birthday.remove']],
@@ -105,9 +105,7 @@ export function glance(group: string, ctx: Ctx, store: Store): string | null {
       const l = levelOf(store.xpOf(g, ctx.userId).xp);
       const r = rankFor(l.level);
       const ready = w.daily_day !== new Date().toISOString().slice(0, 10);
-      const m = missionOf(g);
-      const done = Number(store.getKv(`mission:${g}:${new Date().toISOString().slice(0, 10)}:${ctx.userId}`) ?? 0) >= m.need;
-      return `${r.emoji} **${r.name}** · level **${l.level}** · 👛 **¥${w.yen.toLocaleString()}** · ${ready ? '💴 daily **ready**' : '💴 daily done'}${w.streak ? ` · 🔥 ${w.streak}` : ''}\n🕵️ Mission: **${m.text}** ${done ? '✅' : ''}`;
+      return `${r.emoji} **${r.name}** · level **${l.level}** · 👛 **¥${w.yen.toLocaleString()}** · ${ready ? '💴 daily **ready**' : '💴 daily done'}${w.streak ? ` · 🔥 ${w.streak}` : ''}\n${questGlance(store, g, ctx.userId)}`;
     }
     if (group === 'yen' && g) {
       const w = store.wallet(g, ctx.userId);

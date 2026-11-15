@@ -76,7 +76,10 @@ const status: Command = {
     // the rest of the dashboard: quests, armoury, reminders and today's shop at a glance
     const glance: string[] = [];
     const q = store.snapshot<{ allDone: boolean; lines: string[] }>(ctx.userId, 'quests')?.data;
-    if (q) glance.push(q.allDone ? '📜 quests all done' : `📜 ${q.lines.length} quest line${q.lines.length === 1 ? '' : 's'} open`);
+    if (q) {
+      if (q.allDone) glance.push('📜 OwO quests all done');
+      else fields.push({ name: '📜 OwO quests', value: q.lines.map((l) => `▫️ ${l}`).join('\n').slice(0, 1000) || 'Nothing readable in it.', inline: false });
+    }
     const arm = store.snapshot<[string, unknown][]>(ctx.userId, 'armoury')?.data;
     if (arm) glance.push(`⚔️ ${arm.length} weapons on file`);
     const queued = store.userReminders(ctx.userId).filter((r) => !['reset', 'lastcall'].includes(r.kind));
@@ -85,7 +88,7 @@ const status: Command = {
     if (shopSnap && (!shopSnap.data.until || shopSnap.data.until > Date.now())) glance.push('🛒 today\'s weapon shop is on file, `tz shop`');
     if (glance.length) fields.push({ name: '🧭 At a glance', value: glance.join('\n'), inline: false });
     const nav = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      ...[['huntbot', '🤖', 'Huntbot'], ['armoury', '⚔️', 'Armoury'], ['zoo', '🦁', 'Zoo'], ['quests', '📜', 'Quests'], ['pings', '🔔', 'Pings and reminders']]
+      ...[['huntbot', '🤖', 'Huntbot'], ['armoury', '⚔️', 'Armoury'], ['zoo', '🦁', 'Zoo'], ['pings', '🔔', 'Pings and reminders']]
         .map(([cmd, emoji, label]) => new ButtonBuilder().setCustomId(`nav|${cmd}|owner=${ctx.userId},back=status`).setEmoji(emoji).setLabel(label).setStyle(ButtonStyle.Secondary)),
     );
     const more = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
@@ -252,24 +255,6 @@ const weapon: Command = {
     const best = rows.find((r) => !r.d.mismatch) ?? rows[0];
     fields.push({ name: '🎯 Verdict', value: `Give it to **${best.p.name}**: \`owo weapon ${w.id} ${best.p.name}\`\n-# Before enemy resistance, total counts every enemy hit`, inline: false });
     return show(ctx, store, { kind: 'weapon', title: `${w.name} · ${w.quality ?? '?'}%`, emoji: '🗡️', fields, body: w.wpCost ? `💧 costs **${w.wpCost} WP** per use` : undefined });
-  },
-};
-
-const quests: Command = {
-  name: 'quests',
-  group: 'owo',
-  data: new SlashCommandBuilder().setName('quests').setDescription('Your OwO quests from the last owo quest').toJSON(),
-  text: { aliases: ['q'] },
-  run: (ctx, store) => {
-    const q = store.snapshot<{ allDone: boolean; lines: string[] }>(ctx.userId, 'quests');
-    if (!q) return missing(ctx, store, 'owo quest', 'Quests');
-    if (q.data.allDone) return ctx.reply({ content: `📜 Every quest done for today. ${say('questsDone')}`, temp: true });
-    const body = q.data.lines.map((l) => `▫️ ${l}`).join('\n') || 'Nothing readable in it.';
-    const social = /cookie|pray|curse|battle/i.test(body);
-    return show(ctx, store, {
-      kind: 'quests', title: 'Quests', emoji: '📜', body, at: q.at,
-      fields: social ? [{ name: '🤝 Need a hand?', value: '`tz ask pray` (or cookie, curse, battle) calls the quest buddies here.', inline: false }] : [],
-    });
   },
 };
 
@@ -447,6 +432,6 @@ export const owo: Module = {
   name: 'owo',
   label: 'OwO helper',
   about: 'Reminders, huntbot, gems, zoo, weapons, quests and the weekly board',
-  commands: [status, huntbot, gems, zoo, armoury, shop, team, weapon, quests, stats, leaderboard, remind, settings, buddy, ask],
+  commands: [status, huntbot, gems, zoo, armoury, shop, team, weapon, stats, leaderboard, remind, settings, buddy, ask],
 };
 

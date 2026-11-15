@@ -12,7 +12,7 @@ import { f1Quiz, f1Today, f1Trivia } from './bulletins.js';
 import { guess } from './anime.js';
 import { crestQuiz } from './f1quiz.js';
 import { quote } from './quote.js';
-import { achievements, medalcase, mission } from './missions.js';
+import { achievements, medalcase, quests } from './missions.js';
 import { prepareCoin } from '../features/coinart.js';
 import { icEmoji, polishEmbed, polishRows } from '../core/icons.js';
 
@@ -549,5 +549,5 @@ export const utility: Module = {
   name: 'utility',
   label: 'Utility and fun',
   about: 'Avatars, user and server info, polls, choose, dice, coin, 8ball and AFK',
-  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk, guess, f1Quiz, f1Trivia, f1Today, crestQuiz, quote, mission, achievements, medalcase, booth],
+  commands: [avatar, user, profile, server, poll, choose, roll, coin, ship, eightball, afk, guess, f1Quiz, f1Trivia, f1Today, crestQuiz, quote, quests, achievements, medalcase, booth],
 };

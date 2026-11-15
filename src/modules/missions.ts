@@ -8,22 +8,98 @@ import { fetchAvatar, medalCase } from '../features/rankcard.js';
 // one place every feature reports to: a daily Agency mission for the whole server, and badges that stay on your profile
 
 export type Event = 'quote' | 'quizwin' | 'guesswin' | 'catch' | 'catchRare' | 'catchShiny' | 'typesSeen' | 'daily' | 'dailyStreak' | 'predict' | 'predictWin' | 'perfectPodium'
-  | 'quoteOfWeek' | 'fastGuess' | 'yen' | 'gave' | 'messages' | 'level' | 'watchparty' | 'nightOwl' | 'earlyBird' | 'missionStreak' | 'missionDone' | 'counted' | 'countRecord' | `catchType:${string}`;
+  | 'quoteOfWeek' | 'fastGuess' | 'yen' | 'gave' | 'messages' | 'level' | 'watchparty' | 'nightOwl' | 'earlyBird' | 'missionStreak' | 'missionDone' | 'rareDone' | 'counted' | 'countRecord' | `catchType:${string}`;
 
-interface Mission { id: string; text: string; event: Event; need: number }
-const MISSIONS: Mission[] = [
-  { id: 'quote', text: 'Make a quote out of someone\'s message', event: 'quote', need: 1 },
-  { id: 'quiz2', text: 'Win 2 quiz or crest quiz questions', event: 'quizwin', need: 2 },
-  { id: 'guess', text: 'Win a round of guess the anime', event: 'guesswin', need: 1 },
-  { id: 'catch5', text: 'Catch 5 pokémon', event: 'catch', need: 5 },
-  { id: 'water', text: 'Catch a Water type', event: 'catchType:Water', need: 1 },
-  { id: 'fire', text: 'Catch a Fire type', event: 'catchType:Fire', need: 1 },
-  { id: 'grass', text: 'Catch a Grass type', event: 'catchType:Grass', need: 1 },
-  { id: 'psychic', text: 'Catch a Psychic type', event: 'catchType:Psychic', need: 1 },
-  { id: 'daily', text: 'Claim your daily yen', event: 'daily', need: 1 },
-  { id: 'predict', text: 'Make a prediction for a race or a match', event: 'predict', need: 1 },
+// quests: three dailies, two weeklies, and now and then a rare one that lasts three days
+// cmd:<name> is counted whenever someone runs that command, so any command can be a quest
+type QEvent = Event | `cmd:${string}`;
+interface Quest { id: string; text: string; event: QEvent; need: number; pay: number }
+const DAILY: Quest[] = [
+  { id: 'quote', text: 'Make a quote out of someone\'s message', event: 'quote', need: 1, pay: 120 },
+  { id: 'quiz2', text: 'Win 2 quiz or crest quiz questions', event: 'quizwin', need: 2, pay: 140 },
+  { id: 'guess', text: 'Win a round of guess the anime', event: 'guesswin', need: 1, pay: 140 },
+  { id: 'catch5', text: 'Catch 5 pokémon', event: 'catch', need: 5, pay: 150 },
+  { id: 'water', text: 'Catch a Water type', event: 'catchType:Water', need: 1, pay: 110 },
+  { id: 'fire', text: 'Catch a Fire type', event: 'catchType:Fire', need: 1, pay: 120 },
+  { id: 'grass', text: 'Catch a Grass type', event: 'catchType:Grass', need: 1, pay: 110 },
+  { id: 'psychic', text: 'Catch a Psychic type', event: 'catchType:Psychic', need: 1, pay: 140 },
+  { id: 'electric', text: 'Catch an Electric type', event: 'catchType:Electric', need: 1, pay: 140 },
+  { id: 'daily', text: 'Claim your daily yen', event: 'daily', need: 1, pay: 80 },
+  { id: 'predict', text: 'Make a prediction for a race or a match', event: 'predict', need: 1, pay: 120 },
+  { id: 'chat30', text: 'Send 30 messages', event: 'messages', need: 30, pay: 120 },
+  { id: 'work2', text: 'Work 2 shifts with `tz work`', event: 'cmd:work', need: 2, pay: 120 },
+  { id: 'fish3', text: 'Go fishing 3 times', event: 'cmd:fish', need: 3, pay: 120 },
+  { id: 'scratch', text: 'Scratch a ticket', event: 'cmd:scratch', need: 1, pay: 100 },
+  { id: 'slots3', text: 'Play the slots 3 times', event: 'cmd:slots', need: 3, pay: 120 },
+  { id: 'bj2', text: 'Play 2 hands of blackjack', event: 'cmd:blackjack', need: 2, pay: 130 },
+  { id: 'rps2', text: 'Play rock paper scissors twice', event: 'cmd:rps', need: 2, pay: 100 },
+  { id: 'count10', text: 'Get 10 numbers right in the count', event: 'counted', need: 10, pay: 140 },
+  { id: 'give', text: 'Give yen to someone', event: 'gave', need: 1, pay: 120 },
+  { id: 'crime', text: 'Pull off a crime with `tz crime`', event: 'cmd:crime', need: 1, pay: 130 },
+  { id: 'act2', text: 'Hug, pat or bonk someone twice', event: 'cmd:act', need: 2, pay: 90 },
 ];
-const PRIZE = 120;
+const WEEKLY: Quest[] = [
+  { id: 'catch50', text: 'Catch 50 pokémon', event: 'catch', need: 50, pay: 1200 },
+  { id: 'quiz15', text: 'Win 15 quiz questions', event: 'quizwin', need: 15, pay: 1200 },
+  { id: 'guess8', text: 'Win 8 rounds of guess the anime', event: 'guesswin', need: 8, pay: 1100 },
+  { id: 'chat400', text: 'Send 400 messages', event: 'messages', need: 400, pay: 1000 },
+  { id: 'count75', text: 'Get 75 numbers right in the count', event: 'counted', need: 75, pay: 1100 },
+  { id: 'work15', text: 'Work 15 shifts', event: 'cmd:work', need: 15, pay: 1000 },
+  { id: 'heist2', text: 'Join 2 heists', event: 'cmd:heist', need: 2, pay: 1300 },
+  { id: 'fish20', text: 'Go fishing 20 times', event: 'cmd:fish', need: 20, pay: 1000 },
+  { id: 'predict3', text: 'Make 3 predictions', event: 'predict', need: 3, pay: 900 },
+  { id: 'quote5', text: 'Make 5 quotes', event: 'quote', need: 5, pay: 1000 },
+  { id: 'dragon', text: 'Catch a Dragon type', event: 'catchType:Dragon', need: 1, pay: 1400 },
+  { id: 'ghost2', text: 'Catch 2 Ghost types', event: 'catchType:Ghost', need: 2, pay: 1300 },
+  { id: 'daily5', text: 'Claim your daily on 5 days', event: 'daily', need: 5, pay: 1000 },
+];
+const RARE: Quest[] = [
+  { id: 'shiny', text: 'Catch a shiny', event: 'catchShiny', need: 1, pay: 6000 },
+  { id: 'legend', text: 'Catch a legendary, mythical or ultra beast', event: 'catchRare', need: 1, pay: 4000 },
+  { id: 'fast', text: 'Guess the anime in under 5 seconds', event: 'fastGuess', need: 1, pay: 3500 },
+  { id: 'oracle', text: 'Get 2 predictions right', event: 'predictWin', need: 2, pay: 4000 },
+  { id: 'record', text: 'Push the count past its record', event: 'countRecord', need: 1, pay: 3500 },
+  { id: 'catch150', text: 'Catch 150 pokémon', event: 'catch', need: 150, pay: 4500 },
+  { id: 'quiz30', text: 'Win 30 quiz questions', event: 'quizwin', need: 30, pay: 4000 },
+  { id: 'heist5', text: 'Join 5 heists', event: 'cmd:heist', need: 5, pay: 4000 },
+];
+const SET_BONUS = { daily: 200, weekly: 750 };
+const RARE_DAYS = 3;
+const RARE_CHANCE = 22; // out of 100, rolled once a day while no rare quest is open
+
+const hashOf = (s: string) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0; return h; };
+// a few different picks from a pool, the same for that person all day or week
+function pickFrom(pool: Quest[], seed: string, n: number) {
+  return [...pool].map((q) => [hashOf(`${seed}:${q.id}`), q] as const).sort((x, y) => x[0] - y[0]).slice(0, n).map(([, q]) => q);
+}
+const weekOf = (d = new Date()) => {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = (t.getUTCDay() + 6) % 7;
+  t.setUTCDate(t.getUTCDate() - day);
+  return t.toISOString().slice(0, 10); // the Monday
+};
+interface Rare { id: string; until: number; done?: boolean }
+// the rare quest someone has open, rolling for a new one once a day when there's none
+export function rareOf(store: Store, g: string, u: string): Rare | null {
+  const key = `qrare:${g}:${u}`;
+  const cur = JSON.parse(store.getKv(key) ?? 'null') as Rare | null;
+  if (cur && cur.until > Date.now() && !cur.done) return cur;
+  const rolled = `qrareroll:${g}:${u}`;
+  if (store.getKv(rolled) === today()) return cur && cur.until > Date.now() ? cur : null;
+  store.setKv(rolled, today());
+  if (hashOf(`${g}:${u}:${today()}:rare`) % 100 >= RARE_CHANCE) return cur && cur.until > Date.now() ? cur : null;
+  const q = RARE[hashOf(`${g}:${u}:${today()}:which`) % RARE.length];
+  const fresh: Rare = { id: q.id, until: Date.now() + RARE_DAYS * 86_400_000 };
+  store.setKv(key, JSON.stringify(fresh));
+  store.setKv(`q:${g}:${u}:rare:${fresh.until}`, '0');
+  return fresh;
+}
+export const dailiesOf = (g: string, u: string, day = today()) => pickFrom(DAILY, `${g}:${u}:${day}`, 3);
+export const weekliesOf = (g: string, u: string, wk = weekOf()) => pickFrom(WEEKLY, `${g}:${u}:${wk}`, 2);
+const progKey = (g: string, u: string, period: string, id: string) => `q:${g}:${u}:${period}:${id}`;
+const got = (store: Store, k: string) => Number(store.getKv(k) ?? 0);
+interface Streak { last: string; n: number; best?: number }
+const streakOf = (store: Store, key: string) => JSON.parse(store.getKv(key) ?? '{"last":"","n":0}') as Streak;
 
 // achievements: a count of something done, or the best value reached (a streak, a balance, a level)
 export interface Badge { id: string; emoji: string; name: string; how: string; group: string; event: Event; need: number; best?: boolean }
@@ -57,8 +133,11 @@ export const BADGES: Badge[] = [
   { id: 'counter', emoji: '🔢', name: 'Keeps count', how: 'Get 100 numbers right in the count', group: 'Server life', event: 'counted', need: 100 },
   { id: 'counter1k', emoji: '📒', name: 'The ledger', how: 'Get 1,000 numbers right in the count', group: 'Server life', event: 'counted', need: 1000 },
   { id: 'recorder', emoji: '🏆', name: 'Record keeper', how: 'Push the count past its old record', group: 'Server life', event: 'countRecord', need: 1 },
-  { id: 'mission7', emoji: '🕵️', name: 'On the case', how: 'Finish the daily mission 7 days in a row', group: 'Missions', event: 'missionStreak', need: 7, best: true },
-  { id: 'mission30', emoji: '🗂️', name: 'Case closed', how: 'Finish 30 daily missions', group: 'Missions', event: 'missionDone', need: 30 },
+  { id: 'mission7', emoji: '🕵️', name: 'On the case', how: 'Clear all three daily quests 7 days in a row', group: 'Quests', event: 'missionStreak', need: 7, best: true },
+  { id: 'mission30', emoji: '🗂️', name: 'Case closed', how: 'Finish 30 quests', group: 'Quests', event: 'missionDone', need: 30 },
+  { id: 'quest250', emoji: '📚', name: 'Archivist', how: 'Finish 250 quests', group: 'Quests', event: 'missionDone', need: 250 },
+  { id: 'rare1', emoji: '💠', name: 'Off the books', how: 'Crack a rare quest', group: 'Quests', event: 'rareDone', need: 1 },
+  { id: 'rare10', emoji: '🔱', name: 'Special division', how: 'Crack 10 rare quests', group: 'Quests', event: 'rareDone', need: 10 },
 ];
 
 // how far someone is towards one: the count so far, or their best value
@@ -77,13 +156,6 @@ export function shownOf(store: Store, guild: string, user: string, tierOf: (id: 
 export const setShown = (store: Store, guild: string, user: string, ids: string[]) => store.setKv(`achshow:${guild}:${user}`, JSON.stringify(ids.slice(0, 6)));
 
 const today = () => new Date().toISOString().slice(0, 10);
-// the same mission for everyone in a server on a day, so people can do it together
-export function missionOf(guild: string, day = today()) {
-  let h = 0;
-  for (const c of `${guild}:${day}`) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return MISSIONS[h % MISSIONS.length];
-}
-
 export const badgesOf = (store: Store, guild: string, user: string) => JSON.parse(store.getKv(`ach:${guild}:${user}`) ?? '[]') as string[];
 
 function count(store: Store, key: string, by = 1) {
@@ -94,9 +166,17 @@ function count(store: Store, key: string, by = 1) {
 
 // a feature says something happened, back come the lines worth showing (a badge, a finished mission)
 // for the "best" kind, by is the value reached, like a streak of 12 or a balance of 4,000
-export function track(store: Store, guild: string | null, user: string, event: Event, by = 1): string[] {
+export function track(store: Store, guild: string | null, user: string, event: Event | `cmd:${string}`, by = 1): string[] {
   if (!guild) return [];
   const out: string[] = [];
+  if (event.startsWith('cmd:')) {
+    const have = badgesOf(store, guild, user);
+    const at = earnedAt(store, guild, user);
+    const medals: string[] = [];
+    const out = questProgress(store, guild, user, event, by, have, (b) => { have.push(b.id); at[b.id] = Date.now(); medals.push(`${b.emoji} <@${user}> earned **${b.name}**! *${b.how.toLowerCase()}*`); });
+    if (medals.length) { store.setKv(`ach:${guild}:${user}`, JSON.stringify(have)); store.setKv(`achat:${guild}:${user}`, JSON.stringify(at)); }
+    return [...out, ...medals];
+  }
   const isBest = BADGES.some((b) => b.event === event && b.best);
   let total: number;
   if (isBest) {
@@ -127,33 +207,7 @@ export function track(store: Store, guild: string | null, user: string, event: E
       for (const b of BADGES) if (b.event === 'typesSeen' && seen.size >= b.need && !have.includes(b.id)) earn(b);
     }
   }
-  // today's mission
-  const m = missionOf(guild);
-  if (m.event === event) {
-    const key = `mission:${guild}:${today()}:${user}`;
-    const before = Number(store.getKv(key) ?? 0);
-    if (before < m.need) {
-      const now = count(store, key, by);
-      if (now >= m.need) {
-        const streakKey = `mstreak:${guild}:${user}`;
-        const s = JSON.parse(store.getKv(streakKey) ?? '{"last":"","n":0}') as { last: string; n: number };
-        const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-        s.n = s.last === yesterday ? s.n + 1 : 1;
-        s.last = today();
-        store.setKv(streakKey, JSON.stringify(s));
-        const bonus = PRIZE + Math.min(6, s.n - 1) * 20;
-        if (store.rules(guild, 'economy').enabled) store.pay(guild, user, bonus);
-        out.push(`🕵️ <@${user}> finished today's mission${store.rules(guild, 'economy').enabled ? `, +¥${bonus}` : ''}${s.n > 1 ? ` · 🔥 ${s.n} day streak` : ''}`);
-        const done = count(store, `cnt:${guild}:${user}:missionDone`);
-        const best = Math.max(s.n, Number(store.getKv(`best:${guild}:${user}:missionStreak`) ?? 0));
-        store.setKv(`best:${guild}:${user}:missionStreak`, String(best));
-        for (const b of BADGES) {
-          if (have.includes(b.id)) continue;
-          if ((b.event === 'missionStreak' && best >= b.need) || (b.event === 'missionDone' && done >= b.need)) earn(b);
-        }
-      }
-    }
-  }
+  out.push(...questProgress(store, guild, user, event, by, have, earn));
   if (out.length) {
     store.setKv(`ach:${guild}:${user}`, JSON.stringify(have));
     store.setKv(`achat:${guild}:${user}`, JSON.stringify(at));
@@ -161,22 +215,127 @@ export function track(store: Store, guild: string | null, user: string, event: E
   return out;
 }
 
-export const mission: Command = {
-  name: 'mission',
+// moves every open quest that listens for this event, pays what finishes, and keeps the streaks
+function questProgress(store: Store, g: string, u: string, event: QEvent, by: number, have: string[], earn: (b: Badge) => void): string[] {
+  const out: string[] = [];
+  const paid = store.rules(g, 'economy').enabled;
+  const pay = (n: number) => { if (paid && n > 0) store.pay(g, u, n); };
+  const day = today(), wk = weekOf();
+  const finish = (q: Quest, period: string) => {
+    const k = progKey(g, u, period, q.id);
+    const was = got(store, k);
+    if (was >= q.need) return false;
+    const now = Math.min(q.need, was + by);
+    store.setKv(k, String(now));
+    if (now < q.need) return false;
+    pay(q.pay);
+    store.setKv(`cnt:${g}:${u}:missionDone`, String(got(store, `cnt:${g}:${u}:missionDone`) + 1));
+    return true;
+  };
+  // dailies
+  const daily = dailiesOf(g, u, day);
+  for (const q of daily.filter((x) => x.event === event)) if (finish(q, day)) out.push(`📜 <@${u}> finished a daily quest: **${q.text}**${paid ? `, +¥${q.pay}` : ''}`);
+  if (daily.some((q) => q.event === event) && daily.every((q) => got(store, progKey(g, u, day, q.id)) >= q.need) && store.getKv(`qset:${g}:${u}:${day}`) !== '1') {
+    store.setKv(`qset:${g}:${u}:${day}`, '1');
+    const s = streakOf(store, `mstreak:${g}:${u}`);
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    s.n = s.last === yesterday ? s.n + 1 : 1;
+    s.last = day;
+    s.best = Math.max(s.best ?? 0, s.n);
+    store.setKv(`mstreak:${g}:${u}`, JSON.stringify(s));
+    // the streak adds to the bonus up to ten days, and every seventh day pays a little extra
+    const bonus = SET_BONUS.daily + Math.min(10, s.n - 1) * 25 + (s.n % 7 === 0 ? 500 : 0);
+    pay(bonus);
+    out.push(`🗂️ <@${u}> cleared all three dailies${paid ? `, bonus **¥${bonus}**` : ''}${s.n > 1 ? ` · 🔥 **${s.n} day** streak` : ''}${s.n % 7 === 0 ? ' · a week straight!' : ''}`);
+    const best = Math.max(s.n, got(store, `best:${g}:${u}:missionStreak`));
+    store.setKv(`best:${g}:${u}:missionStreak`, String(best));
+  }
+  // weeklies
+  const weekly = weekliesOf(g, u, wk);
+  for (const q of weekly.filter((x) => x.event === event)) if (finish(q, `w${wk}`)) out.push(`📅 <@${u}> finished a weekly quest: **${q.text}**${paid ? `, +¥${q.pay.toLocaleString()}` : ''}`);
+  if (weekly.some((q) => q.event === event) && weekly.every((q) => got(store, progKey(g, u, `w${wk}`, q.id)) >= q.need) && store.getKv(`qwset:${g}:${u}:${wk}`) !== '1') {
+    store.setKv(`qwset:${g}:${u}:${wk}`, '1');
+    const s = streakOf(store, `qwstreak:${g}:${u}`);
+    const lastWeek = weekOf(new Date(Date.now() - 7 * 86_400_000));
+    s.n = s.last === lastWeek ? s.n + 1 : 1;
+    s.last = wk;
+    store.setKv(`qwstreak:${g}:${u}`, JSON.stringify(s));
+    const bonus = SET_BONUS.weekly + Math.min(4, s.n - 1) * 250;
+    pay(bonus);
+    out.push(`🗓️ <@${u}> cleared both weeklies${paid ? `, bonus **¥${bonus.toLocaleString()}**` : ''}${s.n > 1 ? ` · 🔥 **${s.n} weeks** running` : ''}`);
+  }
+  // the rare one
+  const r = JSON.parse(store.getKv(`qrare:${g}:${u}`) ?? 'null') as Rare | null;
+  const rq = r && !r.done && r.until > Date.now() ? RARE.find((q) => q.id === r.id) : null;
+  if (rq && rq.event === event && finish(rq, `rare:${r!.until}`)) {
+    store.setKv(`qrare:${g}:${u}`, JSON.stringify({ ...r, done: true }));
+    const n = got(store, `cnt:${g}:${u}:rareDone`) + 1;
+    store.setKv(`cnt:${g}:${u}:rareDone`, String(n));
+    out.push(`💠 <@${u}> cracked a **rare quest**: **${rq.text}**${paid ? `, +¥${rq.pay.toLocaleString()}` : ''}!`);
+    for (const b of BADGES) if (b.event === 'rareDone' && n >= b.need && !have.includes(b.id)) earn(b);
+  }
+  // quest medals
+  const done = got(store, `cnt:${g}:${u}:missionDone`);
+  const best = got(store, `best:${g}:${u}:missionStreak`);
+  for (const b of BADGES) {
+    if (have.includes(b.id)) continue;
+    if ((b.event === 'missionStreak' && best >= b.need) || (b.event === 'missionDone' && done >= b.need)) earn(b);
+  }
+  return out;
+}
+
+// one quest as a line: the bar, the count and the pay
+const bar = (n: number, need: number) => { const k = Math.round((Math.min(n, need) / need) * 8); return `${'▰'.repeat(k)}${'▱'.repeat(8 - k)}`; };
+const line = (store: Store, k: string, q: Quest) => {
+  const n = got(store, k);
+  return n >= q.need ? `✅ ~~${q.text}~~ · ¥${q.pay.toLocaleString()}` : `▫️ **${q.text}**\n${bar(n, q.need)} ${n.toLocaleString()}/${q.need.toLocaleString()} · ¥${q.pay.toLocaleString()}`;
+};
+
+export function questPage(store: Store, g: string, u: string) {
+  const day = today(), wk = weekOf();
+  const daily = dailiesOf(g, u, day), weekly = weekliesOf(g, u, wk);
+  const rare = rareOf(store, g, u);
+  const rq = rare ? RARE.find((q) => q.id === rare.id) : null;
+  const s = streakOf(store, `mstreak:${g}:${u}`);
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const alive = s.last === day || s.last === yesterday ? s.n : 0;
+  const ws = streakOf(store, `qwstreak:${g}:${u}`);
+  const wAlive = ws.last === wk || ws.last === weekOf(new Date(Date.now() - 7 * 86_400_000)) ? ws.n : 0;
+  const midnight = Math.floor(Date.parse(`${day}T00:00:00Z`) / 1000) + 86_400;
+  const monday = Math.floor(Date.parse(`${wk}T00:00:00Z`) / 1000) + 7 * 86_400;
+  const dDone = store.getKv(`qset:${g}:${u}:${day}`) === '1';
+  const wDone = store.getKv(`qwset:${g}:${u}:${wk}`) === '1';
+  const nextBonus = SET_BONUS.daily + Math.min(10, (s.last === yesterday ? s.n : 0)) * 25;
+  const fields = [
+    { name: `📜 Daily · new <t:${midnight}:R>`, value: [...daily.map((q) => line(store, progKey(g, u, day, q.id), q)), dDone ? '🗂️ All three done today.' : `All three: **+¥${nextBonus}** bonus and the streak goes on`].join('\n'), inline: false },
+    { name: `🗓️ Weekly · new <t:${monday}:R>`, value: [...weekly.map((q) => line(store, progKey(g, u, `w${wk}`, q.id), q)), wDone ? '🗓️ Both done this week.' : `Both: **+¥${(SET_BONUS.weekly + Math.min(4, wAlive) * 250).toLocaleString()}** bonus`].join('\n'), inline: false },
+    rq && rare
+      ? { name: `💠 Rare · ends <t:${Math.floor(rare.until / 1000)}:R>`, value: rare.done ? `✅ ~~${rq.text}~~ · cracked it` : line(store, progKey(g, u, `rare:${rare.until}`, rq.id), rq), inline: false }
+      : { name: '💠 Rare', value: 'None open. Some days a rare, hard quest turns up and stays for three days, check back tomorrow.', inline: false },
+  ];
+  return {
+    embeds: [card({ kind: 'help', title: 'Your quests', emoji: '📜', gif: 'off', line: '',
+      body: `🔥 Daily streak **${alive}** day${alive === 1 ? '' : 's'} · 🗓️ weekly streak **${wAlive}** · ${got(store, `cnt:${g}:${u}:missionDone`).toLocaleString()} quests done${s.best ? ` · best streak ${s.best}` : ''}`,
+      fields })],
+  };
+}
+
+export function questGlance(store: Store, g: string, u: string) {
+  const day = today();
+  const daily = dailiesOf(g, u, day);
+  const n = daily.filter((q) => got(store, progKey(g, u, day, q.id)) >= q.need).length;
+  const rare = rareOf(store, g, u);
+  return `📜 Quests **${n}/3** today${rare && !rare.done ? ' · 💠 a rare one is open' : ''}`;
+}
+
+export const quests: Command = {
+  name: 'quests',
   group: 'you',
-  data: new SlashCommandBuilder().setName('mission').setDescription('Today\'s Agency mission and your badges').toJSON(),
-  text: { aliases: ['missions'] },
+  data: new SlashCommandBuilder().setName('quests').setDescription('Your daily, weekly and rare quests, what they pay and your streak').toJSON(),
+  text: { aliases: ['quest', 'q', 'mission', 'missions', 'dailies'] },
   run: (ctx, store) => {
-    if (!ctx.guildId) return ctx.reply('Missions are per server.');
-    const m = missionOf(ctx.guildId);
-    const done = Number(store.getKv(`mission:${ctx.guildId}:${today()}:${ctx.userId}`) ?? 0);
-    const s = JSON.parse(store.getKv(`mstreak:${ctx.guildId}:${ctx.userId}`) ?? '{"last":"","n":0}') as { last: string; n: number };
-    const have = badgesOf(store, ctx.guildId, ctx.userId);
-    const midnight = Math.floor(Date.parse(`${today()}T00:00:00Z`) / 1000) + 86_400;
-    const e = card({ kind: 'help', title: 'Today\'s mission', emoji: '🕵️', gif: 'off', line: '',
-      body: `**${m.text}**\n${done >= m.need ? '✅ done' : `${Math.min(done, m.need)}/${m.need}`} · pays ¥${PRIZE} plus ¥20 a day for a streak · new mission <t:${midnight}:R>${s.n ? `\n🔥 ${s.n} day streak` : ''}`,
-      fields: [{ name: '🏅 Achievements', value: `${have.length} of ${BADGES.length} earned · \`tz achievements\` shows them all and what's left`, inline: false }] });
-    return ctx.reply({ embeds: [e] });
+    if (!ctx.guildId) return ctx.reply('Quests are per server.');
+    return ctx.reply(questPage(store, ctx.guildId, ctx.userId));
   },
 };
 
