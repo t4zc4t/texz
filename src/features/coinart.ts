@@ -219,3 +219,44 @@ export async function prepareCoin() {
   return made;
 }
 export const coinArt = () => made;
+
+// the coin as small emoji art: each face on its own, and a coin turning over and over
+export async function coinEmojiArt(size = 128) {
+  const faces = { Heads: await faceImage('Heads'), Tails: await faceImage('Tails') };
+  const flat = (side: Side) => {
+    const c = createCanvas(size, size);
+    c.getContext('2d').drawImage(faces[side], 4, 4, size - 8, size - 8);
+    return c.toBuffer('image/png');
+  };
+  const shots: Uint8ClampedArray[] = [];
+  const n = 16;
+  for (let f = 0; f < n; f++) {
+    const t = (f / n) * Math.PI * 2;
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const h = Math.abs(Math.cos(t));
+    const showing: Side = Math.cos(t) >= 0 ? 'Heads' : 'Tails';
+    const r = size / 2 - 4;
+    x.translate(size / 2, size / 2);
+    x.scale(Math.max(0.06, h), 1);
+    x.drawImage(faces[showing], -r, -r, r * 2, r * 2);
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    const d = x.getImageData(0, 0, size, size);
+    for (let p = 3; p < d.data.length; p += 4) d.data[p] = d.data[p] > 110 ? 255 : 0;
+    shots.push(new Uint8ClampedArray(d.data));
+  }
+  // the colours from the solid pixels, and one more slot kept for see-through
+  const solid = concat(shots.map((p) => p.filter((_, i) => p[i - (i % 4) + 3] === 255)));
+  const palette = quantize(solid, 255);
+  const near = mapper(palette);
+  palette.push([0, 0, 0]);
+  const clear = palette.length - 1;
+  const enc = GIFEncoder();
+  for (const p of shots) {
+    const idx = near(p);
+    for (let i = 0; i < idx.length; i++) if (p[i * 4 + 3] === 0) idx[i] = clear;
+    enc.writeFrame(idx, size, size, { palette, delay: 40, transparent: true, transparentIndex: clear, repeat: 0 } as never);
+  }
+  enc.finish();
+  return { heads: flat('Heads'), tails: flat('Tails'), spin: Buffer.from(enc.bytes()) };
+}

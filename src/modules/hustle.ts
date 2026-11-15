@@ -6,7 +6,8 @@ import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
 import { levelOf, rankFor, ranks } from './levels.js';
 import { polishEmbed, polishRows } from '../core/icons.js';
-import { shortOf } from './casino.js';
+import { banner, nameOf, pause, playOut, shortOf } from './casino.js';
+import { casinoEmoji as art } from '../features/slotart.js';
 
 // ways to earn and lose yen besides the daily: shifts at the Agency, Port Mafia jobs, the river, the vault,
 // robbing each other, roulette, scratch cards, crew heists and rock paper scissors. Buttons edit their own message.
@@ -81,14 +82,19 @@ const crime: Command = {
     const left = waitLeft(store, 'crime', ctx.guildId, ctx.userId, 7200);
     if (left) return ctx.reply({ content: `⏳ The Port Mafia has nothing for you until ${later(left)}.`, temp: true });
     stamp(store, 'crime', ctx.guildId, ctx.userId);
+    const top = banner('PORT MAFIA JOB');
+    const who = `**${nameOf(ctx)}** takes a job from the Port Mafia`;
+    let end: string;
     if (Math.random() < 0.55) {
       const got = between(250, 600);
       store.pay(ctx.guildId, ctx.userId, got);
-      return ctx.reply({ embeds: [card('🖤 Port Mafia job', `You ${pick(CRIMES_OK)}.\n**+${fmt(got)}**\n-# wallet ${fmt(wallet(store, ctx.guildId, ctx.userId))}`, WIN)], public: true });
+      end = `🖤 You ${pick(CRIMES_OK)} and walked away with **${fmt(got)}**`;
+    } else {
+      const fine = Math.min(between(150, 400), wallet(store, ctx.guildId, ctx.userId));
+      store.pay(ctx.guildId, ctx.userId, -fine);
+      end = `🚨 You ${pick(CRIMES_BAD)}. **−${fmt(fine)}**`;
     }
-    const fine = Math.min(between(150, 400), wallet(store, ctx.guildId, ctx.userId));
-    store.pay(ctx.guildId, ctx.userId, -fine);
-    return ctx.reply({ embeds: [card('🚨 Caught', `You ${pick(CRIMES_BAD)}.\n**−${fmt(fine)}**\n-# wallet ${fmt(wallet(store, ctx.guildId, ctx.userId))}`, LOSE)], public: true });
+    await playOut(ctx, [`${top}\n${who}\n🌃 slipping into the docks after dark...`, `${top}\n${who}\n${end}`], [1800]);
   },
 };
 
@@ -143,7 +149,13 @@ const fish: Command = {
     const hit = CATCH.find((c) => (r -= c[3]) < 0) ?? CATCH[1];
     if (hit[2]) store.pay(ctx.guildId, ctx.userId, hit[2]);
     const rare = hit[2] >= 600;
-    return ctx.reply({ embeds: [card(`🎣 ${rare ? 'What a catch' : 'Gone fishing'}`, `${hit[0]} You pulled up ${hit[1]}.\n${hit[2] ? `Sold for **+${fmt(hit[2])}**` : 'Worth nothing. Kunikida makes you bin it.'}\n-# wallet ${fmt(wallet(store, ctx.guildId, ctx.userId))}`, rare ? 0xe0901f : hit[2] ? WIN : PLAY)], public: true });
+    const top = banner('THE YOKOHAMA RIVER');
+    const who = `**${nameOf(ctx)}** casts a line`;
+    await playOut(ctx, [
+      `${top}\n${who}\n🎣 the float bobs on the water...`,
+      `${top}\n${who}\n🎣 something's tugging${rare ? ', hard' : ''}...`,
+      `${top}\n${who}\n${hit[0]} and reels in **${hit[1]}**${hit[2] ? `, sold for **${fmt(hit[2])}**` : '. Worth nothing, Kunikida makes you bin it.'}${rare ? '\n-# a rare catch' : ''}`,
+    ], [1400, 1100]);
   },
 };
 
@@ -254,9 +266,9 @@ function betOf(store: Store, g: string, u: string, raw: string | null): number |
 const roulette: Command = {
   name: 'roulette',
   cooldown: 5,
-  data: new SlashCommandBuilder().setName('roulette').setDescription('Spin the Lupin wheel: red, black, odd, even, low, high or a number')
+  data: new SlashCommandBuilder().setName('roulette').setDescription('Spin the Lupin wheel: red, black, odd, even, low, high, a dozen or a number')
     .addStringOption((o) => o.setName('bet').setDescription('How much, or half / all').setRequired(true))
-    .addStringOption((o) => o.setName('on').setDescription('red, black, odd, even, low, high, or 0 to 36').setRequired(true)).toJSON(),
+    .addStringOption((o) => o.setName('on').setDescription('red, black, odd, even, low, high, 1st/2nd/3rd dozen, or 0 to 36').setRequired(true)).toJSON(),
   text: { aliases: ['wheel', 'rl'], args: ['bet', 'on'] },
   example: '200 red',
   run: async (ctx, store) => {
@@ -266,14 +278,28 @@ const roulette: Command = {
     const on = (ctx.str('on') ?? '').toLowerCase().trim();
     const num = /^\d+$/.test(on) ? Number(on) : null;
     const kinds = ['red', 'black', 'odd', 'even', 'low', 'high'];
-    if ((num === null || num > 36) && !kinds.includes(on)) return ctx.reply({ content: 'Bet on `red`, `black`, `odd`, `even`, `low` (1-18), `high` (19-36) or a number from 0 to 36. Like `tz roulette 200 red`.', temp: true });
+    if ((num === null || num > 36) && !kinds.includes(on) && !/^(d|dozen)?[123](st|nd|rd)$|^(d|dozen)[123]$/.test(on.replace(/\s+/g, ''))) return ctx.reply({ content: 'Bet on `red`, `black`, `odd`, `even`, `low` (1-18), `high` (19-36), a dozen (`1st`, `2nd`, `3rd`, pays 2×) or a number from 0 to 36 (pays 35×). Like `tz roulette 200 red`.', temp: true });
     const ball = Math.floor(Math.random() * 37);
-    const colour = ball === 0 ? '🟢' : REDS.has(ball) ? '🔴' : '⚫';
+    const chip = ball === 0 ? 'chip_green' : REDS.has(ball) ? 'chip_red' : 'chip_black';
+    const colour = ball === 0 ? 'green' : REDS.has(ball) ? 'red' : 'black';
+    const dozen = /^(?:(?:d|dozen)([123])|([123])(?:st|nd|rd))$/.exec(on.replace(/\s+/g, ''));
+    const d = num === null && dozen ? Number(dozen[1] ?? dozen[2]) : null;
     const won = num !== null ? ball === num
+      : d !== null ? ball !== 0 && Math.ceil(ball / 12) === d
       : ball !== 0 && ({ red: REDS.has(ball), black: !REDS.has(ball), odd: ball % 2 === 1, even: ball % 2 === 0, low: ball <= 18, high: ball >= 19 } as Record<string, boolean>)[on];
-    const change = won ? bet * (num !== null ? 35 : 1) : -bet;
+    const times = num !== null ? 35 : d !== null ? 2 : 1;
+    const change = won ? bet * times : -bet;
     store.pay(ctx.guildId, ctx.userId, change);
-    return ctx.reply({ embeds: [card('🎡 Lupin roulette', `The ball lands on **${colour} ${ball}**.\nYou bet on ${num !== null ? `**${num}**` : `**${on}**`}. ${won ? `**+${fmt(change)}**` : `**−${fmt(bet)}**`}\n-# numbers pay 35×, everything else 1× · wallet ${fmt(wallet(store, ctx.guildId, ctx.userId))}`, won ? WIN : LOSE)], public: true });
+    const label = num !== null ? `**${num}**` : d !== null ? `the **${['1st', '2nd', '3rd'][d - 1]} twelve**` : `**${on}**`;
+    const top = banner('BAR LUPIN ROULETTE');
+    const who = `**${nameOf(ctx)}** bet **${fmt(bet)}** on ${label}`;
+    // a few numbers the ball rattles past on the way
+    const past = Array.from({ length: 3 }, () => Math.floor(Math.random() * 37));
+    await playOut(ctx, [
+      `${top}\n${who}\n${art('wheel_spin')} the ball is rolling...`,
+      `${top}\n${who}\n${art('wheel_spin')} it rattles past ${past.join(', ')}...`,
+      `${top}\n${who}\n${art(chip)} **${ball}** ${colour} ${won ? `and won **${fmt(bet + change)}** · ${times}×` : pick(['and lost it all. The wheel has no mercy, and neither does Mori.', 'and lost it all. Dazai blames the ball.', 'and lost it all. Chuuya calls it a skill issue.'])}`,
+    ], [1300, 1200]);
   },
 };
 
@@ -281,7 +307,7 @@ const roulette: Command = {
 const PRICE = 100;
 const TICKET_LIFE = 90_000;
 // symbol, chance of being the winning one on a ticket, how many tickets it pays
-const PRIZES: [string, number, number][] = [['🍙', 0.15, 2], ['🦀', 0.08, 3], ['🔔', 0.04, 5], ['💎', 0.008, 20], ['🖤', 0.001, 100]];
+const PRIZES: [string, number, number][] = [['🍙', 0.13, 2], ['🦀', 0.08, 3], ['🔔', 0.04, 5], ['💎', 0.008, 20], ['🖤', 0.001, 100]];
 interface Ticket { guild: string; user: string; cells: string[]; open: boolean[]; win: string | null; at: number; done: boolean; msg?: import('discord.js').Message }
 const tickets = new Map<string, Ticket>();
 
@@ -365,7 +391,7 @@ const chanceOf = (n: number) => Math.min(0.8, 0.25 + 0.1 * n);
 function heistView(h: Heist, end: string | null) {
   const id = (a: string) => `hs|${a}|${h.leader}`;
   const body = `**Target:** ${h.target}\n**Crew (${h.crew.length}):** ${h.crew.map((u) => `<@${u}>`).join(' ')}\n**Way in:** ${fmt(ENTRY)} each, paid when it starts · **odds** ${Math.round(chanceOf(h.crew.length) * 100)}%${end ? `\n\n${end}` : '\n-# More crew, better odds. The leader starts it once there are at least two.'}`;
-  const e = card('🕶️ Heist', body, end ? (/made it|split/i.test(end) ? WIN : LOSE) : PLAY);
+  const e = card('🕶️ Heist', body, end ? (/made it|split/i.test(end) ? WIN : /\.\.\.$/.test(end) ? PLAY : LOSE) : PLAY);
   const rows = end ? [] : [row(
     new ButtonBuilder().setCustomId(id('join')).setLabel('Join the crew').setEmoji('🤝').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(id('go')).setLabel('Pull it off').setEmoji('💥').setStyle(ButtonStyle.Danger).setDisabled(h.crew.length < 2),
@@ -451,13 +477,18 @@ export async function onHustle(store: Store, i: Interaction): Promise<boolean> {
     if (h.crew.length < 2) { await i.update(heistView(h, 'Not enough of the crew could pay their way in. Called off.')); return true; }
     for (const u of h.crew) store.pay(h.guild, u, -ENTRY);
     stamp(store, 'heist', h.guild, leader);
-    if (Math.random() < chanceOf(h.crew.length)) {
-      const each = ENTRY + between(250, 450) + 40 * h.crew.length;
-      for (const u of h.crew) store.pay(h.guild, u, each);
-      await i.update(heistView(h, `💰 You made it out. Everyone takes home **+${fmt(each - ENTRY)}** after the split.`));
-    } else {
-      await i.update(heistView(h, `🚨 ${pick(['Chuuya was waiting inside', 'Kunikida had the place staked out', 'Dazai sold you out for a laugh', 'Fyodor saw it coming'])}. Everyone loses their **${fmt(ENTRY)}**.`));
+    const made = Math.random() < chanceOf(h.crew.length);
+    const each = ENTRY + between(250, 450) + 40 * h.crew.length;
+    if (made) for (const u of h.crew) store.pay(h.guild, u, each);
+    // the job plays out on the same message
+    await i.deferUpdate();
+    for (const step of ['🔦 Getting past the guards...', '🔐 Cracking the vault...', '🚗 Running for the getaway car...']) {
+      await i.editReply(heistView(h, step)).catch(() => {});
+      await pause(1300);
     }
+    await i.editReply(heistView(h, made
+      ? `💰 You made it out. Everyone takes home **+${fmt(each - ENTRY)}** after the split.`
+      : `🚨 ${pick(['Chuuya was waiting inside', 'Kunikida had the place staked out', 'Dazai sold you out for a laugh', 'Fyodor saw it coming'])}. Everyone loses their **${fmt(ENTRY)}**.`)).catch(() => {});
     return true;
   }
   if (i.customId.startsWith('sc|')) {
@@ -497,7 +528,9 @@ export async function onHustle(store: Store, i: Interaction): Promise<boolean> {
       else if (wallet(store, d.guild, loser) >= d.bet) { store.pay(d.guild, loser, -d.bet); if (winner !== 'bot') store.pay(d.guild, winner, d.bet); money = ` **${fmt(d.bet)}** changes hands.`; }
     }
     const end = `${name(d.a)} ${HANDS[pa]} vs ${HANDS[pb]} ${name(d.b)}\n${winner ? `**${name(winner)} wins.**${money}` : '**A draw.** Nobody pays.'}`;
-    await i.update(duelView(d, key, end));
+    await i.deferUpdate();
+    for (const beat of ['✊ Rock...', '✋ Paper...', '✌️ Scissors...']) { await i.editReply(duelView(d, key, beat)).catch(() => {}); await pause(550); }
+    await i.editReply(duelView(d, key, end)).catch(() => {});
     return true;
   }
   return false;

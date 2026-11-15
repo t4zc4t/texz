@@ -4,7 +4,7 @@ import {
 } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
-import { SLOT_SYMS, slotEmoji, type SlotSym } from '../features/slotart.js';
+import { SLOT_SYMS, casinoEmoji as art, slotEmoji, type SlotSym } from '../features/slotart.js';
 
 // the back room of Bar Lupin: coin flips, slots and blackjack for yen. Everything edits its own message, nothing piles up.
 
@@ -38,9 +38,27 @@ function checkBet(store: Store, guild: string, user: string, raw: string | null)
 }
 
 const card = (title: string, body: string, colour: number) => new EmbedBuilder().setColor(colour).setTitle(title).setDescription(body);
+const pickLine = (a: string[]) => a[Math.floor(Math.random() * a.length)];
+const COIN_LOST = ['and lost it all. Dazai caught it and kept it.', 'and lost it all. Kunikida notes it in the ledger.', 'and lost it all. The coin feels nothing.'];
 const WIN = 0x3fa76a;
 const LOSE = 0xc8283c;
 const PLAY = 0xc8a97e;
+
+// a game told in a few edits of one message, the money already settled before the first one
+export const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+type Editable = { edit: (v: unknown) => Promise<unknown> };
+export const messageOf = (sent: unknown): Editable | null => {
+  const m = (sent as { resource?: { message?: unknown } })?.resource?.message ?? sent;
+  return m && typeof (m as { edit?: unknown }).edit === 'function' ? m as Editable : null;
+};
+export async function playOut(ctx: import('../core/ctx.js').Ctx, frames: string[], gaps: number[]) {
+  const sent = await ctx.reply({ content: frames[0], public: true, temp: false });
+  const msg = messageOf(sent);
+  if (!msg) return;
+  for (let k = 1; k < frames.length; k++) { await pause(gaps[k - 1] ?? 900); await msg.edit({ content: frames[k] }).catch(() => {}); }
+}
+export const nameOf = (ctx: import('../core/ctx.js').Ctx) => (ctx.member && 'displayName' in ctx.member ? ctx.member.displayName : null) ?? 'You';
+export const banner = (t: string) => `**\`  ${t}  \`**`;
 
 const coinflip: Command = {
   name: 'coinflip',
@@ -58,8 +76,13 @@ const coinflip: Command = {
     const landed = Math.random() < 0.5 ? 'heads' : 'tails';
     const won = landed === pick;
     store.pay(ctx.guildId, ctx.userId, won ? c.bet : -c.bet);
-    const now = store.wallet(ctx.guildId, ctx.userId).yen;
-    return ctx.reply({ embeds: [card(`🪙 ${landed}`, `${won ? `You called ${pick}. **+${fmt(c.bet)}**` : `You called ${pick}. **−${fmt(c.bet)}**, Dazai pockets it.`}\n-# wallet ${fmt(now)}`, won ? WIN : LOSE)], public: true });
+    const who = `**${nameOf(ctx)}** bet **${fmt(c.bet)}** on **${pick}**, ${pick === 'heads' ? 'the Agency' : 'the Port Mafia'}`;
+    const top = banner('THE LUPIN COIN');
+    const end = won ? `and won **${fmt(c.bet * 2)}**` : pickLine(COIN_LOST);
+    await playOut(ctx, [
+      `${top}\n${who}\n${art('coin_spin')} the coin is in the air...`,
+      `${top}\n${who}\n${art(`coin_${landed}`)} it lands on **${landed}** ${end}`,
+    ], [2200]);
   },
 };
 
@@ -90,13 +113,6 @@ const machine = (name: string, bet: number, shown: (SlotSym | 'spin')[], result:
   `\`|         |\` ${result}`,
   '`|         |`',
 ].join('\n');
-const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
-// a slash reply hands back an interaction response, a typed one the message itself
-const messageOf = (sent: unknown): { edit: (v: unknown) => Promise<unknown> } | null => {
-  const m = (sent as { resource?: { message?: unknown } })?.resource?.message ?? sent;
-  return m && typeof (m as { edit?: unknown }).edit === 'function' ? m as { edit: (v: unknown) => Promise<unknown> } : null;
-};
-
 const slots: Command = {
   name: 'slots',
   cooldown: 5,
@@ -112,25 +128,22 @@ const slots: Command = {
     const { reels, mult } = pull();
     const back = c.bet * mult;
     store.pay(ctx.guildId, ctx.userId, back - c.bet);
-    const name = (ctx.member && 'displayName' in ctx.member ? ctx.member.displayName : null) ?? 'You';
+    const name = nameOf(ctx);
     const result = mult === 0 ? LOST[Math.floor(Math.random() * LOST.length)]
       : mult === 1 ? `and got **${fmt(back)}** back, even.`
       : `and won **${fmt(back)}**${mult === 10 ? ' · **jackpot ×10**' : ` · ×${mult}`}`;
-    const sent = await ctx.reply({ content: machine(name, c.bet, ['spin', 'spin', 'spin'], ''), public: true, allowedMentions: { parse: [] } } as never);
-    const msg = messageOf(sent);
-    if (!msg) return;
-    await pause(1000);
-    await msg.edit({ content: machine(name, c.bet, [reels[0], 'spin', 'spin'], '') }).catch(() => {});
-    await pause(800);
-    await msg.edit({ content: machine(name, c.bet, [reels[0], reels[1], 'spin'], '') }).catch(() => {});
-    await pause(900);
-    await msg.edit({ content: machine(name, c.bet, reels, result) }).catch(() => {});
+    await playOut(ctx, [
+      machine(name, c.bet, ['spin', 'spin', 'spin'], ''),
+      machine(name, c.bet, [reels[0], 'spin', 'spin'], ''),
+      machine(name, c.bet, [reels[0], reels[1], 'spin'], ''),
+      machine(name, c.bet, reels, result),
+    ], [1000, 800, 900]);
   },
 };
 
 // ---------- blackjack, played on one message with buttons ----------
 type Hand = number[];
-interface Game { guild: string; user: string; bet: number; deck: number[]; you: Hand; dealer: Hand; doubled: boolean; at: number }
+interface Game { guild: string; user: string; bet: number; deck: number[]; you: Hand; dealer: Hand; doubled: boolean; at: number; reveal?: boolean }
 const games = new Map<string, Game>();
 const face = (c: number) => ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'][c % 13] + ['♠', '♥', '♦', '♣'][Math.floor(c / 13) % 4];
 const value = (h: Hand) => {
@@ -140,17 +153,20 @@ const value = (h: Hand) => {
   while (total > 21 && aces--) total -= 10;
   return total;
 };
-const deck = () => Array.from({ length: 52 }, (_, i) => i).sort(() => Math.random() - 0.5);
+// a fair shuffle, every order equally likely
+const deck = () => { const d = Array.from({ length: 52 }, (_, i) => i); for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; } return d; };
+const cards = (h: Hand) => h.map((c) => `\`${face(c)}\``).join(' ');
 
 function table(g: Game, end: string | null) {
   const you = value(g.you);
-  const shown = end ? g.dealer.map(face).join(' ') : `${face(g.dealer[0])} 🂠`;
-  const dv = end ? ` (${value(g.dealer)})` : '';
+  const open = end !== null || g.reveal;
+  const shown = open ? cards(g.dealer) : `${cards([g.dealer[0]])} \`??\``;
+  const dv = open ? ` · **${value(g.dealer)}**` : ` · **${value([g.dealer[0]])}** showing`;
   const e = card(`🃏 Blackjack · ${fmt(g.bet)}${g.doubled ? ' doubled' : ''}`,
-    `**Dealer**${dv}\n${shown}\n\n**You** (${you})\n${g.you.map(face).join(' ')}${end ? `\n\n${end}` : ''}`,
+    `Dealer${dv}\n${shown}\n\nYou · **${you}**${you === 21 && g.you.length === 2 ? ' blackjack' : ''}\n${cards(g.you)}${end ? `\n\n${end}` : g.reveal ? '\n\n-# the dealer draws...' : ''}`,
     end ? (/won|blackjack/i.test(end) ? WIN : /push/i.test(end) ? PLAY : LOSE) : PLAY);
   const id = (a: string) => `bj|${a}|${g.user}`;
-  const rows = end ? [] : [row(
+  const rows = end || g.reveal ? [] : [row(
     new ButtonBuilder().setCustomId(id('hit')).setLabel('Hit').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(id('stand')).setLabel('Stand').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(id('double')).setLabel('Double').setStyle(ButtonStyle.Secondary).setDisabled(g.you.length > 2),
@@ -158,22 +174,29 @@ function table(g: Game, end: string | null) {
   return { embeds: [e], components: rows };
 }
 
-// the dealer draws to 17, then the money moves once
+// the bet is taken at the deal, so walking away from a bad hand still costs it
+// settling pays back what's owed: twice the bet for a win, 2.5× for a blackjack, the bet itself for a push
 function settle(store: Store, g: Game): string {
   games.delete(g.user);
   const you = value(g.you);
-  if (you > 21) { store.pay(g.guild, g.user, -g.bet); return `Bust. **−${fmt(g.bet)}**`; }
-  while (value(g.dealer) < 17) g.dealer.push(g.deck.pop()!);
+  if (you > 21) return `Bust. **−${fmt(g.bet)}**`;
   const d = value(g.dealer);
   const natural = you === 21 && g.you.length === 2;
-  if (d > 21 || you > d) {
-    const win = natural ? Math.floor(g.bet * 1.5) : g.bet;
-    store.pay(g.guild, g.user, win);
-    return `${natural ? 'Blackjack!' : 'You won.'} **+${fmt(win)}**`;
+  const dealerNatural = d === 21 && g.dealer.length === 2;
+  if (natural && !dealerNatural) { store.pay(g.guild, g.user, g.bet + Math.floor(g.bet * 1.5)); return `**Blackjack!** **+${fmt(Math.floor(g.bet * 1.5))}**`; }
+  if (d > 21 || you > d) { store.pay(g.guild, g.user, g.bet * 2); return `${d > 21 ? 'The dealer busts.' : 'You win.'} **+${fmt(g.bet)}**`; }
+  if (you === d) { store.pay(g.guild, g.user, g.bet); return 'Push, your bet comes back.'; }
+  return `${pickLine(['The house wins.', 'Dazai deals himself the better hand.', 'The dealer smiles. The house wins.'])} **−${fmt(g.bet)}**`;
+}
+// the dealer turns the hidden card, then draws to 17 one card at a time on the same message
+async function dealerPlays(store: Store, g: Game, edit: (v: ReturnType<typeof table>) => Promise<unknown>) {
+  if (value(g.you) <= 21) {
+    g.reveal = true;
+    await edit(table(g, null)).catch(() => {});
+    while (value(g.dealer) < 17) { await pause(800); g.dealer.push(g.deck.pop()!); await edit(table(g, null)).catch(() => {}); }
+    await pause(700);
   }
-  if (you === d) return 'Push, your bet comes back.';
-  store.pay(g.guild, g.user, -g.bet);
-  return `The house wins. **−${fmt(g.bet)}**`;
+  await edit(table(g, settle(store, g))).catch(() => {});
 }
 
 const blackjack: Command = {
@@ -191,6 +214,7 @@ const blackjack: Command = {
     if ('error' in c) return ctx.reply({ content: c.error, temp: true });
     const d = deck();
     const g: Game = { guild: ctx.guildId, user: ctx.userId, bet: c.bet, deck: d, you: [d.pop()!, d.pop()!], dealer: [d.pop()!, d.pop()!], doubled: false, at: Date.now() };
+    store.pay(ctx.guildId, ctx.userId, -c.bet);
     games.set(ctx.userId, g);
     // a natural 21 settles straight away
     if (value(g.you) === 21) return ctx.reply({ ...table(g, settle(store, g)), public: true });
@@ -206,20 +230,25 @@ export async function onCasino(store: Store, i: Interaction): Promise<boolean> {
   if (!g) { await i.update({ components: [] }).catch(() => {}); return true; }
   g.at = Date.now();
   if (what === 'double') {
-    if (store.wallet(g.guild, g.user).yen < g.bet * 2) { await i.reply({ content: 'Not enough yen to double.', flags: MessageFlags.Ephemeral }); return true; }
+    if (store.wallet(g.guild, g.user).yen < g.bet) { await i.reply({ content: 'Not enough yen to double.', flags: MessageFlags.Ephemeral }); return true; }
+    store.pay(g.guild, g.user, -g.bet);
     g.bet *= 2;
     g.doubled = true;
     g.you.push(g.deck.pop()!);
-    await i.update(table(g, settle(store, g)));
+    await i.deferUpdate();
+    await dealerPlays(store, g, (v) => i.editReply(v));
     return true;
   }
   if (what === 'hit') {
     g.you.push(g.deck.pop()!);
-    if (value(g.you) >= 21) { await i.update(table(g, settle(store, g))); return true; }
+    if (value(g.you) > 21) { await i.update(table(g, settle(store, g))); return true; }
+    if (value(g.you) === 21) { await i.deferUpdate(); await dealerPlays(store, g, (v) => i.editReply(v)); return true; }
     await i.update(table(g, null));
     return true;
   }
-  await i.update(table(g, settle(store, g)));
+  if (g.reveal) { await i.deferUpdate().catch(() => {}); return true; }
+  await i.deferUpdate();
+  await dealerPlays(store, g, (v) => i.editReply(v));
   return true;
 }
 
