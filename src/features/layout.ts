@@ -30,7 +30,7 @@ export const extraRooms = {
   roles: { name: '🎭┃pick-your-roles', topic: 'Ping roles and name colours. Pick from the menus, unpick to drop.' },
   promotions: { name: '🎖️┃promotions', topic: 'Rank ups, posted by Texz. Every level is a step closer to Agency president.' },
   office: { name: '💬┃agency-office', topic: 'The general chat. Desks, coffee, Dazai asleep on the sofa. Talk about anything.' },
-  evidence: { name: '📸┃evidence-board', topic: 'Pictures, clips, memes and screenshots. Evidence of everything.' },
+  evidence: { name: '📸┃evidence-board', topic: 'Pictures, clips, memes and screenshots, open to everyone. Talk in the thread under a post. Texz drops the picture of the day and memes here.' },
   pokedex: { name: '🔴┃pokedex-bureau', topic: 'Pokétwo spawns and catching. Texz posts the name and the catch line under every spawn.' },
   cards: { name: '🃏┃card-vault', topic: 'Shoob card drops. Rare tiers ping the Shoob Rare Drops role.' },
   owo: { name: '🐾┃stray-dogs-den', topic: 'OwO hunting, battling and gambling. Texz keeps your timers.' },
@@ -42,7 +42,7 @@ export const extraRooms = {
   ledger: { name: '📓┃texz-ledger', topic: 'What Texz did and what admins changed in its settings. Staff only.' },
 } as const;
 
-type Mode = 'read' | 'chat' | 'bot' | 'open' | 'private';
+type Mode = 'read' | 'chat' | 'bot' | 'open' | 'media' | 'private';
 type Perms = Partial<Record<PermissionsString, boolean | null>>;
 
 // a channel Texz made before, under an older name or in the wrong place, is moved and renamed; anyone else's channel is left alone
@@ -74,6 +74,11 @@ const locks: Record<Mode, { everyone: Perms; staff?: Perms; me: Perms }> = {
   open: {
     everyone: { SendMessages: true, ReadMessageHistory: true, AddReactions: true, AttachFiles: null, EmbedLinks: null, UseExternalEmojis: null, UseExternalStickers: null, CreatePublicThreads: null, SendMessagesInThreads: true, MentionEveryone: false, SendTTSMessages: false },
     me: { ViewChannel: true, SendMessages: true, EmbedLinks: true, AttachFiles: true, AddReactions: true, ReadMessageHistory: true, ManageMessages: true, UseExternalEmojis: true },
+  },
+  // the picture board: like open, and files and links for everyone whatever their rank
+  media: {
+    everyone: { SendMessages: true, ReadMessageHistory: true, AddReactions: true, AttachFiles: true, EmbedLinks: true, UseExternalEmojis: null, UseExternalStickers: null, CreatePublicThreads: true, SendMessagesInThreads: true, MentionEveryone: false, SendTTSMessages: false },
+    me: { ViewChannel: true, SendMessages: true, EmbedLinks: true, AttachFiles: true, AddReactions: true, ReadMessageHistory: true, ManageMessages: true, UseExternalEmojis: true, CreatePublicThreads: true, ManageThreads: true },
   },
   // staff read, nobody else sees it
   private: {
@@ -340,7 +345,7 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
   const q = await room(guild, store, board, g.quotes.channel, rooms.quotes, 'read', me, ['quotes', 'make-it-a-quote', 'quote-wall']);
   const a = await room(guild, store, board, g.starboard.channel, rooms.archive, 'read', me, ['starboard']);
   const gen = await room(guild, store, bar, store.getKv(`generalch:${guild.id}`), extraRooms.office, 'open', me, ['general', 'chat', 'general-chat']);
-  const ev = await room(guild, store, bar, store.getKv(`mediach:${guild.id}`), extraRooms.evidence, 'open', me, ['media', 'memes', 'pics']);
+  const ev = await room(guild, store, bar, store.getKv(`mediach:${guild.id}`), extraRooms.evidence, 'media', me, ['media', 'memes', 'pics']);
   const countSaved = (JSON.parse(store.getKv(`count:${guild.id}`) ?? '{}') as { channel?: string }).channel;
   const k = await room(guild, store, bar, countSaved, rooms.count, 'chat', me, ['counting', 'count']);
   const y = await room(guild, store, bar, store.rules(guild.id, 'economy').channels[0], extraRooms.yen, 'bot', me, ['economy', 'yen', 'bank']);

@@ -41,6 +41,8 @@ export const medalOf: Record<string, { tier: Tier; mark: Mark }> = {
   earlybird: { tier: 'bronze', mark: 'sun' },
   counter: { tier: 'silver', mark: 'hash' },
   counter1k: { tier: 'gold', mark: 'scroll' },
+  snap25: { tier: 'silver', mark: 'lens' },
+  snap100: { tier: 'gold', mark: 'lens' },
   recorder: { tier: 'gold', mark: 'cup' },
   mission7: { tier: 'gold', mark: 'hat' },
   mission30: { tier: 'gold', mark: 'folder' },

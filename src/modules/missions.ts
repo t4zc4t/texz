@@ -8,7 +8,7 @@ import { fetchAvatar, medalCase } from '../features/rankcard.js';
 // one place every feature reports to: a daily Agency mission for the whole server, and badges that stay on your profile
 
 export type Event = 'quote' | 'quizwin' | 'guesswin' | 'catch' | 'catchRare' | 'catchShiny' | 'typesSeen' | 'daily' | 'dailyStreak' | 'predict' | 'predictWin' | 'perfectPodium'
-  | 'quoteOfWeek' | 'fastGuess' | 'yen' | 'gave' | 'messages' | 'level' | 'watchparty' | 'nightOwl' | 'earlyBird' | 'missionStreak' | 'missionDone' | 'rareDone' | 'counted' | 'countRecord' | `catchType:${string}`;
+  | 'quoteOfWeek' | 'fastGuess' | 'yen' | 'gave' | 'messages' | 'level' | 'watchparty' | 'nightOwl' | 'earlyBird' | 'missionStreak' | 'missionDone' | 'rareDone' | 'evidence' | 'counted' | 'countRecord' | `catchType:${string}`;
 
 // quests: three dailies, two weeklies, and now and then a rare one that lasts three days
 // cmd:<name> is counted whenever someone runs that command, so any command can be a quest
@@ -36,6 +36,7 @@ const DAILY: Quest[] = [
   { id: 'count10', text: 'Get 10 numbers right in the count', event: 'counted', need: 10, pay: 140 },
   { id: 'give', text: 'Give yen to someone', event: 'gave', need: 1, pay: 120 },
   { id: 'crime', text: 'Pull off a crime with `tz crime`', event: 'cmd:crime', need: 1, pay: 130 },
+  { id: 'evidence', text: 'Post a picture, clip or link on the evidence board', event: 'evidence', need: 1, pay: 120 },
   { id: 'act2', text: 'Hug, pat or bonk someone twice', event: 'cmd:act', need: 2, pay: 90 },
 ];
 const WEEKLY: Quest[] = [
@@ -51,6 +52,7 @@ const WEEKLY: Quest[] = [
   { id: 'quote5', text: 'Make 5 quotes', event: 'quote', need: 5, pay: 1000 },
   { id: 'dragon', text: 'Catch a Dragon type', event: 'catchType:Dragon', need: 1, pay: 1400 },
   { id: 'ghost2', text: 'Catch 2 Ghost types', event: 'catchType:Ghost', need: 2, pay: 1300 },
+  { id: 'evidence8', text: 'Post 8 pieces of evidence on the evidence board', event: 'evidence', need: 8, pay: 1000 },
   { id: 'daily5', text: 'Claim your daily on 5 days', event: 'daily', need: 5, pay: 1000 },
 ];
 const RARE: Quest[] = [
@@ -131,6 +133,8 @@ export const BADGES: Badge[] = [
   { id: 'nightowl', emoji: '🦉', name: 'Night owl', how: 'Chat between 3 and 4 in the morning, your time', group: 'Server life', event: 'nightOwl', need: 1 },
   { id: 'earlybird', emoji: '🌅', name: 'Early bird', how: 'Chat between 5 and 6 in the morning, your time', group: 'Server life', event: 'earlyBird', need: 1 },
   { id: 'counter', emoji: '🔢', name: 'Keeps count', how: 'Get 100 numbers right in the count', group: 'Server life', event: 'counted', need: 100 },
+  { id: 'snap25', emoji: '📸', name: 'Evidence clerk', how: 'Post 25 pieces of evidence on the evidence board', group: 'Server life', event: 'evidence', need: 25 },
+  { id: 'snap100', emoji: '🗃️', name: 'Chief of evidence', how: 'Post 100 pieces of evidence on the evidence board', group: 'Server life', event: 'evidence', need: 100 },
   { id: 'counter1k', emoji: '📒', name: 'The ledger', how: 'Get 1,000 numbers right in the count', group: 'Server life', event: 'counted', need: 1000 },
   { id: 'recorder', emoji: '🏆', name: 'Record keeper', how: 'Push the count past its old record', group: 'Server life', event: 'countRecord', need: 1 },
   { id: 'mission7', emoji: '🕵️', name: 'On the case', how: 'Clear all three daily quests 7 days in a row', group: 'Quests', event: 'missionStreak', need: 7, best: true },
