@@ -20,6 +20,7 @@ import { onCount, startRecap } from './modules/community.js';
 import { applyPerks, carryRankPerms, fixRankOrder, tidyRanks } from './modules/levels.js';
 import { warmModel } from './features/pokemodel.js';
 import { loadTypeIcons } from './features/typeicons.js';
+import { loadSlotArt } from './features/slotart.js';
 import { loadLogos } from './features/logos.js';
 import { startBulletins } from './modules/bulletins.js';
 import { startDesk } from './modules/predict.js';
@@ -92,6 +93,7 @@ client.once(Events.ClientReady, (c) => {
   startDailyCharacter(client, store);
   watchSpawns(client, store);
   warmModel();
+  void loadSlotArt(client).catch((e) => report('slot art', e));
   void loadTypeIcons(client).catch((e) => report('type icons', e)).then(() => loadLogos(client)).catch((e) => report('team logos', e));
   startQuoteOfWeek(client, store);
   startHealth(client, store);

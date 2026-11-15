@@ -4,6 +4,7 @@ import {
 } from 'discord.js';
 import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
+import { SLOT_SYMS, slotEmoji, type SlotSym } from '../features/slotart.js';
 
 // the back room of Bar Lupin: coin flips, slots and blackjack for yen. Everything edits its own message, nothing piles up.
 
@@ -54,19 +55,44 @@ const coinflip: Command = {
   },
 };
 
-// three reels, weighted so the shiny ones are rare
-const REEL: [string, number][] = [['🍒', 30], ['🍋', 25], ['🍙', 20], ['🦀', 14], ['🔔', 8], ['💎', 3]];
-const PAYS: Record<string, number> = { '🍒': 3, '🍋': 4, '🍙': 5, '🦀': 8, '🔔': 15, '💎': 50 };
-const spin = () => {
-  let r = Math.random() * REEL.reduce((s, [, w]) => s + w, 0);
-  for (const [e, w] of REEL) { if ((r -= w) < 0) return e; }
-  return '🍒';
+// No Longer Human: three reels that stop one by one, and only three alike pays, like the OwO machine
+// the odds are set up front so the payback stays near 95%
+const ODDS: [SlotSym, number, number][] = [ // symbol, chance in 1000, what three of them pay back
+  ['cherry', 200, 1], ['lemon', 200, 2], ['bell', 50, 3], ['gem', 25, 4], ['seven', 10, 10],
+];
+const any = () => SLOT_SYMS[Math.floor(Math.random() * SLOT_SYMS.length)];
+function pull(): { reels: SlotSym[]; mult: number } {
+  let r = Math.random() * 1000;
+  for (const [s, w, m] of ODDS) { if ((r -= w) < 0) return { reels: [s, s, s], mult: m }; }
+  // a loss, a near miss now and then: the first two match and the last one breaks it
+  const reels: SlotSym[] = Math.random() < 0.35 ? (() => { const s = any(); let t = any(); while (t === s) t = any(); return [s, s, t]; })() : [any(), any(), any()];
+  while (reels[0] === reels[1] && reels[1] === reels[2]) reels[2] = any();
+  return { reels, mult: 0 };
+}
+const LOST = [
+  'and lost it all. *How wonderfully tragic,* says Dazai.',
+  'and lost it all. Kunikida wrote it down in the ledger.',
+  'and lost it all. Chuuya will be laughing about this for a week.',
+  'and lost it all. Dazai says the house always wins, he would know.',
+  'and lost it all. Ranpo saw it coming before you pulled.',
+];
+const machine = (name: string, bet: number, shown: (SlotSym | 'spin')[], result: string) => [
+  '**`  NO LONGER HUMAN  `**',
+  `\` \` ${shown.map(slotEmoji).join(' ')} \` \` **${name}** bet **${fmt(bet)}**`,
+  `\`|         |\` ${result}`,
+  '`|         |`',
+].join('\n');
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// a slash reply hands back an interaction response, a typed one the message itself
+const messageOf = (sent: unknown): { edit: (v: unknown) => Promise<unknown> } | null => {
+  const m = (sent as { resource?: { message?: unknown } })?.resource?.message ?? sent;
+  return m && typeof (m as { edit?: unknown }).edit === 'function' ? m as { edit: (v: unknown) => Promise<unknown> } : null;
 };
 
 const slots: Command = {
   name: 'slots',
   cooldown: 5,
-  data: new SlashCommandBuilder().setName('slots').setDescription('Pull the Lupin slot machine for yen')
+  data: new SlashCommandBuilder().setName('slots').setDescription('Pull No Longer Human, the slot machine, for yen')
     .addStringOption((o) => o.setName('bet').setDescription('How much, or half / all').setRequired(true)).toJSON(),
   text: { aliases: ['slot'], args: ['bet'] },
   example: '200',
@@ -74,16 +100,23 @@ const slots: Command = {
     if (!ctx.guildId) return ctx.reply('Bets live in servers.');
     const c = checkBet(store, ctx.guildId, ctx.userId, ctx.str('bet'));
     if ('error' in c) return ctx.reply({ content: c.error, temp: true });
-    const reels = [spin(), spin(), spin()];
-    const three = reels[0] === reels[1] && reels[1] === reels[2];
-    const two = !three && new Set(reels).size === 2;
-    const pair = two ? reels.find((r, i) => reels.indexOf(r) !== i)! : null;
-    // three alike pays the table, a pair of crabs or better gets the bet back and a half
-    const back = three ? c.bet * PAYS[reels[0]] : pair && PAYS[pair] >= 8 ? Math.floor(c.bet * 1.5) : 0;
+    // the money moves at the pull, the reels are only the show
+    const { reels, mult } = pull();
+    const back = c.bet * mult;
     store.pay(ctx.guildId, ctx.userId, back - c.bet);
-    const now = store.wallet(ctx.guildId, ctx.userId).yen;
-    const line = three ? `**Jackpot row.** ${PAYS[reels[0]]}× pays **+${fmt(back - c.bet)}**` : back ? `A pair of ${pair}. **+${fmt(back - c.bet)}**` : `Nothing lines up. **−${fmt(c.bet)}**`;
-    return ctx.reply({ embeds: [card('🎰 Lupin slots', `## ${reels.join(' ')}\n${line}\n-# 🍒3× 🍋4× 🍙5× 🦀8× 🔔15× 💎50× for three alike · wallet ${fmt(now)}`, back > c.bet ? WIN : back ? PLAY : LOSE)], public: true });
+    const name = (ctx.member && 'displayName' in ctx.member ? ctx.member.displayName : null) ?? 'You';
+    const result = mult === 0 ? LOST[Math.floor(Math.random() * LOST.length)]
+      : mult === 1 ? `and got **${fmt(back)}** back, even.`
+      : `and won **${fmt(back)}**${mult === 10 ? ' · **jackpot ×10**' : ` · ×${mult}`}`;
+    const sent = await ctx.reply({ content: machine(name, c.bet, ['spin', 'spin', 'spin'], ''), public: true, allowedMentions: { parse: [] } } as never);
+    const msg = messageOf(sent);
+    if (!msg) return;
+    await pause(1000);
+    await msg.edit({ content: machine(name, c.bet, [reels[0], 'spin', 'spin'], '') }).catch(() => {});
+    await pause(800);
+    await msg.edit({ content: machine(name, c.bet, [reels[0], reels[1], 'spin'], '') }).catch(() => {});
+    await pause(900);
+    await msg.edit({ content: machine(name, c.bet, reels, result) }).catch(() => {});
   },
 };
 
