@@ -28,7 +28,7 @@ import { countUse, report } from '../ops.js';
 import { quoteCommand } from '../modules/quote.js';
 import { onProfileEdit } from '../modules/profile.js';
 import { onAchPick } from '../modules/missions.js';
-import { community, onConfess } from '../modules/community.js';
+import { community, onConfess, onCountButton } from '../modules/community.js';
 import { actions, onAct } from '../modules/actions.js';
 import { onMovie } from '../modules/movies.js';
 import { onCasino } from '../modules/casino.js';
@@ -398,6 +398,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onProfileEdit(store, i)) return;
     if (await onAchPick(store, i)) return;
     if (await onConfess(store, i)) return;
+    if (await onCountButton(store, i)) return;
     if (await onShip(i)) return;
     if (await onAct(store, i)) return;
     if (await onMovie(store, i)) return;

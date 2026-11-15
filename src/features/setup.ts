@@ -292,7 +292,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
 
   if (page === 'quotes') {
     title = 'Community';
-    body = 'The rooms everyone uses. **Build the Agency** puts them where they belong, with the right locks:\n🖋️ quotes and ⭐ the archive (5 stars) on the bulletin board, read-only\n🔢 the count and 🕯️ the confessional in the 🥃 Bar Lupin\n🌸 a front door for welcomes, 🗄️ staff-only archives for logs\nEvery Monday the week\'s file (top chatters, catchers, numbers) goes to the archive.';
+    body = 'The rooms everyone uses. **Build the Agency** puts them where they belong, with the right locks:\n🖋️ quotes and ⭐ the archive (5 stars) on the bulletin board, read-only\n🔢 the count (only numbers, every right one pays, `tz count` for your book) and 🕯️ the confessional in the 🥃 Bar Lupin\n🌸 a front door for welcomes, 🗄️ staff-only archives for logs\nEvery Monday the week\'s file (top chatters, catchers, numbers) goes to the archive.';
     const count = JSON.parse(store.getKv(`count:${guild.id}`) ?? '{}') as { channel?: string; n?: number; best?: number };
     const conf = store.getKv(`confessch:${guild.id}`);
     fields.push(

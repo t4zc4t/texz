@@ -9,6 +9,7 @@ import { isStaff } from '../core/staff.js';
 import { fixText } from '../core/fixes.js';
 import { CATEGORY } from './bulletins.js';
 import { track } from './missions.js';
+import { staffRoles } from '../core/staff.js';
 
 // the community corner of the Agency board: quotes, the archive, the count and the confessional, plus a Monday recap
 
@@ -18,7 +19,7 @@ const COLOR = 0xc8283c;
 export const rooms = {
   quotes: { name: '🖋️┃ink-and-regret', topic: 'Things people said and can never take back, framed by Texz. Right click a message → Apps → Make it a Quote.' },
   archive: { name: '⭐┃the-agency-files', topic: 'Messages the server starred enough to keep. React with ⭐ anywhere, five stars and it\'s filed here.' },
-  count: { name: '🔢┃kunikidas-ledger', topic: 'Kunikida keeps the numbers. Count up together, one number each, no two in a row. A wrong number sends it back to 1.' },
+  count: { name: '🔢┃kunikidas-ledger', topic: 'Kunikida keeps the numbers. Only numbers here, one each, no two in a row. A wrong number sends it back to 1. Every number pays, see tz count.' },
   confess: { name: '🕯️┃midnight-confessions', topic: 'Anonymous confessions, posted by Texz. Press the button on the pinned message, or /fun view:confess.' },
 } as const;
 
@@ -30,36 +31,183 @@ export const recapOn = (store: Store, g: string) => store.getKv(`recap:${g}`) !=
 
 // the rooms themselves are made by the Agency layout in /setup, see features/layout.ts
 
-export const countIntro = () => ({ embeds: [card({ kind: 'bulletin', title: '🔢 The count', emoji: '', gif: 'off', body: 'One number each, going up from **1**. Nobody counts twice in a row, and a wrong number sends everyone back to the start. The record is kept.' })] });
+export const countIntro = () => ({ embeds: [card({ kind: 'bulletin', title: '🔢 The count', emoji: '', gif: 'off', body: 'One number each, going up from **1**. Nobody counts twice in a row, and a wrong number sends everyone back to the start. Only numbers go here, anything else is cleared.\n\nEvery right number pays a little yen, round numbers pay more, and your own tally earns titles, bonuses and pardons that save the count when you slip. `tz count` shows your book.' })] });
 
 // ---------- the count ----------
 
+// your own page in the ledger
+interface Book { n: number; ruins: number; saves: number; tier: number; day?: string; dayYen?: number }
+const bookOf = (store: Store, g: string, u: string): Book => ({ n: 0, ruins: 0, saves: 0, tier: 0, ...JSON.parse(store.getKv(`countme:${g}:${u}`) ?? '{}') });
+const saveBook = (store: Store, g: string, u: string, b: Book) => store.setKv(`countme:${g}:${u}`, JSON.stringify(b));
+const yen = (n: number) => `¥${n.toLocaleString()}`;
+
+// titles for numbers you got right yourself, each pays once and hands you a pardon
+export const TITLES = [
+  { at: 50, name: 'Clerk', bonus: 500 },
+  { at: 250, name: 'Bookkeeper', bonus: 1500 },
+  { at: 1000, name: 'Accountant', bonus: 5000 },
+  { at: 2500, name: 'Kunikida\'s right hand', bonus: 10000 },
+  { at: 5000, name: 'The Ideal', bonus: 25000 },
+];
+const titleOf = (n: number) => [...TITLES].reverse().find((t) => n >= t.at)?.name ?? 'New hire';
+const PER = 5; // yen for a right number
+const DAY_CAP = 300; // the most the plain numbers pay in a day, so two people can't farm it
+const MAX_SAVES = 2;
+const PARDON = 1500;
+// leaving chatter in the count is a choice staff make, by default only numbers stay
+export const countChat = (store: Store, g: string) => store.getKv(`countchat:${g}`) === 'on';
+
+// a short note that clears itself, at most once a couple of minutes per person
+async function nudge(store: Store, m: Message, text: string) {
+  const key = `countnudge:${m.guildId}:${m.author.id}`;
+  if (Date.now() - Number(store.getKv(key) ?? 0) < 120_000 || !m.channel.isSendable()) return;
+  store.setKv(key, String(Date.now()));
+  const n = await m.channel.send({ content: text, allowedMentions: { users: [m.author.id] } }).catch(() => null);
+  if (n) setTimeout(() => void n.delete().catch(() => {}), 6000);
+}
+
 export async function onCount(store: Store, m: Message) {
   if (!m.guildId || m.author.bot || !store.rules(m.guildId, 'community').enabled) return;
-  const c = countOf(store, m.guildId);
+  const g = m.guildId;
+  const c = countOf(store, g);
   if (!c.channel || m.channelId !== c.channel) return;
-  const said = /^\s*(\d{1,7})\b/.exec(m.content)?.[1];
-  // chatter in the channel is fine, only numbers count
-  if (!said) return;
+  const pure = /^\s*(\d{1,7})\s*$/.exec(m.content)?.[1];
+  const said = pure ?? (countChat(store, g) ? /^\s*(\d{1,7})\b/.exec(m.content)?.[1] : undefined);
+  if (!said) {
+    // only numbers stay, staff and typed commands aside
+    const prefix = store.guild(g).prefix;
+    const staff = m.member?.permissions.has(PermissionFlagsBits.ManageMessages) || staffRoles(store, g).some((r) => m.member?.roles.cache.has(r));
+    if (countChat(store, g) || staff || m.content.toLowerCase().startsWith(`${prefix.toLowerCase()} `)) return;
+    await m.delete().catch(() => {});
+    await nudge(store, m, `🔢 <@${m.author.id}> only numbers go in the ledger. The next one is **${c.n + 1}**.`);
+    return;
+  }
   const n = Number(said);
+  const paid = store.rules(g, 'economy').enabled;
+  const book = bookOf(store, g, m.author.id);
+  const notes: string[] = [];
   if (n === c.n + 1 && m.author.id !== c.last) {
+    const oldBest = c.best;
     c.n = n;
     c.last = m.author.id;
     const record = n > c.best;
     if (record) c.best = n;
-    saveCount(store, m.guildId, c);
+    saveCount(store, g, c);
+    book.n += 1;
+    // the plain pay, capped a day, and the bigger moments on top
+    let earn = 0;
+    const today = new Date().toISOString().slice(0, 10);
+    if (book.day !== today) { book.day = today; book.dayYen = 0; }
+    if ((book.dayYen ?? 0) < DAY_CAP) { earn += PER; book.dayYen = (book.dayYen ?? 0) + PER; }
+    if (n % 1000 === 0) { earn += 1000; notes.push(`🎉 **${n.toLocaleString()}**! <@${m.author.id}> landed the big one${paid ? ` and gets **${yen(1000)}**` : ''}.`); }
+    else if (n % 100 === 0) earn += 100;
+    // the first number past the old record, once a run
+    if (record && n === oldBest + 1 && oldBest >= 25) {
+      earn += 250;
+      notes.push(`🏆 <@${m.author.id}> pushed the count past the old record of **${oldBest}**${paid ? `, **${yen(250)}** for that` : ''}. Keep going.`);
+      notes.push(...track(store, g, m.author.id, 'countRecord'));
+    }
+    // a new title from your own tally
+    const t = TITLES[book.tier];
+    if (t && book.n >= t.at) {
+      book.tier += 1;
+      earn += t.bonus;
+      const gotSave = book.saves < MAX_SAVES;
+      if (gotSave) book.saves += 1;
+      notes.push(`📒 <@${m.author.id}> has **${book.n.toLocaleString()}** numbers in the ledger and is now **${t.name}**${paid ? `, **${yen(t.bonus)}**` : ''}${gotSave ? ' and a pardon that saves the count once' : ''}.`);
+    }
+    if (paid && earn) store.pay(g, m.author.id, earn);
+    saveBook(store, g, m.author.id, book);
     await m.react(n % 100 === 0 ? '💯' : record && n > 10 ? '🏆' : '✅').catch(() => {});
-    const lines = track(store, m.guildId, m.author.id, 'counted');
-    if (lines.length && m.channel.isSendable()) await m.channel.send({ content: lines.join('\n'), allowedMentions: { users: [m.author.id] } }).catch(() => {});
+    notes.push(...track(store, g, m.author.id, 'counted'));
+    if (notes.length && m.channel.isSendable()) await m.channel.send({ content: notes.join('\n'), allowedMentions: { users: [m.author.id] } }).catch(() => {});
     return;
   }
-  const why = m.author.id === c.last ? 'counted twice in a row' : `said **${n}**, the next was **${c.n + 1}**`;
+  // the same person twice is only a slip, the number stays where it was
+  if (m.author.id === c.last) {
+    await m.delete().catch(() => {});
+    await nudge(store, m, `✋ <@${m.author.id}> you said the last one, let someone else say **${c.n + 1}**.`);
+    return;
+  }
+  // a wrong number: a pardon saves the run, otherwise it goes back to 1
+  if (c.n > 0 && book.saves > 0) {
+    book.saves -= 1;
+    saveBook(store, g, m.author.id, book);
+    await m.react('🛡️').catch(() => {});
+    if (m.channel.isSendable()) await m.channel.send({ content: `🛡️ <@${m.author.id}> said **${n}**, but used a pardon. The count stays at **${c.n}**, next is **${c.n + 1}**. ${book.saves} pardon${book.saves === 1 ? '' : 's'} left.`, allowedMentions: { users: [m.author.id] } }).catch(() => {});
+    return;
+  }
   await m.react('❌').catch(() => {});
-  if (c.n > 0 && m.channel.isSendable()) await m.channel.send({ content: `💥 <@${m.author.id}> ${why}. The count stopped at **${c.n}**, the record is **${c.best}**. Back to **1**.`, allowedMentions: { users: [m.author.id] } }).catch(() => {});
+  if (c.n > 0) {
+    book.ruins += 1;
+    saveBook(store, g, m.author.id, book);
+    const fine = paid && c.n >= 10 ? Math.min(store.wallet(g, m.author.id).yen, Math.min(500, c.n * 2)) : 0;
+    if (fine) store.pay(g, m.author.id, -fine);
+    if (m.channel.isSendable()) await m.channel.send({ content: `💥 <@${m.author.id}> said **${n}**, the next was **${c.n + 1}**. The count stopped at **${c.n}**, the record is **${c.best}**. Back to **1**.${fine ? `\n-# Kunikida fined them ${yen(fine)}. A pardon would have saved it, \`tz count\`.` : ''}`, allowedMentions: { users: [m.author.id] } }).catch(() => {});
+  }
   c.n = 0;
   c.last = null;
-  saveCount(store, m.guildId, c);
+  saveCount(store, g, c);
 }
+
+// the ledger page: where the count is, your own book, the best counters and what it pays
+function ledger(store: Store, g: string, u: string, note?: string) {
+  const c = countOf(store, g);
+  const b = bookOf(store, g, u);
+  const next = TITLES[b.tier];
+  const top = store.kvByPrefix(`countme:${g}:`)
+    .map((r) => ({ id: r.key.split(':')[2], n: (JSON.parse(r.value) as Book).n ?? 0 }))
+    .filter((r) => r.n > 0).sort((x, y) => y.n - x.n).slice(0, 5);
+  const e = card({
+    kind: 'bulletin', title: '🔢 Kunikida\'s ledger', emoji: '', gif: 'off', line: '',
+    body: [c.channel ? `The count is at **${c.n}** in <#${c.channel}>, the record is **${c.best}**. Next up: **${c.n + 1}**.` : 'There\'s no count here yet. An admin can make one in /setup → Community.', note ? `\n${note}` : ''].join(''),
+    fields: [
+      { name: 'Your book', value: [`**${titleOf(b.n)}** · ${b.n.toLocaleString()} right`, next ? `${next.name} at ${next.at.toLocaleString()}, pays ${yen(next.bonus)}` : 'Every title earned', `🛡️ ${b.saves}/${MAX_SAVES} pardons · 💥 broke it ${b.ruins} time${b.ruins === 1 ? '' : 's'}`].join('\n'), inline: true },
+      { name: 'Top counters', value: top.map((r, i) => `${['🥇', '🥈', '🥉', '4.', '5.'][i]} <@${r.id}> · ${r.n.toLocaleString()}`).join('\n') || 'Nobody yet', inline: true },
+      { name: 'What it pays', value: [`${yen(PER)} a right number, up to ${yen(DAY_CAP)} a day`, `${yen(100)} for every hundred, ${yen(1000)} for every thousand`, `${yen(250)} for breaking the record`, 'Titles pay a bonus and a pardon', `A pardon saves the count once, or buy one for ${yen(PARDON)}`, 'Breaking the count costs a small fine'].join('\n'), inline: false },
+    ],
+  });
+  const full = b.saves >= MAX_SAVES;
+  return {
+    embeds: [e],
+    components: [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`cnt|buy|${u}`).setLabel(full ? 'Pardons full' : `Buy a pardon · ${yen(PARDON)}`).setEmoji('🛡️').setStyle(ButtonStyle.Secondary).setDisabled(full || !store.rules(g, 'economy').enabled),
+    )],
+  };
+}
+
+export async function onCountButton(store: Store, i: Interaction) {
+  if (!i.isButton() || !i.customId.startsWith('cnt|') || !i.guildId) return false;
+  const [, what, owner] = i.customId.split('|');
+  if (i.user.id !== owner) { await i.reply({ content: 'That\'s someone else\'s book, open yours with `tz count`.', flags: MessageFlags.Ephemeral }); return true; }
+  if (what === 'buy') {
+    const b = bookOf(store, i.guildId, owner);
+    let note: string;
+    if (b.saves >= MAX_SAVES) note = 'You already hold as many pardons as Kunikida allows.';
+    else if (!store.pay(i.guildId, owner, -PARDON)) note = `A pardon costs ${yen(PARDON)}, you're short.`;
+    else { b.saves += 1; saveBook(store, i.guildId, owner, b); note = `🛡️ Bought a pardon. If you slip, it keeps the count going.`; }
+    await i.update(ledger(store, i.guildId, owner, note));
+  }
+  return true;
+}
+
+export const count: Command = {
+  name: 'count',
+  group: 'you',
+  data: new SlashCommandBuilder().setName('count').setDescription('The count: where it is, your own tally, pardons and what it pays')
+    .addStringOption((o) => o.setName('chat').setDescription('Staff: let chatter stay in the count channel').addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })).toJSON(),
+  text: { aliases: ['ledger', 'counting'], args: ['chat'] },
+  run: async (ctx, store) => {
+    if (!ctx.guildId) return ctx.reply('The count is per server.');
+    const chat = ctx.str('chat')?.toLowerCase();
+    if (chat === 'on' || chat === 'off') {
+      if (!isStaff(store, ctx)) return ctx.reply({ content: 'Only staff can change that.', temp: true });
+      store.setKv(`countchat:${ctx.guildId}`, chat === 'on' ? 'on' : null);
+      return ctx.reply({ content: chat === 'on' ? 'Chatter can stay in the count now, only numbers at the start count.' : 'Only numbers stay in the count now, everything else is cleared.', temp: true });
+    }
+    return ctx.reply(ledger(store, ctx.guildId, ctx.userId));
+  },
+};
 
 // ---------- the confessional ----------
 
@@ -172,5 +320,5 @@ export const community: Module = {
   name: 'community',
   label: 'Community',
   about: 'The archive, the count, the confessional and the Monday recap. Set up in /setup → Community',
-  commands: [confess],
+  commands: [confess, count],
 };

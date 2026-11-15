@@ -68,7 +68,7 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
     quick: ['wish.list', 'wish.add', 'pings'],
   },
   fun: {
-    sections: [['🏆 Games that pay yen', ['quiz', 'crestquiz', 'guess', 'trivia']], ['🫂 Hugs, pats and bonks', ['act']], ['🎉 For the channel', ['quote', 'ship', 'poll', 'onthisday', 'confess']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']]],
+    sections: [['🏆 Games that pay yen', ['quiz', 'crestquiz', 'guess', 'trivia']], ['🫂 Hugs, pats and bonks', ['act']], ['🎉 For the channel', ['quote', 'ship', 'poll', 'onthisday', 'confess', 'count']], ['🎲 Small stuff', ['roll', 'coin', '8ball', 'choose']]],
     quick: ['act', 'quiz', 'crestquiz', 'guess', 'ship'],
   },
   profile: {
