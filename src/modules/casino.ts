@@ -20,12 +20,20 @@ function betOf(raw: string | null, have: number): number | null {
   return Number.isFinite(n) && n > 0 ? Math.min(n, MAX) : null;
 }
 
+// not enough on you: say what is, and where the rest is if it's sitting in the vault
+export function shortOf(store: Store, guild: string, user: string, bet: number, have: number) {
+  const vault = (JSON.parse(store.getKv(`bank:${guild}:${user}`) ?? '{"yen":0}') as { yen: number }).yen;
+  const need = bet - have;
+  if (vault >= need) return `You've only got **${fmt(have)}** on you, the other **${fmt(vault)}** is in your vault. Bets come out of your wallet, take some out first with \`tz bank withdraw ${need <= 1000 ? Math.ceil(need / 100) * 100 : 'all'}\`.`;
+  return `You've got **${fmt(have)}**${vault ? ` on you and **${fmt(vault)}** in the vault` : ''}. Kunikida doesn't do credit.`;
+}
+
 function checkBet(store: Store, guild: string, user: string, raw: string | null): { bet: number } | { error: string } {
   const have = store.wallet(guild, user).yen;
   const bet = betOf(raw, have);
   if (!bet) return { error: `How much? Like \`100\`, \`half\` or \`all\`, from ${fmt(MIN)} to ${fmt(MAX)}.` };
   if (bet < MIN) return { error: `The smallest bet at the table is ${fmt(MIN)}.` };
-  if (bet > have) return { error: `You've got ${fmt(have)}. Kunikida doesn't do credit.` };
+  if (bet > have) return { error: shortOf(store, guild, user, bet, have) };
   return { bet };
 }
 

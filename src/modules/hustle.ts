@@ -6,6 +6,7 @@ import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
 import { levelOf, rankFor, ranks } from './levels.js';
 import { polishEmbed, polishRows } from '../core/icons.js';
+import { shortOf } from './casino.js';
 
 // ways to earn and lose yen besides the daily: shifts at the Agency, Port Mafia jobs, the river, the vault,
 // robbing each other, roulette, scratch cards, crew heists and rock paper scissors. Buttons edit their own message.
@@ -247,7 +248,7 @@ function betOf(store: Store, g: string, u: string, raw: string | null): number |
   if (!Number.isFinite(n) || n <= 0) return 'How much? Like `100`, `half` or `all`.';
   const bet = Math.min(n, 10_000);
   if (bet < 10) return `The smallest bet is ${fmt(10)}.`;
-  if (bet > have) return `You've got ${fmt(have)}. Kunikida doesn't do credit.`;
+  if (bet > have) return shortOf(store, g, u, bet, have);
   return bet;
 }
 const roulette: Command = {
@@ -340,7 +341,7 @@ const scratch: Command = {
   run: async (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Yen lives in servers.');
     if ([...tickets.values()].some((t) => t.user === ctx.userId && t.guild === ctx.guildId && !t.done)) return ctx.reply({ content: 'Finish scratching the ticket you have first.', temp: true });
-    if (wallet(store, ctx.guildId, ctx.userId) < PRICE) return ctx.reply({ content: `A ticket costs ${fmt(PRICE)}.`, temp: true });
+    if (wallet(store, ctx.guildId, ctx.userId) < PRICE) return ctx.reply({ content: `A ticket costs ${fmt(PRICE)}. ${shortOf(store, ctx.guildId, ctx.userId, PRICE, wallet(store, ctx.guildId, ctx.userId))}`, temp: true });
     // paid at the counter, before a single cell is scratched
     store.pay(ctx.guildId, ctx.userId, -PRICE);
     const { cells, win } = printTicket();
@@ -379,7 +380,7 @@ const heist: Command = {
     if (!ctx.guildId) return ctx.reply('Heists live in servers.');
     const left = waitLeft(store, 'heist', ctx.guildId, ctx.userId, 3600);
     if (left) return ctx.reply({ content: `⏳ The heat is still on from your last job. Next one ${later(left)}.`, temp: true });
-    if (wallet(store, ctx.guildId, ctx.userId) < ENTRY) return ctx.reply({ content: `You need ${fmt(ENTRY)} to bring to the job.`, temp: true });
+    if (wallet(store, ctx.guildId, ctx.userId) < ENTRY) return ctx.reply({ content: `You need ${fmt(ENTRY)} to bring to the job. ${shortOf(store, ctx.guildId, ctx.userId, ENTRY, wallet(store, ctx.guildId, ctx.userId))}`, temp: true });
     const h: Heist = { guild: ctx.guildId, leader: ctx.userId, crew: [ctx.userId], target: pick(TARGETS), at: Date.now(), done: false };
     heists.set(ctx.userId, h);
     return ctx.reply({ ...heistView(h, null), public: true });
