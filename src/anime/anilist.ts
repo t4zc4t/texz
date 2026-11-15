@@ -44,6 +44,7 @@ export interface Media {
   siteUrl: string;
   title: { romaji: string | null; english: string | null; native: string | null };
   format: string | null;
+  countryOfOrigin?: string | null;
   status: string | null;
   description: string | null;
   episodes: number | null;
@@ -65,13 +66,21 @@ export interface Media {
   relations?: { edges: { relationType: string; node: { id: number; type: string; format: string | null; title: { romaji: string | null; english: string | null } } }[] };
 }
 
-const MEDIA = `id type siteUrl title { romaji english native } format status description(asHtml: false)
+const MEDIA = `id type siteUrl title { romaji english native } format countryOfOrigin status description(asHtml: false)
   episodes duration chapters volumes season seasonYear averageScore popularity genres isAdult
   coverImage { large color } bannerImage studios(isMain: true) { nodes { name } }
   nextAiringEpisode { episode airingAt } startDate { year month day }
   externalLinks { site url type isDisabled }
   relations { edges { relationType node { id type format title { romaji english } } } }`;
 
+// manga, manhwa and manhua are all MANGA on AniList, the country and format tell them apart
+export function readKind(m: Pick<Media, 'format' | 'countryOfOrigin'>) {
+  if (m.format === 'NOVEL') return 'Light novel';
+  if (m.format === 'ONE_SHOT') return 'One-shot';
+  if (m.countryOfOrigin === 'KR') return 'Manhwa';
+  if (m.countryOfOrigin === 'CN' || m.countryOfOrigin === 'TW') return 'Manhua';
+  return 'Manga';
+}
 export async function searchMedia(search: string, type: 'ANIME' | 'MANGA'): Promise<Media[]> {
   const q = `query ($search: String, $type: MediaType) { Page(perPage: 6) { media(search: $search, type: $type, isAdult: false, sort: SEARCH_MATCH) { ${MEDIA} } } }`;
   const d = await ask<{ Page: { media: Media[] } }>(q, { search, type });
@@ -97,9 +106,9 @@ export async function trending(type: 'ANIME' | 'MANGA'): Promise<Media[]> {
 }
 
 // a list to pick a favourite from: the most popular ever, trending now, or this season
-export async function topMedia(type: 'ANIME' | 'MANGA', sort: 'POPULARITY_DESC' | 'TRENDING_DESC' | 'SCORE_DESC', season?: { season: string; year: number }): Promise<Media[]> {
-  const q = `query ($type: MediaType, $sort: [MediaSort], $season: MediaSeason, $year: Int) { Page(perPage: 23) { media(type: $type, isAdult: false, sort: $sort, season: $season, seasonYear: $year) { ${MEDIA} } } }`;
-  const d = await ask<{ Page: { media: Media[] } }>(q, { type, sort: [sort], ...(season ?? {}) }, 6 * 3600_000);
+export async function topMedia(type: 'ANIME' | 'MANGA', sort: 'POPULARITY_DESC' | 'TRENDING_DESC' | 'SCORE_DESC', season?: { season: string; year: number }, country?: string): Promise<Media[]> {
+  const q = `query ($type: MediaType, $sort: [MediaSort], $season: MediaSeason, $year: Int, $country: CountryCode) { Page(perPage: 23) { media(type: $type, isAdult: false, sort: $sort, season: $season, seasonYear: $year, countryOfOrigin: $country) { ${MEDIA} } } }`;
+  const d = await ask<{ Page: { media: Media[] } }>(q, { type, sort: [sort], ...(season ?? {}), ...(country ? { country } : {}) }, 6 * 3600_000);
   return d.Page.media;
 }
 

@@ -10,14 +10,15 @@ import { fetchAvatar, profileCard, type Fav } from '../features/rankcard.js';
 import { levelOf, rankFor } from './levels.js';
 import { toldHere, fmtDate, parseDate } from './birthdays.js';
 import { bondsOf } from './actions.js';
-import { currentSeason, searchMedia, titleOf, topMedia, type Media } from '../anime/anilist.js';
+import { currentSeason, readKind, searchMedia, titleOf, topMedia, type Media } from '../anime/anilist.js';
 
 // the lists to pick a favourite anime or manga from
-const listName: Record<string, string> = { pop: 'the most popular ever', trend: 'what\'s trending', season: 'this season', top: 'the top rated' };
+const listName: Record<string, string> = { manhwa: 'the most popular manhwa', manhua: 'the most popular manhua', jp: 'the most popular manga', pop: 'the most popular ever', trend: 'what\'s trending', season: 'this season', top: 'the top rated' };
 async function mediaList(key: string): Promise<Media[]> {
   const [type, which] = key.split(':') as ['ANIME' | 'MANGA', string];
   const sort = which === 'trend' ? 'TRENDING_DESC' : which === 'top' ? 'SCORE_DESC' : 'POPULARITY_DESC';
-  return topMedia(type, sort, which === 'season' ? currentSeason() : undefined).catch(() => []);
+  const country = which === 'manhwa' ? 'KR' : which === 'manhua' ? 'CN' : which === 'jp' ? 'JP' : undefined;
+  return topMedia(type, sort, which === 'season' ? currentSeason() : undefined, country).catch(() => []);
 }
 import { asEmoji } from '../features/logos.js';
 import { teamDot } from '../feeds/f1.js';
@@ -35,7 +36,7 @@ export const f1Teams: Record<string, string> = {
 
 // what can go on the card, everything personal starts hidden
 const parts = {
-  club: 'Football club', team: 'F1 team', anime: 'Favourite anime', manga: 'Favourite manga',
+  club: 'Football club', team: 'F1 team', anime: 'Favourite anime', manga: 'Favourite manga or manhwa',
   level: 'Level and rank', yen: 'Yen', birthday: 'Birthday', done: 'Anime finished',
 } as const;
 type Part = keyof typeof parts;
@@ -45,6 +46,10 @@ interface Picks {
   clubId?: string; clubLogo?: string; clubColor?: string; animeCover?: string; animeColor?: string; mangaCover?: string; mangaColor?: string;
   // looked up once already, so a name with no match isn't searched on every card
   clubTried?: boolean; animeTried?: boolean; mangaTried?: boolean;
+  // manga, manhwa, manhua or light novel, read from the pick
+  mangaKind?: string;
+  // yen joined the default card later, this marks a file that already got it once
+  yenOn?: boolean;
   bio?: string;
 }
 
@@ -63,7 +68,10 @@ export function picksOf(store: Store, guildId: string | null, userId: string): P
       store.setProfile(userId, { bio: null, favourite: null });
     }
   }
-  return { ...saved, show: saved.show ?? ['level', 'birthday'] };
+  const show = saved.show ?? ['level', 'yen', 'birthday'];
+  // everyone shows their yen unless they hide it themselves
+  if (!saved.yenOn && !show.includes('yen')) show.push('yen');
+  return { ...saved, show, yenOn: true };
 }
 export const savePicks = (store: Store, guildId: string | null, userId: string, p: Picks) => store.setKv(`picks:${guildId ?? 'dm'}:${userId}`, JSON.stringify(p));
 
@@ -92,15 +100,16 @@ async function editPanel(store: Store, guildId: string | null, userId: string, l
         { label: 'Type a club myself', value: '-type', emoji: '⌨️' }, { label: 'No club', value: '-' },
       )),
       // anime and manga work like the club: pick a list, then the title with its cover
-      list ? row(new StringSelectMenuBuilder().setCustomId(id(`mediapick:${list}`)).setPlaceholder(`${list.startsWith('MANGA') ? '📖 My manga' : '📺 My anime'} from ${listName[list.split(':')[1]] ?? 'the list'}`).addOptions(
+      list ? row(new StringSelectMenuBuilder().setCustomId(id(`mediapick:${list}`)).setPlaceholder(`${list.startsWith('MANGA') ? '📖 My read' : '📺 My anime'} from ${listName[list.split(':')[1]] ?? 'the list'}`).addOptions(
         { label: 'Back to the lists', value: '-back', emoji: '⬅️' },
-        ...(await mediaList(list)).map((m) => ({ label: titleOf(m).slice(0, 100), value: String(m.id), description: [m.format, m.seasonYear ?? m.startDate?.year].filter(Boolean).join(' · ').slice(0, 100) || undefined, default: [p.anime, p.manga].includes(titleOf(m).slice(0, 40)) })),
-      )) : row(new StringSelectMenuBuilder().setCustomId(id('medialist')).setPlaceholder(`📺 ${p.anime ? `Anime: ${p.anime}` : 'Pick my anime'} · 📖 ${p.manga ? `Manga: ${p.manga}` : 'my manga'}`.slice(0, 150)).addOptions(
+        ...(await mediaList(list)).map((m) => ({ label: titleOf(m).slice(0, 100), value: String(m.id), description: [m.type === 'MANGA' ? readKind(m) : m.format, m.seasonYear ?? m.startDate?.year].filter(Boolean).join(' · ').slice(0, 100) || undefined, default: [p.anime, p.manga].includes(titleOf(m).slice(0, 40)) })),
+      )) : row(new StringSelectMenuBuilder().setCustomId(id('medialist')).setPlaceholder(`📺 ${p.anime ? `Anime: ${p.anime}` : 'Pick my anime'} · 📖 ${p.manga ? `${p.mangaKind ?? 'Manga'}: ${p.manga}` : 'my manga or manhwa'}`.slice(0, 150)).addOptions(
         { label: 'Anime: the most popular ever', value: 'ANIME:pop', emoji: '📺' }, { label: 'Anime: trending now', value: 'ANIME:trend', emoji: '🔥' },
         { label: 'Anime: this season', value: 'ANIME:season', emoji: '🌸' }, { label: 'Anime: type a title', value: 'type:anime', emoji: '⌨️' },
-        { label: 'Manga: the most popular ever', value: 'MANGA:pop', emoji: '📖' }, { label: 'Manga: trending now', value: 'MANGA:trend', emoji: '🔥' },
-        { label: 'Manga: top rated', value: 'MANGA:top', emoji: '⭐' }, { label: 'Manga: type a title', value: 'type:manga', emoji: '⌨️' },
-        { label: 'No favourite anime', value: 'none:anime', emoji: '✖️' }, { label: 'No favourite manga', value: 'none:manga', emoji: '✖️' },
+        { label: 'Manga: the most popular', value: 'MANGA:jp', emoji: '📖' }, { label: 'Manhwa: the most popular', value: 'MANGA:manhwa', emoji: '📖' },
+        { label: 'Manhua: the most popular', value: 'MANGA:manhua', emoji: '📖' }, { label: 'Manga, manhwa and more: trending now', value: 'MANGA:trend', emoji: '🔥' },
+        { label: 'Manga, manhwa and more: top rated', value: 'MANGA:top', emoji: '⭐' }, { label: 'Manga or manhwa: type a title', value: 'type:manga', emoji: '⌨️' },
+        { label: 'No favourite anime', value: 'none:anime', emoji: '✖️' }, { label: 'No favourite manga or manhwa', value: 'none:manga', emoji: '✖️' },
       )),
       row(
         new ButtonBuilder().setCustomId(id('bio')).setLabel('Bio').setEmoji('🖋️').setStyle(ButtonStyle.Secondary),
@@ -124,9 +133,14 @@ async function fillPictures(store: Store, guildId: string | null, id: string, p:
   }
   for (const what of ['anime', 'manga'] as const) {
     const title = p[what];
-    if (!title || p[`${what}Cover`] || p[`${what}Tried`]) continue;
+    const needKind = what === 'manga' && title && !p.mangaKind;
+    if (!title || ((p[`${what}Cover`] || p[`${what}Tried`]) && !needKind)) continue;
     const [hit] = await searchMedia(title, what === 'anime' ? 'ANIME' : 'MANGA').catch(() => []);
-    if (hit) { p[`${what}Cover`] = hit.coverImage.large ?? undefined; p[`${what}Color`] = hit.coverImage.color ?? undefined; }
+    if (hit) {
+      p[`${what}Cover`] ??= hit.coverImage.large ?? undefined; p[`${what}Color`] ??= hit.coverImage.color ?? undefined;
+      if (what === 'manga') p.mangaKind = readKind(hit);
+    }
+    if (what === 'manga' && !p.mangaKind) p.mangaKind = 'Manga';
     p[`${what}Tried`] = true;
     changed = true;
   }
@@ -155,7 +169,7 @@ export async function drawProfile(store: Store, id: string, guildId: string | nu
   if (show.has('team') && p.team) { const l = f1LogoOf(p.team); favs.push({ label: 'F1 team', name: p.team, image: l?.url, color: f1Teams[p.team] ?? l?.color, kind: 'badge' }); }
   if (show.has('club') && p.club) favs.push({ label: 'Club', name: p.club, image: p.clubLogo, color: p.clubColor, kind: 'crest' });
   if (show.has('anime') && p.anime) favs.push({ label: 'Anime', name: p.anime, image: p.animeCover, color: p.animeColor, kind: 'cover' });
-  if (show.has('manga') && p.manga) favs.push({ label: 'Manga', name: p.manga, image: p.mangaCover, color: p.mangaColor, kind: 'cover' });
+  if (show.has('manga') && p.manga) favs.push({ label: p.mangaKind ?? 'Manga', name: p.manga, image: p.mangaCover, color: p.mangaColor, kind: 'cover' });
   const done = store.watchlist(id, 'completed').length;
   // the medal count goes on the card as a chip, the medals themselves have their own page
   const have = guildId ? badgesOf(store, guildId, id) : [];
@@ -191,8 +205,8 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
     }
     if (i.isStringSelectMenu() && what === 'medialist') {
       const [kind, arg] = i.values[0].split(':');
-      if (kind === 'type') { await i.showModal(modal(owner, arg, `${arg === 'anime' ? 'Anime' : 'Manga'} title, I'll look it up`, (arg === 'manga' ? p.manga : p.anime) ?? '', 100, arg === 'anime' ? 'Bungo Stray Dogs' : 'Chainsaw Man')); return true; }
-      if (kind === 'none') { const w = arg as 'anime' | 'manga'; p[w] = p[`${w}Cover`] = p[`${w}Color`] = undefined; savePicks(store, g, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); } return true; }
+      if (kind === 'type') { await i.showModal(modal(owner, arg, `${arg === 'anime' ? 'Anime' : 'Manga or manhwa'} title, I'll look it up`, (arg === 'manga' ? p.manga : p.anime) ?? '', 100, arg === 'anime' ? 'Bungo Stray Dogs' : 'Chainsaw Man')); return true; }
+      if (kind === 'none') { const w = arg as 'anime' | 'manga'; p[w] = p[`${w}Cover`] = p[`${w}Color`] = undefined; if (w === 'manga') p.mangaKind = undefined; savePicks(store, g, owner, p); { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); } return true; }
       { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner, undefined, i.values[0])); }
       return true;
     }
@@ -207,6 +221,7 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
         p[`${w}Cover`] = m.coverImage.large ?? undefined;
         p[`${w}Color`] = m.coverImage.color ?? undefined;
         p[`${w}Tried`] = true;
+        if (w === 'manga') p.mangaKind = readKind(m);
         if (!p.show.includes(w)) p.show.push(w);
         savePicks(store, g, owner, p);
       }
@@ -236,7 +251,7 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
     const current = what === 'bio' ? p.bio ?? '' : what === 'birthday' ? (told ? fmtDate(told.month, told.day) : '') : (p as unknown as Record<string, string | undefined>)[what] ?? '';
     const labels: Record<string, [string, number, string]> = {
       club: ['Football club (empty removes it)', 40, 'Real Madrid'], anime: ['Anime title, I\'ll look it up', 100, 'Bungo Stray Dogs'],
-      manga: ['Manga title, I\'ll look it up', 100, 'Chainsaw Man'], bio: ['About you (empty removes it)', 180, 'A line or two'],
+      manga: ['Manga or manhwa title, I\'ll look it up', 100, 'Solo Leveling'], bio: ['About you (empty removes it)', 180, 'A line or two'],
       color: ['Accent colour like #c2a46e (empty = default)', 7, '#c2a46e'],
       birthday: ['Your birthday, no year (empty forgets it)', 20, '19 Feb'],
     };
@@ -274,13 +289,14 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
     else p.color = v ? `#${v.replace('#', '')}` : undefined;
   }
   if (what === 'anime' || what === 'manga') {
-    if (!v) p[what] = undefined;
+    if (!v) { p[what] = undefined; if (what === 'manga') p.mangaKind = undefined; }
     else {
       const [hit] = await searchMedia(v, what === 'anime' ? 'ANIME' : 'MANGA').catch(() => []);
       p[what] = hit ? titleOf(hit).slice(0, 40) : v.slice(0, 40);
       p[`${what}Cover`] = hit?.coverImage.large ?? undefined;
       p[`${what}Color`] = hit?.coverImage.color ?? undefined;
       p[`${what}Tried`] = true;
+      if (what === 'manga') p.mangaKind = hit ? readKind(hit) : 'Manga';
       if (!p.show.includes(what)) p.show.push(what);
     }
   }
