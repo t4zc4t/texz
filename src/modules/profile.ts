@@ -22,7 +22,14 @@ async function mediaList(key: string): Promise<Media[]> {
 }
 import { asEmoji } from '../features/logos.js';
 import { teamDot } from '../feeds/f1.js';
-import { allClubs, clubLeagues, findClub, leagues } from '../feeds/football.js';
+import { allClubs, brightOf, clubLeagues, findClub, leagues, type Club } from '../feeds/football.js';
+
+// a club's crest and colour for the dark card: the dark-mode crest and the second colour when the usual ones are nearly black
+const clubLook = (c: Club) => {
+  const color = brightOf(c);
+  const darkMain = !!c.color && color !== `#${c.color}`;
+  return { logo: darkMain && c.dark ? c.dark : c.logo, color };
+};
 import { clubEmoji, f1LogoOf } from '../features/logos.js';
 
 const leagueFlag: Record<string, string> = { 'eng.1': '🏴', 'esp.1': '🇪🇸', 'ita.1': '🇮🇹', 'ger.1': '🇩🇪', 'fra.1': '🇫🇷', 'usa.1': '🇺🇸', 'por.1': '🇵🇹', 'ned.1': '🇳🇱' };
@@ -46,6 +53,8 @@ interface Picks {
   clubId?: string; clubLogo?: string; clubColor?: string; animeCover?: string; animeColor?: string; mangaCover?: string; mangaColor?: string;
   // looked up once already, so a name with no match isn't searched on every card
   clubTried?: boolean; animeTried?: boolean; mangaTried?: boolean;
+  // 2 once the crest and colour were picked for the dark card
+  clubV?: number;
   // manga, manhwa, manhua or light novel, read from the pick
   mangaKind?: string;
   // yen joined the default card later, this marks a file that already got it once
@@ -125,10 +134,11 @@ async function editPanel(store: Store, guildId: string | null, userId: string, l
 // picks saved before there were pictures, or typed by hand, get their crest and covers looked up once and kept
 async function fillPictures(store: Store, guildId: string | null, id: string, p: Picks) {
   let changed = false;
-  if (p.club && !p.clubLogo && !p.clubTried) {
+  if (p.club && ((!p.clubLogo && !p.clubTried) || (p.clubLogo && p.clubV !== 2))) {
     const c = await findClub(p.club).catch(() => null);
-    if (c) { p.club = c.name; p.clubId = c.id; p.clubLogo = c.logo; p.clubColor = c.color ? `#${c.color}` : undefined; }
+    if (c) { p.club = c.name; p.clubId = c.id; p.clubLogo = clubLook(c).logo; p.clubColor = clubLook(c).color; }
     p.clubTried = true;
+    p.clubV = 2;
     changed = true;
   }
   for (const what of ['anime', 'manga'] as const) {
@@ -232,7 +242,7 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
       const v = i.values[0];
       if (v === '-back') { { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); } return true; }
       const c = v === '-' ? null : (await allClubs().catch(() => [])).find((x) => x.id === v);
-      p.club = c?.name; p.clubId = c?.id; p.clubLogo = c?.logo; p.clubColor = c?.color ? `#${c.color}` : undefined;
+      p.club = c?.name; p.clubId = c?.id; p.clubLogo = c ? clubLook(c).logo : undefined; p.clubColor = c ? clubLook(c).color : undefined; p.clubV = 2;
       if (c && !p.show.includes('club')) p.show.push('club');
       savePicks(store, g, owner, p);
       { if (!i.deferred) await i.deferUpdate(); await i.editReply(await editPanel(store, g, owner)); }
@@ -281,7 +291,7 @@ export async function onProfileEdit(store: Store, i: Interaction): Promise<boole
   if (what === 'club') {
     // a typed club gets its crest if it matches one in the big leagues
     const c = v ? await findClub(v).catch(() => null) : null;
-    p.club = c?.name ?? (v || undefined); p.clubId = c?.id; p.clubLogo = c?.logo; p.clubColor = c?.color ? `#${c.color}` : undefined; p.clubTried = true;
+    p.club = c?.name ?? (v || undefined); p.clubId = c?.id; p.clubLogo = c ? clubLook(c).logo : undefined; p.clubColor = c ? clubLook(c).color : undefined; p.clubTried = true; p.clubV = 2;
     if (v && !p.show.includes('club')) p.show.push('club');
   }
   if (what === 'color') {

@@ -120,8 +120,15 @@ export function clubDot(t: Team) {
 const dist = (a: number[], b: number[]) => a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0);
 
 // every club in the big leagues with its crest, for the crest quiz
-interface EspnTeams { sports: { leagues: { teams: { team: { id: string; displayName: string; color?: string; logos?: { href: string }[] } }[] }[] }[] }
-export interface Club { id: string; name: string; logo: string; league: string; code: string; color: string | null }
+interface EspnTeams { sports: { leagues: { teams: { team: { id: string; displayName: string; color?: string; alternateColor?: string; logos?: { href: string }[] } }[] }[] }[] }
+export interface Club { id: string; name: string; logo: string; league: string; code: string; color: string | null; alt?: string | null; dark?: string | null }
+// the colour that shows on a dark card: the main one, or the second when the main is nearly black
+export const brightOf = (c: Pick<Club, 'color' | 'alt'>) => {
+  const lum = (h: string) => { const n = Number.parseInt(h, 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; };
+  const ok = (h?: string | null) => !!h && /^[0-9a-f]{6}$/i.test(h);
+  const pick = ok(c.color) && lum(c.color!) > 0.16 ? c.color : ok(c.alt) && lum(c.alt!) > 0.16 ? c.alt : c.color;
+  return pick ? `#${pick}` : undefined;
+};
 let clubs: { at: number; list: Club[] } | null = null;
 // the leagues people can pick a favourite club from
 export const clubLeagues = ['eng.1', 'esp.1', 'ita.1', 'ger.1', 'fra.1', 'usa.1', 'por.1', 'ned.1'];
@@ -134,7 +141,9 @@ async function clubsFrom(codes: string[]) {
       const j = (await res.json()) as EspnTeams;
       for (const t of j.sports[0]?.leagues[0]?.teams ?? []) {
         const logo = t.team.logos?.[0]?.href;
-        if (logo) out.push({ id: t.team.id, name: t.team.displayName, logo, league: leagues[l]?.name ?? l, code: l, color: t.team.color ?? null });
+        // the dark-mode crest, for clubs whose usual one is black and vanishes on a dark card
+        const dark = t.team.logos?.find((x) => x.href.includes('/500-dark/'))?.href ?? null;
+        if (logo) out.push({ id: t.team.id, name: t.team.displayName, logo, league: leagues[l]?.name ?? l, code: l, color: t.team.color ?? null, alt: t.team.alternateColor ?? null, dark });
       }
     } catch { /* one league missing is fine */ }
   }

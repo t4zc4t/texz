@@ -236,6 +236,35 @@ async function picture(url?: string | null) {
   return img;
 }
 
+// a colour too dark to glow on the card gets swapped for the brightest strong colour in the picture itself
+const lum = (hex: string) => { const n = Number.parseInt(hex.slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; };
+export function glowOf(hex: string | null | undefined, img: Awaited<ReturnType<typeof loadImage>> | null, fallback: string) {
+  const given = hex && /^#[0-9a-f]{6}$/i.test(hex) ? hex : null;
+  if (given && lum(given) > 0.16) return given;
+  if (!img) return given && lum(given) > 0.08 ? given : fallback;
+  const c = createCanvas(32, 32);
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0, 32, 32);
+  const px = x.getImageData(0, 0, 32, 32).data;
+  // bucket the lively pixels by hue and take the biggest bucket's average
+  const buckets = new Map<number, { r: number; g: number; b: number; n: number }>();
+  for (let i = 0; i < px.length; i += 4) {
+    const [r, g, b, a] = [px[i], px[i + 1], px[i + 2], px[i + 3]];
+    if (a < 200) continue;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx < 90 || mx - mn < 50) continue;
+    const h = mx === r ? ((g - b) / (mx - mn) + 6) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4;
+    const k = Math.round(h * 2) % 12;
+    const o = buckets.get(k) ?? { r: 0, g: 0, b: 0, n: 0 };
+    o.r += r; o.g += g; o.b += b; o.n += 1;
+    buckets.set(k, o);
+  }
+  const best = [...buckets.values()].sort((p, q) => q.n - p.n)[0];
+  if (!best || best.n < 6) return fallback;
+  const hx = (v: number) => Math.round(v / best.n).toString(16).padStart(2, '0');
+  return `#${hx(best.r)}${hx(best.g)}${hx(best.b)}`;
+}
+
 // favourites as a small grid of logos in the top right: the crest or cover glowing in its colour, the name under it
 function favTiles(ctx: SKRSContext2D, favs: Fav[], imgs: (Awaited<ReturnType<typeof loadImage>> | null)[], PW: number, SAND: string) {
   const cols = 2;
@@ -251,7 +280,7 @@ function favTiles(ctx: SKRSContext2D, favs: Fav[], imgs: (Awaited<ReturnType<typ
   favs.forEach((f, i) => {
     const x = x0 + (i % cols) * (w + gap);
     const y = y0 + Math.floor(i / cols) * (h + gap);
-    const color = f.color && /^#[0-9a-f]{6}$/i.test(f.color) ? f.color : SAND;
+    const color = glowOf(f.color, imgs[i], SAND);
     ctx.save();
     rounded(ctx, x, y, w, h, 16);
     ctx.clip();
