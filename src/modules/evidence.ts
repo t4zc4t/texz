@@ -103,6 +103,23 @@ async function memeFor(store: Store, g: string, boards: string[]) {
   return null;
 }
 
+// what Texz brings goes in a thread of its own per kind, so people's posts on the board don't get buried
+const THREADS = { potd: '📸 Picture of the day', meme: '😂 Meme drops' } as const;
+async function threadFor(store: Store, board: import('discord.js').TextChannel, kind: keyof typeof THREADS) {
+  const key = `evthread:${board.guildId}:${kind}`;
+  const id = store.getKv(key);
+  if (id) {
+    const t = await board.threads.fetch(id).catch(() => null);
+    if (t) {
+      if (t.archived) await t.setArchived(false).catch(() => {});
+      return t;
+    }
+  }
+  const t = await board.threads.create({ name: THREADS[kind], autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek, reason: 'a home for the daily drops' }).catch(() => null);
+  if (t) store.setKv(key, t.id);
+  return t;
+}
+
 // once a day each: the picture in the morning and a meme in the afternoon and at night, India time
 const DROPS: { key: string; at: number; what: 'potd' | 'meme' }[] = [
   { key: 'potd', at: 3 * 60 + 30, what: 'potd' },
@@ -121,8 +138,10 @@ export function startEvidenceDrops(client: Client, store: Store) {
         // a drop only goes out in its own slot, so a restart at night doesn't post the morning one late
         const next = DROPS[n + 1]?.at ?? 24 * 60;
         if (mins < d.at || mins >= next || !store.firstTime(guild.id, `ev${d.key}:${day}`)) continue;
-        const ch = await guild.channels.fetch(id).catch(() => null);
-        if (!ch?.isSendable()) continue;
+        const board = await guild.channels.fetch(id).catch(() => null);
+        if (!board || board.type !== ChannelType.GuildText) continue;
+        const ch = await threadFor(store, board, d.what);
+        if (!ch) continue;
         const day0 = Math.floor(Date.parse(day) / 86_400_000);
         const out = d.what === 'potd'
           ? await pictureOfDay(day).catch(() => null)

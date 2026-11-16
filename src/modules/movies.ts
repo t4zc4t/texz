@@ -5,6 +5,7 @@ import {
 import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
 import { card } from '../theme.js';
+import { partyButton } from './watchparty.js';
 import { GENRES, details, genreName, hasMovies, people, pickSome, search, similar, type Film, type Filters } from '../anime/trakt.js';
 
 // movie nights: look a film up, get ones like it, or let the picker roll one (or three for a vote) from the filters you set
@@ -53,6 +54,7 @@ export async function movieCard(slug: string, extra: ButtonBuilder[] = []) {
   const buttons = [new ButtonBuilder().setCustomId(`mvl|${m.slug}`.slice(0, 100)).setLabel('More like this').setStyle(ButtonStyle.Secondary)];
   if (m.trailer) buttons.unshift(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(m.trailer).setLabel('Trailer'));
   buttons.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(`https://www.justwatch.com/in/search?q=${encodeURIComponent(m.title)}`).setLabel('Where to watch'));
+  buttons.push(partyButton('movie', m.slug));
   return { content: '', embeds: [e], components: extra.length ? [row(...buttons), row(...extra)] : [row(...buttons)] };
 }
 
@@ -221,7 +223,7 @@ export function startMovieDay(client: import('discord.js').Client, store: Store)
       store.setKv(`movieday:seen:${guild.id}`, JSON.stringify([...seen, picks[0].slug].slice(-60)));
       const out = await movieCard(picks[0].slug).catch(() => null);
       if (!out) continue;
-      await ch.send({ ...out, content: `🎬 **Movie of the day** · ${mood.map(genreName).join(' and ')} night. Anyone in for a watch party? \`tz movie\` rolls something else.` }).catch(() => {});
+      await ch.send({ ...out, content: `🎬 **Movie of the day** · ${mood.map(genreName).join(' and ')} night. Press Watch party to get everyone together, \`tz movie\` rolls something else.` }).catch(() => {});
     }
   };
   setTimeout(() => void tick(), 120_000);

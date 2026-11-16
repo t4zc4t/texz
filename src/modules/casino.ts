@@ -76,6 +76,7 @@ const coinflip: Command = {
     const landed = Math.random() < 0.5 ? 'heads' : 'tails';
     const won = landed === pick;
     store.pay(ctx.guildId, ctx.userId, won ? c.bet : -c.bet);
+    (ctx.counted ??= []).push('coinflip');
     const who = `**${nameOf(ctx)}** bet **${fmt(c.bet)}** on **${pick}**, ${pick === 'heads' ? 'the Agency' : 'the Port Mafia'}`;
     const top = banner('THE LUPIN COIN');
     const end = won ? `and won **${fmt(c.bet * 2)}**` : pickLine(COIN_LOST);
@@ -126,6 +127,7 @@ const slots: Command = {
     if ('error' in c) return ctx.reply({ content: c.error, temp: true });
     // the money moves at the pull, the reels are only the show
     const { reels, mult } = pull();
+    (ctx.counted ??= []).push('slots');
     const back = c.bet * mult;
     store.pay(ctx.guildId, ctx.userId, back - c.bet);
     const name = nameOf(ctx);
@@ -215,6 +217,7 @@ const blackjack: Command = {
     const d = deck();
     const g: Game = { guild: ctx.guildId, user: ctx.userId, bet: c.bet, deck: d, you: [d.pop()!, d.pop()!], dealer: [d.pop()!, d.pop()!], doubled: false, at: Date.now() };
     store.pay(ctx.guildId, ctx.userId, -c.bet);
+    (ctx.counted ??= []).push('blackjack');
     games.set(ctx.userId, g);
     // a natural 21 settles straight away
     if (value(g.you) === 21) return ctx.reply({ ...table(g, settle(store, g)), public: true });

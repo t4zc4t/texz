@@ -1,5 +1,6 @@
 import { track } from './missions.js';
 import { movie } from './movies.js';
+import { partyButton } from './watchparty.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, StringSelectMenuBuilder,
   type MessageActionRowComponentBuilder,
@@ -94,6 +95,7 @@ function mediaRows(userId: string, m: Media, others: Media[], following: boolean
     buttons.unshift(new ButtonBuilder().setCustomId(`anif|${userId}|${m.id}`).setStyle(following ? ButtonStyle.Success : ButtonStyle.Primary)
       .setEmoji(following ? '🔕' : '🔔').setLabel(following ? 'Stop episode alerts' : 'Alert me for new episodes'));
   }
+  if (m.type === 'ANIME') buttons.push(partyButton('anime', m.id));
   rows.push(row(listMenu(m)));
   rows.push(row(...buttons));
   if (official.length) {

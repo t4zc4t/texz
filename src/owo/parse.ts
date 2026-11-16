@@ -56,9 +56,9 @@ export interface Huntbot {
 }
 
 export function parseDuration(text: string): number | null {
-  const m = text.match(/(?:(\d+)\s*D)?\s*(?:(\d+)\s*H)?\s*(?:(\d+)\s*M)?/i);
-  if (!m || (!m[1] && !m[2] && !m[3])) return null;
-  return ((Number(m[1] ?? 0) * 24 + Number(m[2] ?? 0)) * 60 + Number(m[3] ?? 0)) * 60_000;
+  const m = text.match(/(?:(\d+)\s*D)?\s*(?:(\d+)\s*H)?\s*(?:(\d+)\s*M(?!S))?\s*(?:(\d+)\s*S)?/i);
+  if (!m || (!m[1] && !m[2] && !m[3] && !m[4])) return null;
+  return ((Number(m[1] ?? 0) * 24 + Number(m[2] ?? 0)) * 60 + Number(m[3] ?? 0)) * 60_000 + Number(m[4] ?? 0) * 1000;
 }
 
 export function parseHuntbot(raw: string): Huntbot | null {

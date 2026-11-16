@@ -14,6 +14,8 @@ export type Reply = string | EmbedBuilder | {
 
 // one shape for both slash commands and "tz" text commands, so each command is written once
 export interface Ctx {
+  // quest events a command really did (a shift worked, a bet placed), counted once it has run
+  counted?: string[];
   userId: string;
   guildId: string | null;
   guild: Guild | null;

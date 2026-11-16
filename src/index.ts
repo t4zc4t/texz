@@ -26,6 +26,7 @@ import { startBulletins } from './modules/bulletins.js';
 import { startDesk } from './modules/predict.js';
 import { startMovieDay } from './modules/movies.js';
 import { onEvidence, openBoards, startEvidenceDrops } from './modules/evidence.js';
+import { startPartyClock } from './modules/watchparty.js';
 import { onQuote, QUOTE_MENU, startQuoteOfWeek } from './modules/quote.js';
 import { settleAll, settleGuild } from './core/settle.js';
 import { cleanBooths, watchBooths } from './modules/booth.js';
@@ -107,6 +108,7 @@ client.once(Events.ClientReady, (c) => {
   startDesk(client, store);
   startMovieDay(client, store);
   startEvidenceDrops(client, store);
+  startPartyClock(client, store);
   void openBoards(client, store).catch((e) => report('evidence board', e));
   // knowing the owner lets /setup offer the error channel to them only
   void c.application.fetch().catch(() => {});

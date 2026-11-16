@@ -30,7 +30,7 @@ export const extraRooms = {
   roles: { name: '🎭┃pick-your-roles', topic: 'Ping roles and name colours. Pick from the menus, unpick to drop.' },
   promotions: { name: '🎖️┃promotions', topic: 'Rank ups, posted by Texz. Every level is a step closer to Agency president.' },
   office: { name: '💬┃agency-office', topic: 'The general chat. Desks, coffee, Dazai asleep on the sofa. Talk about anything.' },
-  evidence: { name: '📸┃evidence-board', topic: 'Pictures, clips, memes and screenshots, open to everyone. Talk in the thread under a post. Texz drops the picture of the day and memes here.' },
+  evidence: { name: '📸┃evidence-board', topic: 'Pictures, clips, memes and screenshots, open to everyone. Talk in the thread under a post. The picture of the day and the meme drops have threads of their own.' },
   pokedex: { name: '🔴┃pokedex-bureau', topic: 'Pokétwo spawns and catching. Texz posts the name and the catch line under every spawn.' },
   cards: { name: '🃏┃card-vault', topic: 'Shoob card drops. Rare tiers ping the Shoob Rare Drops role.' },
   owo: { name: '🐾┃stray-dogs-den', topic: 'OwO hunting, battling and gambling. Texz keeps your timers.' },

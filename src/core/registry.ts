@@ -31,6 +31,7 @@ import { onAchPick, track } from '../modules/missions.js';
 import { community, onConfess, onCountButton } from '../modules/community.js';
 import { actions, onAct } from '../modules/actions.js';
 import { onMovie } from '../modules/movies.js';
+import { onWatchparty } from '../modules/watchparty.js';
 import { onCasino } from '../modules/casino.js';
 import { onHustle } from '../modules/hustle.js';
 import { onShip } from '../modules/ship.js';
@@ -247,9 +248,9 @@ async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command, cool = tru
   countUse(cmd.name);
   try {
     await cmd.run(ctx, store);
-    // a command that was really used counts towards any quest that asks for it
-    if (cool && ctx.guildId && ctx.guild) {
-      const lines = track(store, ctx.guildId, ctx.userId, `cmd:${cmd.name}`);
+    // what the command really did counts towards quests, a refused or cooling one counts for nothing
+    if (ctx.counted?.length && ctx.guildId && ctx.guild) {
+      const lines = ctx.counted.flatMap((e) => track(store, ctx.guildId!, ctx.userId, `cmd:${e}`));
       const ch = ctx.guild.channels.cache.get(ctx.channelId);
       if (lines.length && ch?.isSendable()) await ch.send({ content: lines.join('\n'), allowedMentions: { users: [ctx.userId] } }).catch(() => {});
     }
@@ -408,6 +409,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onShip(i)) return;
     if (await onAct(store, i)) return;
     if (await onMovie(store, i)) return;
+    if (await onWatchparty(store, i)) return;
     if (await onCasino(store, i)) return;
     if (await onHustle(store, i)) return;
     if (await onPay(store, i)) return;

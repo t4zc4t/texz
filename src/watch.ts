@@ -15,6 +15,8 @@ import { HOUR, owoDay } from './time.js';
 
 interface Pending {
   userId: string;
+  // the names OwO might print in its reply, to tell two people's commands apart in a busy channel
+  names?: string[];
   cmd: string;
   args?: string;
   at: number;
@@ -32,6 +34,13 @@ function claim(channelId: string, text: string): Pending | undefined {
   // team replies list weapon IDs too, so only a real weapon card counts
   const weaponId = parseWeapon(text)?.id;
   let i = weaponId ? queue.findIndex((p) => p.cmd === 'weapon' && p.args?.toUpperCase() === weaponId) : -1;
+  // OwO names who it's answering, so with several people going at once the name decides, not the order
+  if (i < 0) {
+    const low = text.toLowerCase();
+    const named = queue.map((p, n) => ({ n, hit: (p.names ?? []).filter((x) => x.length >= 3 && low.includes(x)).sort((a, b) => b.length - a.length)[0]?.length ?? 0 }))
+      .filter((x) => x.hit > 0).sort((a, b) => b.hit - a.hit);
+    if (named.length) i = named[0].n;
+  }
   if (i < 0) i = 0;
   const [picked] = queue.splice(i, 1);
   pending.set(channelId, queue);
@@ -92,7 +101,8 @@ function onCommand(store: Store, m: Message) {
   if (m.guildId) store.seenIn(m.guildId, userId);
   scheduleDailies(store, userId);
   const queue = pending.get(m.channelId) ?? [];
-  queue.push({ userId, cmd: cmd.name, args: cmd.args.split(/\s+/)[0] || undefined, at: Date.now() });
+  const names = [m.author.username, m.author.globalName, m.member?.displayName].filter((x): x is string => !!x).map((x) => x.toLowerCase());
+  queue.push({ userId, names: [...new Set(names)], cmd: cmd.name, args: cmd.args.split(/\s+/)[0] || undefined, at: Date.now() });
   pending.set(m.channelId, queue.slice(-10));
 
   const day = owoDay();
@@ -114,7 +124,7 @@ function readReply(store: Store, p: Pending, text: string, embeds: Embedish[], c
   const now = Date.now();
   const day = owoDay();
   // OwO answers cooldowns with things like "please wait 3m 20s" or "try again in 4H 12M"
-  const wait = text.match(/(?:wait|again in|in)\s*\**\s*((?:\d+\s*[hm]\s*)+)/i);
+  const wait = text.match(/(?:wait|again in|in)\s*\**\s*((?:\d+\s*[hms]\s*)+)/i);
   const onCooldown = /slow down|please wait|you need to wait|already (claimed|voted)|come back/i.test(text);
 
   switch (p.cmd) {
@@ -134,7 +144,8 @@ function readReply(store: Store, p: Pending, text: string, embeds: Embedish[], c
     }
     case 'pray':
     case 'curse': {
-      const ms = onCooldown && wait ? parseDuration(wait[1]) : 5 * 60_000;
+      // "you can pray again in 4m 37s" is a cooldown too, so any wait OwO gives wins over the usual five minutes
+      const ms = (wait && parseDuration(wait[1])) || 5 * 60_000;
       if (ms) {
         store.setCooldown(p.userId, 'pray', new Date(now + ms));
         if (s.pray) store.setReminder(p.userId, 'pray', new Date(now + ms), '', m.channelId);

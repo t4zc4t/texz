@@ -8,6 +8,14 @@ import { levelOf, rankFor, ranks } from './levels.js';
 import { polishEmbed, polishRows } from '../core/icons.js';
 import { banner, messageOf, nameOf, pause, playOut, shortOf } from './casino.js';
 import { casinoEmoji as art } from '../features/slotart.js';
+import { track } from './missions.js';
+
+// quest lines for people who took part in something on a button, sent under it
+async function questLines(store: Store, i: Interaction, users: string[], event: string) {
+  if (!i.guildId) return;
+  const lines = users.flatMap((u) => track(store, i.guildId!, u, `cmd:${event}`));
+  if (lines.length && i.channel?.isSendable()) await i.channel.send({ content: lines.join('\n'), allowedMentions: { users } }).catch(() => {});
+}
 
 // ways to earn and lose yen besides the daily: shifts at the Agency, Port Mafia jobs, the river, the vault,
 // robbing each other, roulette, scratch cards, crew heists and rock paper scissors. Buttons edit their own message.
@@ -55,6 +63,7 @@ const work: Command = {
     const got = between(120, 260) + rankIndex(store, ctx.guildId, ctx.userId) * 15;
     store.pay(ctx.guildId, ctx.userId, got);
     stamp(store, 'work', ctx.guildId, ctx.userId);
+    (ctx.counted ??= []).push('work');
     return ctx.reply({ embeds: [card('💼 Agency shift', `You ${pick(JOBS)}.\n**+${fmt(got)}**\n-# higher ranks get paid more · wallet ${fmt(wallet(store, ctx.guildId, ctx.userId))}`, WIN)], public: true });
   },
 };
@@ -82,6 +91,7 @@ const crime: Command = {
     const left = waitLeft(store, 'crime', ctx.guildId, ctx.userId, 7200);
     if (left) return ctx.reply({ content: `⏳ The Port Mafia has nothing for you until ${later(left)}.`, temp: true });
     stamp(store, 'crime', ctx.guildId, ctx.userId);
+    (ctx.counted ??= []).push('crime');
     const top = banner('PORT MAFIA JOB');
     const who = `**${nameOf(ctx)}** takes a job from the Port Mafia`;
     let end: string;
@@ -155,6 +165,7 @@ const fish: Command = {
     const left = waitLeft(store, 'fish', ctx.guildId, ctx.userId, 1200);
     if (left) return ctx.reply({ content: `⏳ The fish need a break. Cast again ${later(left)}.`, temp: true });
     stamp(store, 'fish', ctx.guildId, ctx.userId);
+    (ctx.counted ??= []).push('fish');
     let r = Math.random() * CATCH.reduce((s, c) => s + c[3], 0);
     const hit = CATCH.find((c) => (r -= c[3]) < 0) ?? CATCH[1];
     const key = `${ctx.userId}-${Date.now().toString(36)}`;
@@ -309,6 +320,7 @@ const roulette: Command = {
     const times = num !== null ? 35 : d !== null ? 2 : 1;
     const change = won ? bet * times : -bet;
     store.pay(ctx.guildId, ctx.userId, change);
+    (ctx.counted ??= []).push('roulette');
     const label = num !== null ? `**${num}**` : d !== null ? `the **${['1st', '2nd', '3rd'][d - 1]} twelve**` : `**${on}**`;
     const top = banner('BAR LUPIN ROULETTE');
     const who = `**${nameOf(ctx)}** bet **${fmt(bet)}** on ${label}`;
@@ -389,6 +401,7 @@ const scratch: Command = {
     if (wallet(store, ctx.guildId, ctx.userId) < PRICE) return ctx.reply({ content: `A ticket costs ${fmt(PRICE)}. ${shortOf(store, ctx.guildId, ctx.userId, PRICE, wallet(store, ctx.guildId, ctx.userId))}`, temp: true });
     // paid at the counter, before a single cell is scratched
     store.pay(ctx.guildId, ctx.userId, -PRICE);
+    (ctx.counted ??= []).push('scratch');
     const { cells, win } = printTicket();
     const key = `${ctx.userId}-${Date.now().toString(36)}`;
     const t: Ticket = { guild: ctx.guildId, user: ctx.userId, cells, open: Array(9).fill(false), win, at: Date.now(), done: false };
@@ -523,6 +536,7 @@ export async function onHustle(store: Store, i: Interaction): Promise<boolean> {
     await i.editReply(heistView(h, made
       ? `💰 You made it out. Everyone takes home **+${fmt(each - ENTRY)}** after the split.`
       : `🚨 ${pick(['Chuuya was waiting inside', 'Kunikida had the place staked out', 'Dazai sold you out for a laugh', 'Fyodor saw it coming'])}. Everyone loses their **${fmt(ENTRY)}**.`)).catch(() => {});
+    await questLines(store, i, h.crew, 'heist');
     return true;
   }
   if (i.customId.startsWith('sc|')) {
@@ -565,6 +579,7 @@ export async function onHustle(store: Store, i: Interaction): Promise<boolean> {
     await i.deferUpdate();
     for (const beat of ['✊ Rock...', '✋ Paper...', '✌️ Scissors...']) { await i.editReply(duelView(d, key, beat)).catch(() => {}); await pause(550); }
     await i.editReply(duelView(d, key, end)).catch(() => {});
+    await questLines(store, i, [d.a, d.b].filter((u) => u !== 'bot'), 'rps');
     return true;
   }
   return false;

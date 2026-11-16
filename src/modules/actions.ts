@@ -135,6 +135,7 @@ function run(action: string): Command['run'] {
     const a = acts[action];
     if (!to && !a.solo) return ctx.reply({ content: `Who? Like this: \`tz ${action} @someone\``, temp: true });
     const out = await perform(store, ctx.guildId, action, { id: ctx.userId, name: me }, to, ctx.guild?.members.me?.id ?? '');
+    if (to) (ctx.counted ??= []).push('act');
     return ctx.reply({ ...out, public: true, temp: false, ...(to ? { content: `<@${to.id}>`, ping: [to.id] } : {}) });
   };
 }

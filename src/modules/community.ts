@@ -19,11 +19,11 @@ const COLOR = 0xc8283c;
 export const rooms = {
   quotes: { name: '🖋️┃ink-and-regret', topic: 'Things people said and can never take back, framed by Texz. Right click a message → Apps → Make it a Quote.' },
   archive: { name: '⭐┃the-agency-files', topic: 'Messages the server starred enough to keep. React with ⭐ anywhere, five stars and it\'s filed here.' },
-  count: { name: '🔢┃kunikidas-ledger', topic: 'Kunikida keeps the numbers. Only numbers here, one each, no two in a row. A wrong number sends it back to 1. Every number pays, see tz count.' },
+  count: { name: '🔢┃kunikidas-ledger', topic: 'Kunikida keeps the numbers. Only numbers here, one each, no two in a row. A wrong number sends it back to 1. Beating the record pays, see tz count.' },
   confess: { name: '🕯️┃midnight-confessions', topic: 'Anonymous confessions, posted by Texz. Press the button on the pinned message, or /fun view:confess.' },
 } as const;
 
-interface Count { channel: string | null; n: number; last: string | null; best: number }
+interface Count { channel: string | null; n: number; last: string | null; best: number; runBest?: number }
 const countOf = (store: Store, g: string): Count => ({ channel: null, n: 0, last: null, best: 0, ...JSON.parse(store.getKv(`count:${g}`) ?? '{}') });
 const saveCount = (store: Store, g: string, c: Count) => store.setKv(`count:${g}`, JSON.stringify(c));
 const confessCh = (store: Store, g: string) => store.getKv(`confessch:${g}`);
@@ -31,7 +31,7 @@ export const recapOn = (store: Store, g: string) => store.getKv(`recap:${g}`) !=
 
 // the rooms themselves are made by the Agency layout in /setup, see features/layout.ts
 
-export const countIntro = () => ({ embeds: [card({ kind: 'bulletin', title: '🔢 The count', emoji: '', gif: 'off', body: 'One number each, going up from **1**. Nobody counts twice in a row, and a wrong number sends everyone back to the start. Only numbers go here, anything else is cleared.\n\nEvery right number pays a little yen, round numbers pay more, and your own tally earns titles, bonuses and pardons that save the count when you slip. `tz count` shows your book.' })] });
+export const countIntro = () => ({ embeds: [card({ kind: 'bulletin', title: '🔢 The count', emoji: '', gif: 'off', body: 'One number each, going up from **1**. Nobody counts twice in a row, and a wrong number sends everyone back to the start. Only numbers go here, anything else is cleared.\n\nPushing past the record pays, so does every new hundred beyond it, and your own tally earns titles, bonuses and pardons that save the count when you slip. `tz count` shows your book.' })] });
 
 // ---------- the count ----------
 
@@ -50,8 +50,6 @@ export const TITLES = [
   { at: 5000, name: 'The Ideal', bonus: 25000 },
 ];
 const titleOf = (n: number) => [...TITLES].reverse().find((t) => n >= t.at)?.name ?? 'New hire';
-const PER = 5; // yen for a right number
-const DAY_CAP = 300; // the most the plain numbers pay in a day, so two people can't farm it
 const MAX_SAVES = 2;
 const PARDON = 1500;
 // leaving chatter in the count is a choice staff make, by default only numbers stay
@@ -87,24 +85,23 @@ export async function onCount(store: Store, m: Message) {
   const book = bookOf(store, g, m.author.id);
   const notes: string[] = [];
   if (n === c.n + 1 && m.author.id !== c.last) {
-    const oldBest = c.best;
+    // the record as it stood when this run began, so passing it pays once and not on every number after
+    c.runBest ??= c.best;
     c.n = n;
     c.last = m.author.id;
-    const record = n > c.best;
-    if (record) c.best = n;
+    if (n > c.best) c.best = n;
+    const broke = n === c.runBest + 1 && c.runBest >= 25;
+    const fresh = n > c.runBest; // numbers nobody has reached before
     saveCount(store, g, c);
     book.n += 1;
-    // the plain pay, capped a day, and the bigger moments on top
+    // the pay is for real progress: passing the record once, and the hundreds and thousands past it,
+    // so counting back up to ground already covered after a reset pays nothing
     let earn = 0;
-    const today = new Date().toISOString().slice(0, 10);
-    if (book.day !== today) { book.day = today; book.dayYen = 0; }
-    if ((book.dayYen ?? 0) < DAY_CAP) { earn += PER; book.dayYen = (book.dayYen ?? 0) + PER; }
-    if (n % 1000 === 0) { earn += 1000; notes.push(`🎉 **${n.toLocaleString()}**! <@${m.author.id}> landed the big one${paid ? ` and gets **${yen(1000)}**` : ''}.`); }
-    else if (n % 100 === 0) earn += 100;
-    // the first number past the old record, once a run
-    if (record && n === oldBest + 1 && oldBest >= 25) {
+    if (fresh && n % 1000 === 0) { earn += 1000; notes.push(`🎉 **${n.toLocaleString()}**! <@${m.author.id}> landed the big one${paid ? ` and gets **${yen(1000)}**` : ''}.`); }
+    else if (fresh && n % 100 === 0) earn += 100;
+    if (broke) {
       earn += 250;
-      notes.push(`🏆 <@${m.author.id}> pushed the count past the old record of **${oldBest}**${paid ? `, **${yen(250)}** for that` : ''}. Keep going.`);
+      notes.push(`🏆 <@${m.author.id}> pushed the count past the old record of **${c.runBest}**${paid ? `, **${yen(250)}** for that` : ''}. Every new hundred from here pays too.`);
       notes.push(...track(store, g, m.author.id, 'countRecord'));
     }
     // a new title from your own tally
@@ -118,7 +115,7 @@ export async function onCount(store: Store, m: Message) {
     }
     if (paid && earn) store.pay(g, m.author.id, earn);
     saveBook(store, g, m.author.id, book);
-    await m.react(n % 100 === 0 ? '💯' : record && n > 10 ? '🏆' : '✅').catch(() => {});
+    await m.react(fresh && n % 100 === 0 ? '💯' : broke ? '🏆' : '✅').catch(() => {});
     notes.push(...track(store, g, m.author.id, 'counted'));
     if (notes.length && m.channel.isSendable()) await m.channel.send({ content: notes.join('\n'), allowedMentions: { users: [m.author.id] } }).catch(() => {});
     return;
@@ -147,6 +144,7 @@ export async function onCount(store: Store, m: Message) {
   }
   c.n = 0;
   c.last = null;
+  c.runBest = c.best;
   saveCount(store, g, c);
 }
 
@@ -164,7 +162,7 @@ function ledger(store: Store, g: string, u: string, note?: string) {
     fields: [
       { name: 'Your book', value: [`**${titleOf(b.n)}** · ${b.n.toLocaleString()} right`, next ? `${next.name} at ${next.at.toLocaleString()}, pays ${yen(next.bonus)}` : 'Every title earned', `🛡️ ${b.saves}/${MAX_SAVES} pardons · 💥 broke it ${b.ruins} time${b.ruins === 1 ? '' : 's'}`].join('\n'), inline: true },
       { name: 'Top counters', value: top.map((r, i) => `${['🥇', '🥈', '🥉', '4.', '5.'][i]} <@${r.id}> · ${r.n.toLocaleString()}`).join('\n') || 'Nobody yet', inline: true },
-      { name: 'What it pays', value: [`${yen(PER)} a right number, up to ${yen(DAY_CAP)} a day`, `${yen(100)} for every hundred, ${yen(1000)} for every thousand`, `${yen(250)} for breaking the record`, 'Titles pay a bonus and a pardon', `A pardon saves the count once, or buy one for ${yen(PARDON)}`, 'Breaking the count costs a small fine'].join('\n'), inline: false },
+      { name: 'What it pays', value: [`${yen(250)} for pushing past the record`, `${yen(100)} for every new hundred past it, ${yen(1000)} for a new thousand`, 'Titles pay a bonus and a pardon', `A pardon saves the count once, or buy one for ${yen(PARDON)}`, 'Breaking the count costs a small fine'].join('\n'), inline: false },
     ],
   });
   const full = b.saves >= MAX_SAVES;
