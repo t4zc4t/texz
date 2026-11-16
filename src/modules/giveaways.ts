@@ -21,7 +21,10 @@ export interface GiveawayRules {
   boosterBonus: number;
   // role → tickets, the best one counts
   bonusRoles: Record<string, number>;
+  // a prize Texz hands out itself when it ends, for the daily giveaway
+  reward?: Reward;
 }
+export interface Reward { kind: 'yen' | 'crate' | 'xp' | 'pardon'; amount: number }
 
 // high Agency ranks get extra chances, when levels are on
 const rankTickets = (store: Store, m: GuildMember) => (store.rules(m.guild.id, 'levels').enabled ? perksFor(levelOf(store.xpOf(m.guild.id, m.id).xp).level).tickets : 1);
@@ -66,6 +69,7 @@ export function draw<T>(pool: { who: T; weight: number }[], count: number, rand 
 
 function rulesText(r: GiveawayRules): string {
   const lines = [
+    r.reward && '💴 paid out by Texz the moment it ends, nothing to claim',
     r.needRoles.length && `🎭 needs ${r.needRoles.map((id) => `<@&${id}>`).join(' or ')}`,
     r.blockRoles.length && `🚫 not for ${r.blockRoles.map((id) => `<@&${id}>`).join(', ')}`,
     r.minLevel && `🎖️ level ${r.minLevel}+`,
@@ -132,6 +136,21 @@ async function pickWinners(guild: Guild, store: Store, g: Giveaway, count: numbe
   return draw(pool, count);
 }
 
+// what a reward is in words, and paying it to one winner
+const yen = (n: number) => `¥${n.toLocaleString()}`;
+function payOut(store: Store, guild: string, u: string, r: Reward): string {
+  if (r.kind === 'yen') { store.pay(guild, u, r.amount); return yen(r.amount); }
+  if (r.kind === 'crate') { const n = 1000 + Math.floor(Math.random() * 7) * 1000; store.pay(guild, u, n); return `a crate with ${yen(n)}`; }
+  if (r.kind === 'xp') { store.addXp(guild, u, r.amount); return `${r.amount.toLocaleString()} XP`; }
+  // a pardon for the count, or its price in yen when they already hold two
+  const key = `countme:${guild}:${u}`;
+  const b = { n: 0, ruins: 0, saves: 0, tier: 0, ...JSON.parse(store.getKv(key) ?? '{}') };
+  if (b.saves >= 2) { store.pay(guild, u, 1500); return `${yen(1500)} (pardons were full)`; }
+  b.saves += 1;
+  store.setKv(key, JSON.stringify(b));
+  return 'a count pardon';
+}
+
 export async function finish(client: Client, store: Store, g: Giveaway) {
   store.updateGiveaway(g.id, { ended: 1 });
   const guild = await client.guilds.fetch(g.guild_id).catch(() => null);
@@ -141,16 +160,64 @@ export async function finish(client: Client, store: Store, g: Giveaway) {
   await refresh(client, store, done);
   const ch = await client.channels.fetch(g.channel_id).catch(() => null);
   if (!ch?.isSendable()) return;
+  // Texz's own prizes are paid straight away, nobody has to claim anything
+  const reward = rulesOf(g).reward;
+  const paid = reward && store.rules(g.guild_id, 'economy').enabled ? winners.map((u) => `<@${u}> got **${payOut(store, g.guild_id, u, reward)}**`) : [];
   const text = winners.length
-    ? `🎉 ${winners.map((id) => `<@${id}>`).join(', ')} won **${g.prize}**! Congratulations, the Agency will pretend it's not jealous.`
+    ? `🎉 ${winners.map((id) => `<@${id}>`).join(', ')} won **${g.prize}**! ${paid.length ? `Already in your pocket:\n${paid.join('\n')}` : 'Congratulations, the Agency will pretend it\'s not jealous.'}`
     : `Nobody could win **${g.prize}**. Not one eligible soul. How tragic.`;
   await ch.send({ content: text, allowedMentions: { users: winners }, ...(g.message_id ? { reply: { messageReference: g.message_id, failIfNotExists: false } } : {}) }).catch(() => {});
+}
+
+// the daily giveaway: one a day, Texz hosts it, the prize is yen, XP, a crate or count pardons and pays itself out
+const DAILY: { prize: string; winners: number; reward: Reward; weight: number }[] = [
+  { prize: '¥2,500 each', winners: 2, reward: { kind: 'yen', amount: 2500 }, weight: 26 },
+  { prize: '¥5,000', winners: 1, reward: { kind: 'yen', amount: 5000 }, weight: 18 },
+  { prize: 'A mystery crate each, ¥1,000 to ¥7,000 inside', winners: 3, reward: { kind: 'crate', amount: 0 }, weight: 20 },
+  { prize: '750 XP each', winners: 2, reward: { kind: 'xp', amount: 750 }, weight: 14 },
+  { prize: 'A count pardon each', winners: 3, reward: { kind: 'pardon', amount: 1 }, weight: 12 },
+  { prize: 'The ¥20,000 jackpot', winners: 1, reward: { kind: 'yen', amount: 20000 }, weight: 5 },
+  { prize: '1,500 XP', winners: 1, reward: { kind: 'xp', amount: 1500 }, weight: 5 },
+];
+const SUNDAY = { prize: 'The Sunday ¥15,000 pot, split three ways', winners: 3, reward: { kind: 'yen' as const, amount: 5000 }, weight: 0 };
+// where it goes: the channel staff set with tz gw daily #channel, or one with giveaway in its name
+async function dailyChannel(guild: Guild, store: Store) {
+  const set = store.getKv(`gwdaily:${guild.id}`);
+  if (set === 'off') return null;
+  if (set) return guild.channels.fetch(set).catch(() => null);
+  const found = guild.channels.cache.find((c) => c.type === ChannelType.GuildText && /give\s*-?away|gaw/i.test(c.name));
+  return found ?? null;
+}
+async function dailyGiveaway(client: Client, store: Store) {
+  const now = new Date();
+  // 14:30 UTC is 8 pm in India, it runs until a few minutes before the next one
+  if (now.getUTCHours() * 60 + now.getUTCMinutes() < 14 * 60 + 30) return;
+  const day = now.toISOString().slice(0, 10);
+  for (const guild of client.guilds.cache.values()) {
+    if (!store.rules(guild.id, 'economy').enabled || store.getKv(`gwdailydone:${guild.id}`) === day) continue;
+    const ch = await dailyChannel(guild, store);
+    if (!ch?.isSendable()) continue;
+    store.setKv(`gwdailydone:${guild.id}`, day);
+    let roll = Math.random() * DAILY.reduce((a, d) => a + d.weight, 0);
+    const pick = now.getUTCDay() === 0 ? SUNDAY : DAILY.find((d) => (roll -= d.weight) < 0) ?? DAILY[0];
+    const ends = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 14, 25);
+    const r: GiveawayRules = { ...noRules(), reward: pick.reward };
+    const id = store.addGiveaway({ guild_id: guild.id, channel_id: ch.id, host_id: client.user!.id, prize: `Daily giveaway · ${pick.prize}`, winners: pick.winners, ends_at: ends, rules: JSON.stringify(r) });
+    const sent = await ch.send(view(store, store.giveaway(id)!)).catch(() => null);
+    if (sent) store.updateGiveaway(id, { message_id: sent.id });
+    console.log(`daily giveaway #${id} in ${ch.id}: ${pick.prize}`);
+  }
 }
 
 export function startGiveaways(client: Client, store: Store) {
   const tick = async () => {
     for (const g of store.dueGiveaways(Date.now())) await finish(client, store, g).catch((e) => report('giveaway', e));
   };
+  setInterval(() => void dailyGiveaway(client, store).catch((e) => report('daily giveaway', e)), 5 * 60_000);
+  setTimeout(() => {
+    for (const guild of client.guilds.cache.values()) void dailyChannel(guild, store).then((c) => c && console.log(`daily giveaway channel: ${c.id}`));
+    void dailyGiveaway(client, store).catch((e) => report('daily giveaway', e));
+  }, 60_000);
   setInterval(() => void tick(), 15_000);
   void tick();
 }
@@ -219,13 +286,24 @@ const giveaway: Command = {
     .addSubcommand((c) => c.setName('cancel').setDescription('Call one off without winners')
       .addIntegerOption((o) => o.setName('id').setDescription('Giveaway number').setRequired(true).setMinValue(1)))
     .addSubcommand((c) => c.setName('list').setDescription('Running giveaways here'))
+    .addSubcommand((c) => c.setName('daily').setDescription('Where Texz runs its own daily giveaway, or switch it off')
+      .addChannelOption((o) => o.setName('channel').setDescription('The channel, empty to see where it goes').addChannelTypes(ChannelType.GuildText))
+      .addBooleanOption((o) => o.setName('off').setDescription('Stop the daily giveaway')))
     .toJSON(),
   // tz gw start 1d 2 Nitro Classic, tz gw end 4, tz gw reroll 4
-  text: { aliases: ['gw', 'gaw'], sub: true, subArgs: { start: ['length', 'winners', 'prize'], end: ['id'], reroll: ['id', 'winners'], cancel: ['id'] } },
+  text: { aliases: ['gw', 'gaw'], sub: true, subArgs: { start: ['length', 'winners', 'prize'], end: ['id'], reroll: ['id', 'winners'], cancel: ['id'], daily: ['channel'] } },
   run: async (ctx, store) => {
     if (!ctx.guild) return ctx.reply('Giveaways live in servers.');
     const p = store.guild(ctx.guild.id).prefix;
     const sub = ctx.sub() ?? 'list';
+    if (sub === 'daily') {
+      const raw = (ctx.str('channel') ?? '').toLowerCase();
+      if (ctx.bool('off') || raw === 'off') { store.setKv(`gwdaily:${ctx.guild.id}`, 'off'); return ctx.reply('🎁 The daily giveaway is off. `tz gw daily #channel` brings it back.'); }
+      const chId = ctx.channel('channel');
+      if (chId) { store.setKv(`gwdaily:${ctx.guild.id}`, chId); return ctx.reply(`🎁 The daily giveaway runs in <#${chId}>, every day at 8 pm India time. Prizes pay out by themselves.`); }
+      const ch = await dailyChannel(ctx.guild, store);
+      return ctx.reply(ch ? `🎁 The daily giveaway runs in <#${ch.id}> at 8 pm India time. \`tz gw daily #channel\` moves it, \`tz gw daily off\` stops it.` : '🎁 No daily giveaway channel yet. `tz gw daily #channel` sets one.');
+    }
     if (sub === 'start') {
       const ms = parseLength(ctx.str('length'));
       let winners = ctx.int('winners') ?? 1;
