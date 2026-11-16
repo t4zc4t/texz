@@ -9,6 +9,7 @@ import { polishEmbed, polishRows } from '../core/icons.js';
 import { banner, messageOf, nameOf, pause, playOut, shortOf } from './casino.js';
 import { casinoEmoji as art } from '../features/slotart.js';
 import { track } from './missions.js';
+import { makeOffer, offerKind } from '../core/challenge.js';
 
 // quest lines for people who took part in something on a button, sent under it
 async function questLines(store: Store, i: Interaction, users: string[], event: string) {
@@ -479,12 +480,37 @@ const rps: Command = {
       if (typeof b === 'string') return ctx.reply({ content: b, temp: true });
       bet = b;
     }
+    // someone else has to say yes before the game starts
+    if (other) {
+      return ctx.reply({ ...makeOffer('rps', ctx.userId, other, ctx.guildId, `<@${ctx.userId}> challenges you to rock paper scissors${bet ? ` for **${fmt(bet)}**, the winner takes it` : ''}.`, { bet }), public: true, temp: false });
+    }
     const key = `${ctx.userId}-${Date.now().toString(36)}`;
-    const d: Duel = { guild: ctx.guildId, a: ctx.userId, b: other ?? 'bot', bet, picks: {}, at: Date.now() };
+    const d: Duel = { guild: ctx.guildId, a: ctx.userId, b: 'bot', bet, picks: {}, at: Date.now() };
     duels.set(key, d);
-    return ctx.reply({ ...duelView(d, key, null), ping: other ? [other] : [], public: true });
+    return ctx.reply({ ...duelView(d, key, null), public: true });
   },
 };
+
+// a challenge accepted: both still need the yen, then the game opens on the same message
+export function wireDuels(store: Store) {
+  offerKind('rps', {
+    title: '✊ Rock paper scissors', color: PLAY, accept: 'Accept', decline: 'Decline', minutes: 3,
+    onDecline: (o) => `<@${o.to}> turned down <@${o.from}>'s rock paper scissors.`,
+    onAccept: async (i, o) => {
+      const bet = (o.data as { bet: number }).bet;
+      for (const u of [o.from, o.to]) {
+        if (bet && wallet(store, o.guild, u) < bet) {
+          await i.update({ content: '', embeds: [card('✊ Rock paper scissors', `<@${u}> doesn't have **${fmt(bet)}** on them any more, so it's off.`, LOSE)], components: [] });
+          return;
+        }
+      }
+      const key = `${o.from}-${Date.now().toString(36)}`;
+      const d: Duel = { guild: o.guild, a: o.from, b: o.to, bet, picks: {}, at: Date.now() };
+      duels.set(key, d);
+      await i.update({ content: '', ...duelView(d, key, null) });
+    },
+  });
+}
 
 export async function onHustle(store: Store, i: Interaction): Promise<boolean> {
   if (!i.isButton()) return false;

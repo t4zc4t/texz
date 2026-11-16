@@ -8,7 +8,7 @@ import { fetchAvatar, medalCase } from '../features/rankcard.js';
 // one place every feature reports to: a daily Agency mission for the whole server, and badges that stay on your profile
 
 export type Event = 'quote' | 'quizwin' | 'guesswin' | 'catch' | 'catchRare' | 'catchShiny' | 'typesSeen' | 'daily' | 'dailyStreak' | 'predict' | 'predictWin' | 'perfectPodium'
-  | 'quoteOfWeek' | 'fastGuess' | 'yen' | 'gave' | 'messages' | 'level' | 'watchparty' | 'nightOwl' | 'earlyBird' | 'missionStreak' | 'missionDone' | 'rareDone' | 'evidence' | 'counted' | 'countRecord' | `catchType:${string}`;
+  | 'quoteOfWeek' | 'fastGuess' | 'yen' | 'gave' | 'messages' | 'level' | 'watchparty' | 'nightOwl' | 'earlyBird' | 'missionStreak' | 'missionDone' | 'rareDone' | 'evidence' | 'married' | 'adopted' | 'counted' | 'countRecord' | `catchType:${string}`;
 
 // quests: three dailies, two weeklies, and now and then a rare one that lasts three days
 // cmd:<name> is counted whenever someone runs that command, so any command can be a quest
@@ -135,6 +135,8 @@ export const BADGES: Badge[] = [
   { id: 'counter', emoji: '🔢', name: 'Keeps count', how: 'Get 100 numbers right in the count', group: 'Server life', event: 'counted', need: 100 },
   { id: 'snap25', emoji: '📸', name: 'Evidence clerk', how: 'Post 25 pieces of evidence on the evidence board', group: 'Server life', event: 'evidence', need: 25 },
   { id: 'snap100', emoji: '🗃️', name: 'Chief of evidence', how: 'Post 100 pieces of evidence on the evidence board', group: 'Server life', event: 'evidence', need: 100 },
+  { id: 'wed', emoji: '💒', name: 'Tied the knot', how: 'Get married', group: 'Server life', event: 'married', need: 1 },
+  { id: 'parent', emoji: '🍼', name: 'Head of the family', how: 'Adopt someone', group: 'Server life', event: 'adopted', need: 1 },
   { id: 'counter1k', emoji: '📒', name: 'The ledger', how: 'Get 1,000 numbers right in the count', group: 'Server life', event: 'counted', need: 1000 },
   { id: 'recorder', emoji: '🏆', name: 'Record keeper', how: 'Push the count past its old record', group: 'Server life', event: 'countRecord', need: 1 },
   { id: 'mission7', emoji: '🕵️', name: 'On the case', how: 'Clear all three daily quests 7 days in a row', group: 'Quests', event: 'missionStreak', need: 7, best: true },

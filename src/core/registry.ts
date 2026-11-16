@@ -31,6 +31,8 @@ import { onAchPick, track } from '../modules/missions.js';
 import { community, onConfess, onCountButton } from '../modules/community.js';
 import { actions, onAct } from '../modules/actions.js';
 import { onMovie } from '../modules/movies.js';
+import { onOffer } from './challenge.js';
+import { family, onFamily } from '../modules/family.js';
 import { onWatchparty } from '../modules/watchparty.js';
 import { onCasino } from '../modules/casino.js';
 import { onHustle } from '../modules/hustle.js';
@@ -46,7 +48,7 @@ import { askModal, entriesOf, homePage, needsInput, refPage, refPageOf, parseKey
 
 // voice moderation lives in its own file but belongs with the rest of moderation
 if (!moderation.commands.includes(vc)) moderation.commands.push(vc);
-export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule, community, actions];
+export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule, community, actions, family];
 allModules.push(...modules);
 useModules(modules);
 
@@ -59,7 +61,7 @@ const groups: Record<string, Group> = {
   shoob: { label: 'Card Vault', emoji: '🃏', about: '*Some cards are worth waiting for.*\nRare drop pings and a wishlist for the characters you want.', description: 'Shoob: rare drop pings and your character wishlist', old: [], extra: ['spawns', 'pings'] },
   anime: { label: 'Literary Annex', emoji: '📚', about: '', description: 'Anime, manga and movies: what\'s airing, search, your list, movie night, watch parties', anywhere: true, old: ['annex'], extra: ['animehome'] },
   sports: { label: 'Paddock & Pitch', emoji: '🏁', about: '*Odds, engines and ninety minutes of chaos.*\nFormula 1, football from the big leagues, and predictions that pay.', description: 'F1, football, international games and predictions', anywhere: true, old: ['sport'], extra: ['pings'] },
-  fun: { label: 'Bar Lupin', emoji: '🥃', about: '*Three glasses on the counter. Pull up a stool.*\nQuizzes that pay yen, games for the channel, confessions and dice.', description: 'Quizzes, guess the anime, ship, polls, quotes, confessions, dice', anywhere: true, old: ['games', 'game'] },
+  fun: { label: 'Bar Lupin', emoji: '🥃', about: '*Three glasses on the counter. Pull up a stool.*\nQuizzes that pay yen, games for the channel, confessions and dice.', description: 'Quizzes, guess the anime, family, ship, polls, quotes, confessions, dice', anywhere: true, old: ['games', 'game'] },
   profile: { label: 'Personnel File', emoji: '🪪', about: '*Everything the Agency knows about you. Mostly flattering.*\nYour card, favourites, rank, medals, closest people, birthday and every ping you get.', description: 'Your profile card, favourites, rank, medals, bonds, birthday and pings', anywhere: true, old: ['you', 'me', 'file'] },
   yen: { label: 'Yen Ledger', emoji: '💴', about: '*Kunikida balances it. Dazai owes it.*\nDaily yen, shifts, Port Mafia jobs, the river, your vault, robbing, crew heists, the back room tables, a colour role of your own and the role shop.', description: 'Daily, work, crime, fishing, vault, rob, heists, casino games, your colour role and the shop', old: ['eco', 'money'] },
   misc: { label: 'Odds & Ends', emoji: '🔧', about: '*The drawer nobody labels.*\nLook people up, server info, afk, one-off reminders, your private voice booth and the bot ping.', description: 'User and server info, avatar, afk, reminders and private voice booths', anywhere: true, old: ['info', 'utils', 'odds'], extra: ['ping'] },
@@ -411,6 +413,8 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onMovie(store, i)) return;
     if (await onWatchparty(store, i)) return;
     if (await onCasino(store, i)) return;
+    if (await onOffer(i)) return;
+    if (await onFamily(store, i)) return;
     if (await onHustle(store, i)) return;
     if (await onPay(store, i)) return;
     if (await onBulletinButton(i, store)) return;

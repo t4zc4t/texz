@@ -27,6 +27,8 @@ import { startDesk } from './modules/predict.js';
 import { startMovieDay } from './modules/movies.js';
 import { onEvidence, openBoards, startEvidenceDrops } from './modules/evidence.js';
 import { startPartyClock } from './modules/watchparty.js';
+import { wireFamily } from './modules/family.js';
+import { wireDuels } from './modules/hustle.js';
 import { onQuote, QUOTE_MENU, startQuoteOfWeek } from './modules/quote.js';
 import { settleAll, settleGuild } from './core/settle.js';
 import { cleanBooths, watchBooths } from './modules/booth.js';
@@ -126,6 +128,8 @@ client.once(Events.ClientReady, (c) => {
   setInterval(mood, 10 * 60_000);
 });
 
+wireFamily(store);
+wireDuels(store);
 watchBooths(client, store);
 watchVoiceBans(client, store);
 client.on(Events.GuildCreate, (guild) => settleGuild(store, guild));
