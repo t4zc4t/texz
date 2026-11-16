@@ -34,6 +34,32 @@ const describe = (f: Filters) => [
   f.length !== 'any' ? LENGTHS[f.length].toLowerCase() : null,
 ].filter(Boolean).join(' · ');
 
+// "horror", "korean thriller 2010s", "short comedy 8+": every word a filter, or it's a title search
+const GENRE_WORDS: Record<string, string> = { scifi: 'science-fiction', 'sci-fi': 'science-fiction', sf: 'science-fiction', romcom: 'romance', animated: 'animation', docs: 'documentary', doc: 'documentary', superheroes: 'superhero', scary: 'horror' };
+export function filtersFrom(q: string): Filters | null {
+  const f: Filters = { genres: [], decade: null, score: 0, lang: null, length: 'any' };
+  const words = q.toLowerCase().replace(/\b(movies?|films?|genre)\b/g, ' ').split(/[\s,&]+/).filter((w) => w && w !== 'and');
+  if (!words.length) return null;
+  for (let n = 0; n < words.length; n++) {
+    const w = words[n];
+    const two = `${w}-${words[n + 1] ?? ''}`;
+    if (GENRES.some(([g]) => g === two)) { f.genres.push(two); n++; continue; }
+    const g = GENRES.find(([id, name]) => id === w || name.toLowerCase() === w)?.[0] ?? GENRE_WORDS[w];
+    if (g) { if (!f.genres.includes(g) && f.genres.length < 3) f.genres.push(g); continue; }
+    const dec = /^(?:19|20)?(\d)0'?s$/.exec(w);
+    if (dec) { const d = Number(dec[1]); f.decade = d >= 2 && d <= 9 && !w.startsWith('20') ? 1900 + d * 10 : 2000 + d * 10; continue; }
+    const lang = LANGS.find(([l, name]) => l && (name.toLowerCase() === w || l === w || `${name.toLowerCase()}s` === w))?.[0];
+    if (lang) { f.lang = lang; continue; }
+    if (w === 'short') { f.length = 'short'; continue; }
+    if (w === 'long') { f.length = 'long'; continue; }
+    const sc = /^(\d)\+$/.exec(w);
+    if (sc) { f.score = Math.min(8, Number(sc[1])); continue; }
+    if (w === 'good' || w === 'best' || w === 'top') { f.score = Math.max(f.score, 7); continue; }
+    return null;
+  }
+  return f;
+}
+
 // extra buttons ride on the card, like going back to the list it came from or rolling again
 export async function movieCard(slug: string, extra: ButtonBuilder[] = []) {
   const [m, who] = await Promise.all([details(slug), people(slug).catch(() => ({ director: null, cast: [] as string[] }))]);
@@ -98,13 +124,25 @@ function picker(owner: string, f: Filters) {
 export const movie: Command = {
   name: 'movie',
   data: new SlashCommandBuilder().setName('movie').setDescription('Find a movie, get ones like it, or open the movie night picker')
-    .addStringOption((o) => o.setName('title').setDescription('A title, "like <title>" for similar ones, or empty for the picker').setMaxLength(100)).toJSON(),
+    .addStringOption((o) => o.setName('title').setDescription('A title, a genre like horror, "like <title>" for similar ones, or empty for the picker').setMaxLength(100)).toJSON(),
   text: { aliases: ['movies', 'film', 'mv'], args: ['title'] },
-  hint: '`{p} movie` · `/anime view:movie`\n-# opens the movie night picker: genres, decade, language, score and length, then roll one, show ten or put three to a vote\n`{p} movie inception` · `{p} movie like interstellar`\n-# look one up with its trailer, cast and where to watch, or get ones like it',
+  hint: '`{p} movie` · `/anime view:movie`\n-# opens the movie night picker: genres, decade, language, score and length, then roll one, show ten or put three to a vote\n`{p} movie horror` · `{p} movie korean thriller 2010s` · `{p} movie short comedy 8+`\n-# ten that fit a genre, plus any of decade, language, length and score\n`{p} movie inception` · `{p} movie like interstellar`\n-# look one up with its trailer, cast and where to watch, or get ones like it',
   run: async (ctx) => {
     if (!hasMovies()) return ctx.reply({ content: nokey, temp: true });
     const q = (ctx.str('title') ?? '').trim();
     if (!q || q === 'pick' || q === 'night') return ctx.reply({ ...picker(ctx.userId, { genres: [], decade: null, score: 0, lang: null, length: 'any' }), public: true });
+    // a genre, or a mix of genre, decade, language and length, lists ten that fit with buttons to reroll or refine
+    const f = filtersFrom(q);
+    if (f && (f.genres.length || f.lang || f.decade)) {
+      const films = await pickSome(f, 10).catch(() => [] as Film[]);
+      if (!films.length) return ctx.reply({ content: `Nothing fits ${describe(f)}. Loosen it a little.`, temp: true });
+      const st = pack(f);
+      return ctx.reply({ ...listOf(`Ten for ${describe(f)}`, films, `mvp|${ctx.userId}|list|${st}`, [
+        new ButtonBuilder().setCustomId(`mvp|${ctx.userId}|list|${st}`).setLabel('Another ten').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`mvp|${ctx.userId}|roll|${st}`).setLabel('Pick one for me').setEmoji('🎲').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`mvp|${ctx.userId}|panel|${st}`).setLabel('Change filters').setStyle(ButtonStyle.Secondary),
+      ]), public: true });
+    }
     const like = /^like\s+(.+)/i.exec(q);
     const found = await search(like ? like[1] : q).catch(() => []);
     if (!found.length) return ctx.reply({ content: `Nothing called "${like ? like[1] : q}". Try the original title or fewer words.`, temp: true });

@@ -48,3 +48,15 @@ test('movie search, likes and the picker answer with Trakt data', async () => {
     delete process.env.TRAKT_ID;
   }
 });
+
+test('genre words turn into movie filters, anything else stays a title', async () => {
+  const { filtersFrom } = await import('../src/modules/movies.ts');
+  assert.deepEqual(filtersFrom('horror')?.genres, ['horror']);
+  const f = filtersFrom('korean thriller 2010s')!;
+  assert.deepEqual([f.genres, f.lang, f.decade], [['thriller'], 'ko', 2010]);
+  assert.equal(filtersFrom('90s sci-fi')?.decade, 1990);
+  assert.deepEqual(filtersFrom('science fiction')?.genres, ['science-fiction']);
+  assert.equal(filtersFrom('short comedy 8+')?.score, 8);
+  assert.equal(filtersFrom('inception'), null);
+  assert.equal(filtersFrom('the dark knight'), null);
+});
