@@ -239,7 +239,7 @@ export async function treeImage(store: Store, guild: Guild, u: string) {
     const couple = pars.length === 2 && famOf(store, g, pars[0]).spouse === pars[1];
     const from = couple
       ? [{ x: (pos.get(pars[0])!.x + pos.get(pars[1])!.x) / 2, y: pos.get(pars[0])!.y + 10 }]
-      : pars.map((q) => ({ x: pos.get(q)!.x, y: pos.get(q)!.y + R }));
+      : pars.map((q) => ({ x: pos.get(q)!.x, y: pos.get(q)!.y + R + 34 }));
     for (const q of from) {
       x.strokeStyle = 'rgba(242,215,225,0.35)';
       x.beginPath(); x.moveTo(q.x, q.y); x.bezierCurveTo(q.x, q.y + GAPY / 2, p.x, p.y - GAPY / 2, p.x, p.y - R); x.stroke();
@@ -252,20 +252,27 @@ export async function treeImage(store: Store, guild: Guild, u: string) {
       heart(x, (p.x + q.x) / 2, p.y - 2, 9);
     }
   }
-  // then the people
-  await Promise.all(nodes.map(async (n) => {
+  // then the people: every avatar is fetched first, then drawn one at a time,
+  // each one's round crop has to be undone before the next is drawn
+  const faces = await Promise.all(nodes.map((n) => (n.avatar ? fetch(n.avatar).then((r) => r.arrayBuffer()).then((b) => loadImage(Buffer.from(b))).catch(() => null) : Promise.resolve(null))));
+  nodes.forEach((n, k) => {
     const p = pos.get(n.id)!;
+    const img = faces[k];
     x.save();
     x.beginPath(); x.arc(p.x, p.y, R, 0, Math.PI * 2); x.closePath(); x.clip();
-    const img = n.avatar ? await fetch(n.avatar).then((r) => r.arrayBuffer()).then((b) => loadImage(Buffer.from(b))).catch(() => null) : null;
-    if (img) x.drawImage(img, p.x - R, p.y - R, R * 2, R * 2); else { x.fillStyle = '#3a2f44'; x.fillRect(p.x - R, p.y - R, R * 2, R * 2); }
+    if (img) x.drawImage(img, p.x - R, p.y - R, R * 2, R * 2);
+    else {
+      x.fillStyle = '#3a2f44'; x.fillRect(p.x - R, p.y - R, R * 2, R * 2);
+      x.fillStyle = '#f2d7e1'; x.font = 'bold 34px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillText(n.name.slice(0, 1).toUpperCase(), p.x, p.y + 2); x.textBaseline = 'alphabetic';
+    }
     x.restore();
     x.lineWidth = n.id === u ? 5 : 3; x.strokeStyle = n.id === u ? '#e8c25a' : '#d46a8c';
     x.beginPath(); x.arc(p.x, p.y, R + 2, 0, Math.PI * 2); x.stroke();
     x.font = `${n.id === u ? 'bold ' : ''}17px sans-serif`; x.fillStyle = '#f5ecf0'; x.textAlign = 'center';
     const label = n.name.length > 14 ? `${n.name.slice(0, 13)}…` : n.name;
     x.fillText(label, p.x, p.y + R + 24);
-  }));
+  });
   if (nodes.length === 1) { x.font = '18px sans-serif'; x.fillStyle = 'rgba(242,215,225,0.6)'; x.fillText('No family yet. Marry or adopt someone to grow the tree.', W / 2, H - 30); }
   return new AttachmentBuilder(c.toBuffer('image/png'), { name: 'family.png' });
 }
