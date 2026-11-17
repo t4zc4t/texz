@@ -134,6 +134,22 @@ function marry(store: Store, g: string, a: string, b: string, ring: string) {
   const fa = famOf(store, g, a), fb = famOf(store, g, b);
   saveFam(store, g, a, { ...fa, spouse: b, since, ring });
   saveFam(store, g, b, { ...fb, spouse: a, since, ring });
+  return [...shareKids(store, g, a, b), ...shareKids(store, g, b, a)];
+}
+// a spouse becomes a parent of the other's children too, where a child still has room for one
+function shareKids(store: Store, g: string, parent: string, spouse: string): string[] {
+  const added: string[] = [];
+  for (const kid of famOf(store, g, parent).children) {
+    const fk = famOf(store, g, kid);
+    if (fk.parents.includes(spouse) || fk.parents.length >= 2 || kid === spouse || ancestors(store, g, spouse).has(kid)) continue;
+    fk.parents.push(spouse);
+    saveFam(store, g, kid, fk);
+    const fs = famOf(store, g, spouse);
+    if (!fs.children.includes(kid)) fs.children.push(kid);
+    saveFam(store, g, spouse, fs);
+    added.push(kid);
+  }
+  return added;
 }
 // the parent who asked, and their spouse if there's room, become the child's parents
 function adopt(store: Store, g: string, parent: string, child: string) {
@@ -425,6 +441,12 @@ const relationCmd: Command = {
 // ---------- buttons and answers
 
 export function wireFamily(store: Store) {
+  // couples married before this rule get their children shared now, once
+  for (const { key, value } of store.kvByPrefix('fam:')) {
+    const [, g, u] = key.split(':');
+    const f = JSON.parse(value) as Fam;
+    if (f.spouse) shareKids(store, g, u, f.spouse);
+  }
   offerKind('marry', {
     title: '💍 A proposal', color: ROSE, accept: 'Yes, I do', decline: 'No', minutes: 10,
     onDecline: (o) => `💔 <@${o.to}> said no to <@${o.from}>. Kunikida offers a tissue.`,
@@ -437,9 +459,9 @@ export function wireFamily(store: Store) {
         await i.update({ content: '', embeds: [card('💍 A proposal', `<@${o.from}> can't pay for the ring any more, so it's off for now.`, 0x8a3b3b)], components: [] });
         return;
       }
-      marry(store, o.guild, o.from, o.to, ringKey);
+      const kids = marry(store, o.guild, o.from, o.to, ringKey);
       const lines = [...track(store, o.guild, o.from, 'married'), ...track(store, o.guild, o.to, 'married')];
-      await i.update({ content: `<@${o.from}> <@${o.to}>`, embeds: [card('💒 Just married', `${ring.emoji} <@${o.from}> and <@${o.to}> are married${ring.price ? `, with a ${ring.name.toLowerCase()}` : ''}! The whole Agency is invited.${lines.length ? `\n\n${lines.join('\n')}` : ''}`)], components: [row(new ButtonBuilder().setCustomId(`fam|tree|${o.from}|${o.from}`).setLabel('Family tree').setEmoji('🌳').setStyle(ButtonStyle.Secondary))], allowedMentions: { users: [o.from, o.to] } });
+      await i.update({ content: `<@${o.from}> <@${o.to}>`, embeds: [card('💒 Just married', `${ring.emoji} <@${o.from}> and <@${o.to}> are married${ring.price ? `, with a ${ring.name.toLowerCase()}` : ''}! The whole Agency is invited.${kids.length ? `\n${kids.map((k) => `<@${k}>`).join(' ')} now ${kids.length === 1 ? 'has' : 'have'} both of them as parents.` : ''}${lines.length ? `\n\n${lines.join('\n')}` : ''}`)], components: [row(new ButtonBuilder().setCustomId(`fam|tree|${o.from}|${o.from}`).setLabel('Family tree').setEmoji('🌳').setStyle(ButtonStyle.Secondary))], allowedMentions: { users: [o.from, o.to] } });
     },
   });
   offerKind('adopt', {

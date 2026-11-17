@@ -25,3 +25,17 @@ test('relations across a small family', () => {
   assert.equal(relation(store, 'g', 'p1', 's'), 'child-in-law');
   assert.equal(relation(store, 'g', 'a', 'nobody'), null);
 });
+
+test('a new spouse becomes a parent of the children too', async () => {
+  const { wireFamily } = await import('../src/modules/family.ts');
+  const store = new Store(':memory:');
+  put(store, 'me', { children: ['k1', 'k2'], spouse: 'wife' });
+  put(store, 'wife', { spouse: 'me' });
+  put(store, 'k1', { parents: ['me'] });
+  put(store, 'k2', { parents: ['me', 'other'] });
+  wireFamily(store);
+  assert.deepEqual(JSON.parse(store.getKv('fam:g:k1')!).parents, ['me', 'wife']);
+  assert.deepEqual(JSON.parse(store.getKv('fam:g:k2')!).parents, ['me', 'other']);
+  assert.deepEqual(JSON.parse(store.getKv('fam:g:wife')!).children, ['k1']);
+  assert.equal(relation(store, 'g', 'k1', 'wife'), 'parent');
+});
