@@ -188,6 +188,8 @@ async function dailyChannel(guild: Guild, store: Store) {
   const found = guild.channels.cache.find((c) => c.type === ChannelType.GuildText && /give\s*-?away|gaw/i.test(c.name));
   return found ?? null;
 }
+// 14:30 UTC today, written as a Discord time so everyone reads it in their own clock
+const dailyAt = () => { const d = new Date(); return Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 14, 30) / 1000); };
 async function dailyGiveaway(client: Client, store: Store) {
   const now = new Date();
   // 14:30 UTC is 8 pm in India, it runs until a few minutes before the next one
@@ -300,9 +302,9 @@ const giveaway: Command = {
       const raw = (ctx.str('channel') ?? '').toLowerCase();
       if (ctx.bool('off') || raw === 'off') { store.setKv(`gwdaily:${ctx.guild.id}`, 'off'); return ctx.reply('🎁 The daily giveaway is off. `tz gw daily #channel` brings it back.'); }
       const chId = ctx.channel('channel');
-      if (chId) { store.setKv(`gwdaily:${ctx.guild.id}`, chId); return ctx.reply(`🎁 The daily giveaway runs in <#${chId}>, every day at 8 pm India time. Prizes pay out by themselves.`); }
+      if (chId) { store.setKv(`gwdaily:${ctx.guild.id}`, chId); return ctx.reply(`🎁 The daily giveaway runs in <#${chId}>, every day at <t:${dailyAt()}:t> your time. Prizes pay out by themselves.`); }
       const ch = await dailyChannel(ctx.guild, store);
-      return ctx.reply(ch ? `🎁 The daily giveaway runs in <#${ch.id}> at 8 pm India time. \`tz gw daily #channel\` moves it, \`tz gw daily off\` stops it.` : '🎁 No daily giveaway channel yet. `tz gw daily #channel` sets one.');
+      return ctx.reply(ch ? `🎁 The daily giveaway runs in <#${ch.id}> at <t:${dailyAt()}:t> your time. \`tz gw daily #channel\` moves it, \`tz gw daily off\` stops it.` : '🎁 No daily giveaway channel yet. `tz gw daily #channel` sets one.');
     }
     if (sub === 'start') {
       const ms = parseLength(ctx.str('length'));

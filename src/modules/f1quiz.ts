@@ -1,3 +1,4 @@
+import { feedOf, playHere } from '../core/feeds.js';
 import { track } from './missions.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type Interaction, type MessageActionRowComponentBuilder } from 'discord.js';
 import { SlashCommandBuilder } from 'discord.js';
@@ -62,6 +63,18 @@ export async function onF1Quiz(store: Store, i: Interaction) {
   const economy = !!i.guildId && store.rules(i.guildId, 'economy').enabled;
   if (parts[1] === 'new') {
     const kind: Kind = parts[2] === 'crest' ? 'crest' : 'f1';
+    // a quiz button on a bulletin starts the question where games are played, not in the feed
+    const feed = feedOf(store, i.guildId, i.channelId);
+    const there = feed && i.guildId ? playHere(store, i.guildId) : null;
+    if (feed) {
+      const ch = there ? await i.client.channels.fetch(there).catch(() => null) : null;
+      if (!ch?.isSendable()) { await i.reply({ content: `The quiz isn't played in ${feed}.`, flags: 64 }); return true; }
+      const r = await quizRound(there!, economy, undefined, kind).catch(() => null);
+      if (!r) await i.reply({ content: 'The questions didn\'t load, try again in a moment.', flags: 64 });
+      else if (r.busy) await i.reply({ content: `A question is already running in <#${there}>, answer that one first.`, flags: 64 });
+      else { await ch.send({ content: `<@${i.user.id}> asked for one`, embeds: r.embeds, components: r.components, allowedMentions: { users: [] } }); await i.reply({ content: `🏁 The question is up in <#${there}>.`, flags: 64 }); }
+      return true;
+    }
     const r = await quizRound(i.channelId, economy, undefined, kind).catch(() => null);
     if (!r) await i.reply({ content: 'The questions didn\'t load, try again in a moment.', flags: 64 });
     else if (r.busy) await i.reply({ content: 'A question is already running here, answer that one first.', flags: 64 });

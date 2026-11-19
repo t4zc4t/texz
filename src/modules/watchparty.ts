@@ -151,7 +151,7 @@ export const watchparty: Command = {
   hint: '`{p} wp` · `{p} wp frieren` · `{p} wp movie interstellar`\n-# starts one now in the Watch Party room\n`{p} wp 21:00 frieren` · `{p} wp in 2h movie dune`\n-# plans one for later, everyone who presses I\'m in gets pinged when it starts',
   run: async (ctx, store) => {
     if (!ctx.guild || !ctx.guildId) return ctx.reply('Watch parties live in servers.');
-    const tz = store.settings(ctx.userId).timezone || 'Asia/Kolkata';
+    const tz = store.settings(ctx.userId).timezone || 'UTC';
     let what = (ctx.str('what') ?? '').trim();
     let at: number | null = Date.now();
     if (ctx.viaText) {
@@ -202,7 +202,7 @@ export async function onWatchparty(store: Store, i: Interaction): Promise<boolea
   if (i.isModalSubmit() && i.customId.startsWith('wpm|')) {
     const [, kind, id] = i.customId.split('|');
     if (!i.guild || !i.channelId) return true;
-    const at = when(i.fields.getTextInputValue('when'), store.settings(i.user.id).timezone || 'Asia/Kolkata');
+    const at = when(i.fields.getTextInputValue('when'), store.settings(i.user.id).timezone || 'UTC');
     if (!at || at < Date.now() - 60_000) { await i.reply({ content: 'I couldn\'t read that time. Try `now`, `in 2h`, `21:00` or `tomorrow 20:30`.', flags: MessageFlags.Ephemeral }); return true; }
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     const w = kind === 'movie' ? await movieWhat(id) : await animeWhat(Number(id));

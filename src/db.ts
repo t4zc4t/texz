@@ -24,7 +24,7 @@ export interface Settings {
 
 export const defaultSettings: Settings = {
   delivery: 'dm',
-  timezone: 'Asia/Kolkata',
+  timezone: 'UTC',
   quiet: null,
   huntbot: true,
   pray: true,

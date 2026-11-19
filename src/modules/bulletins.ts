@@ -160,7 +160,7 @@ const drawOnce = (key: string, make: () => Promise<Buffer>) => {
 const sideOf = (t: Match['home'], played: boolean) => ({ name: t.name, short: t.short, color: t.color, logo: t.logo, ...(played ? { score: t.score, winner: t.winner } : {}) });
 const matchImage = (m: Match, played: boolean) => drawOnce(`${m.id}:${played ? 'ft' : 'ko'}`, () => matchCard({
   home: sideOf(m.home, played), away: sideOf(m.away, played), league: leagues[m.league]?.name ?? m.league,
-  status: played ? (m.detail || 'Full time') : `Kick-off ${new Date(m.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })} IST`,
+  status: played ? (m.detail || 'Full time') : `Kick-off ${new Date(m.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} UTC`,
   venue: m.venue, goals: played ? m.goals.map((g) => ({ who: g.who, clock: g.clock, home: g.team === m.home.id })) : [],
 }));
 
@@ -173,11 +173,13 @@ const withImage = (e: EmbedBuilder, image: Buffer | null, rows: ActionRowBuilder
 // which look a server picked for its F1 cards in /setup, Port Mafia unless it asked for the light one
 export const f1Look = (store: Store, gid: string | null) => (gid ? store.getKv(`f1theme:${gid}`) : null) ?? 'mafia';
 const weekImage = (r: Round, tz: string, look = 'mafia') => drawOnce(`f1week:${r.round}:${tz}:${look}:${Math.floor(Date.now() / 3600_000)}`, () => weekCard({
-  title: r.name, subtitle: `Round ${r.round} · ${r.circuit.name} · times in ${tz === 'Asia/Kolkata' ? 'IST' : tz}`, tz,
+  title: r.name, subtitle: `Round ${r.round} · ${r.circuit.name} · times in ${tzLabel(tz)}`, tz,
   next: Date.parse(r.sessions.find((x) => Date.parse(x.start) > Date.now())?.start ?? '') || undefined,
   sessions: r.sessions.map((x) => ({ label: x.label, start: Date.parse(x.start), big: bigSession(x.type) })),
 }, look));
 
+// how a zone reads on a picture: UTC as it is, a city for anyone who set their own
+export const tzLabel = (tz: string) => (tz === 'UTC' || !tz ? 'UTC' : tz === 'Asia/Kolkata' ? 'IST' : tz.split('/').pop()!.replace(/_/g, ' '));
 const link = (url: string, label: string) => new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(url).setLabel(label);
 const sessionWord: Record<string, string> = { Q: 'Qualifying', SQ: 'Sprint qualifying', S: 'Sprint', R: 'Grand Prix' };
 // a small mark for each kind of session so the week reads at a glance
@@ -204,8 +206,8 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
       for (const [gid, b] of live) {
         if (!store.firstTime(gid, `f1:week:${r.round}`)) continue;
         await post(client, b.f1, {
-          react: [flag, '🏎️'], image: await weekImage(r, 'Asia/Kolkata', f1Look(store, gid)),
-          embed: card({ kind: 'f1Week', title: `${flag} ${r.name} · it's race week`, emoji: '', color: names.f1.color, gif: 'off', body: `Round ${r.round} · ${r.circuit.name}, ${r.circuit.locality}${r.sprint ? ' · ⚡ sprint weekend' : ''}\n${weekLines(r).filter((_, i, a) => i >= a.length - 2).join('\n')}` }),
+          react: [flag, '🏎️'], image: await weekImage(r, 'UTC', f1Look(store, gid)),
+          embed: card({ kind: 'f1Week', title: `${flag} ${r.name} · it's race week`, emoji: '', color: names.f1.color, gif: 'off', body: `Round ${r.round} · ${r.circuit.name}, ${r.circuit.locality}${r.sprint ? ' · ⚡ sprint weekend' : ''}\n${weekLines(r).join('\n')}\n-# times are shown in your own time zone` }),
           buttons: [link(`${SITE}/schedule`, 'Full schedule')],
         });
       }
@@ -385,7 +387,7 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
       if (upcoming.length) {
         const image = await drawOnce(`fbmorning:${today}:${upcoming.map((m) => m.id).join(',')}`, () => fixturesCard('Today on the pitch', upcoming.slice(0, 12).map((m) => ({
           home: sideOf(m.home, false), away: sideOf(m.away, false), league: leagues[m.league]?.name ?? m.league, state: m.state, when: m.date, detail: m.detail,
-        })), 'Asia/Kolkata'));
+        })), 'UTC'));
         await post(client, b.football, {
           image,
           embed: card({ kind: 'fbDay', title: 'Today\'s matches worth watching', emoji: '🏟️', color: names.football.color, gif: image ? 'off' : gifIn(store, gid, 'matchday'),
@@ -666,11 +668,11 @@ const f1: Command = {
       const { rounds } = await schedule();
       const r: Round | null = nextRound(rounds);
       if (!r) return ctx.reply('The season is over. The paddock sleeps, and so do I.');
-      const tz = store.settings(ctx.userId).timezone || 'Asia/Kolkata';
+      const tz = store.settings(ctx.userId).timezone || 'UTC';
       const image = await weekImage(r, tz, f1Look(store, ctx.guildId));
       const next = r.sessions.find((x) => Date.parse(x.start) > Date.now());
       const e = card({ kind: 'f1Week', title: `${flagOf[r.circuit.country] ?? '🏁'} ${r.name}`, emoji: '', color: names.f1.color, gif: image ? 'off' : undefined, line: '',
-        body: `Round ${r.round} · ${r.circuit.name}${r.sprint ? ' · ⚡ sprint weekend' : ''}${next ? `\n${sessionMark(next.type)} **${next.label}** <t:${unix(Date.parse(next.start))}:R>` : ''}` });
+        body: `Round ${r.round} · ${r.circuit.name}${r.sprint ? ' · ⚡ sprint weekend' : ''}\n${weekLines(r).join('\n')}${next ? `\n\nNext up: ${sessionMark(next.type)} **${next.label}** <t:${unix(Date.parse(next.start))}:R>` : ''}` });
       return ctx.reply(withImage(e, image, [site]));
     } catch { return ctx.reply('Parc Fermé didn\'t answer, try again in a moment.'); }
   },
@@ -750,7 +752,7 @@ const football: Command = {
     // live first, then what's still to come, then the finished ones
     const order = { in: 0, pre: 1, post: 2 } as const;
     const sorted = [...mine].sort((x, y) => order[x.state] - order[y.state] || x.date - y.date);
-    const tz = store.settings(ctx.userId).timezone || 'Asia/Kolkata';
+    const tz = store.settings(ctx.userId).timezone || 'UTC';
     const image = await drawOnce(`fbday:${sorted.map((m) => `${m.id}${m.state}${m.home.score}${m.away.score}`).join(',')}:${tz}`, () => fixturesCard('Today on the pitch', sorted.map((m) => ({
       home: sideOf(m.home, m.state !== 'pre'), away: sideOf(m.away, m.state !== 'pre'), league: leagues[m.league]?.name ?? m.league, state: m.state, when: m.date, detail: m.detail,
     })), tz));

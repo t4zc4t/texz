@@ -348,7 +348,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
 
   if (page === 'cotd') {
     title = 'Character of the day';
-    body = 'Every morning (about 9:00 in India) I post one well-loved anime character from AniList in this channel. Anyone can see today\'s with `tz cotd`.';
+    body = `Every day at <t:${Math.floor(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(), 3, 30) / 1000)}:t> your time I post one well-loved anime character from AniList in this channel. Anyone can see today's with \`tz cotd\`.`;
     fields.push({ name: '📣 Channel', value: ch(g.daily.channel), inline: true });
     comps.push(
       row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'cotdch')).setPlaceholder('🎭 Channel for the daily character (empty = off)')

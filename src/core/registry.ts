@@ -43,6 +43,7 @@ import { slashPath, type Command, type Module } from './module.js';
 import { glance, layout } from './glance.js';
 import { closest } from './fuzzy.js';
 import { isStaff } from './staff.js';
+import { feedOf, playHere } from './feeds.js';
 import { fixText, setupButton, usualPerms } from './fixes.js';
 import { askModal, entriesOf, homePage, needsInput, refPage, refPageOf, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
 
@@ -242,6 +243,13 @@ async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command, cool = tru
   // where Back goes from this page: a dashboard goes back to help, anything else to its own dashboard
   ctx.self = cmd.name;
   ctx.home ??= dashNames.has(cmd.name) ? 'help' : groups[cmd.group ?? '']?.dashboard ?? 'help';
+  // a feed channel isn't for commands: the bulletins, the count, the evidence board, the giveaways
+  const feed = cool ? feedOf(store, ctx.guildId, ctx.channelId) : null;
+  if (feed && !isStaff(store, ctx)) {
+    const there = ctx.guildId ? playHere(store, ctx.guildId) : null;
+    await ctx.drop?.();
+    return ctx.reply({ content: `🚫 Not in ${feed}, it's kept for what it's for.${there ? ` Try it in <#${there}>.` : ''}`, temp: true });
+  }
   const blocked = gate(store, ctx, mod, cmd);
   if (blocked) return ctx.reply({ embeds: [card({ ...blocked, title: 'Not this time', emoji: '🚫', color: RED, gif: 'off' })], temp: true });
   // buttons on dashboards move between pages, they don't count

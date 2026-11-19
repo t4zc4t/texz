@@ -365,7 +365,7 @@ export function whenOf(text: string, tz: string): { at: number; note: string } |
     if (min > 59) return null;
     // the offset of their timezone right now, to turn their wall clock into a moment
     const now = new Date();
-    const local = new Date(now.toLocaleString('en-US', { timeZone: tz || 'Asia/Kolkata' }));
+    const local = new Date(now.toLocaleString('en-US', { timeZone: tz || 'UTC' }));
     const offset = local.getTime() - now.getTime();
     const target = new Date(local);
     target.setHours(h, min, 0, 0);

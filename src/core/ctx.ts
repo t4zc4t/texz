@@ -14,6 +14,8 @@ export type Reply = string | EmbedBuilder | {
 
 // one shape for both slash commands and "tz" text commands, so each command is written once
 export interface Ctx {
+  // a typed command's own message, so it can be cleared from a channel it doesn't belong in
+  drop?: () => Promise<unknown>;
   // quest events a command really did (a shift worked, a bet placed), counted once it has run
   counted?: string[];
   userId: string;
@@ -169,6 +171,7 @@ export function fromText(m: Message, tokens: string[], argNames: string[], hasSu
   });
   const id = (n: string, re: RegExp) => values.get(n)?.match(re)?.[1] ?? null;
   return {
+    drop: () => m.delete().catch(() => null),
     userId: m.author.id,
     guildId: m.guildId,
     guild: m.guild,

@@ -421,7 +421,7 @@ export async function fixturesCard(title: string, rows: FixtureRow[], tz: string
   ctx.fillText(title, 40, 66);
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.font = '20px "Texz Sans"';
-  ctx.fillText(`times in ${tz === 'Asia/Kolkata' ? 'IST' : tz}`, 40, 98);
+  ctx.fillText(`times in ${tz === 'UTC' ? 'UTC' : tz === 'Asia/Kolkata' ? 'IST' : tz.split('/').pop()!.replace(/_/g, ' ')}`, 40, 98);
   const time = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   for (const [n, r] of list.entries()) {
     const y = 140 + n * 64;
