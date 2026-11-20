@@ -61,7 +61,7 @@ hookRest(client);
 client.once(Events.ClientReady, (c) => {
   void syncIcons(c);
   void prepareCoin();
-  console.log(`texz online as ${c.user.tag}`);
+  console.log(`texz online as ${c.user.tag} on node ${process.version}`);
   look.avatar = c.user.displayAvatarURL();
   // new servers start switched off, the home server keeps everything
   settleAll(c, store);
