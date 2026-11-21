@@ -129,11 +129,25 @@ export async function carryRankPerms(guild: Guild, rewards: Record<string, strin
 
 // puts the rank perks in place: the earned permissions come off @everyone and the member role, each rank role
 // gets its own and the ones below it, boosters and bots get theirs, and channels stop handing them out to everyone
+// the trusted role (family, friends): every rank perk from day one, and nothing that can run the server.
+// Its server-wide permissions are set to exactly that, so locked channels like the bulletins stay locked for it too
+const P2 = PermissionFlagsBits;
+export const TRUSTED_BASE = P2.ViewChannel | P2.SendMessages | P2.ReadMessageHistory | P2.AddReactions | P2.Connect | P2.Speak | P2.Stream | P2.UseVAD
+  | P2.ChangeNickname | P2.UseApplicationCommands | P2.CreatePublicThreads | P2.SendMessagesInThreads | P2.CreateInstantInvite | P2.UseEmbeddedActivities | P2.UseSoundboard;
+export function trustedRole(store: Store, guild: Guild) {
+  const set = store.getKv(`trusted:${guild.id}`);
+  if (set) return set === 'none' ? null : guild.roles.cache.get(set) ?? null;
+  // a role simply called fam or family is taken as it, once, until an admin picks another in setup
+  const hit = guild.roles.cache.filter((r) => /^(fam|family)$/i.test(r.name.replace(/[^a-z]/gi, '')) && !r.managed);
+  if (hit.size === 1) { store.setKv(`trusted:${guild.id}`, hit.first()!.id); return hit.first()!; }
+  return null;
+}
+
 export async function applyPerks(store: Store, guild: Guild): Promise<number> {
   const me = await guild.members.fetchMe().catch(() => null);
   if (!me?.permissions.has(PermissionFlagsBits.ManageRoles)) return 0;
   const rewards = store.guild(guild.id).levels.rewards ?? {};
-  if (!Object.keys(rewards).length) return 0;
+  if (!Object.keys(rewards).length && !trustedRole(store, guild)) return 0;
   // a bot can only hand out or take away permissions it has itself
   const can = me.permissions.has(PermissionFlagsBits.Administrator) ? ~0n : me.permissions.bitfield;
   const below = (r: { position: number; managed: boolean } | undefined) => !!r && r.position < me.roles.highest.position;
@@ -156,6 +170,8 @@ export async function applyPerks(store: Store, guild: Guild): Promise<number> {
   }
   const booster = guild.roles.premiumSubscriberRole;
   if (booster && below(booster)) await setTo(booster, booster.permissions.bitfield | (BOOSTER & can), 'boosters skip the wait');
+  const trusted = trustedRole(store, guild) ?? undefined;
+  if (below(trusted) && !trusted!.managed) await setTo(trusted!, (TRUSTED_BASE | gated) & can, 'trusted: every rank perk, nothing that runs the server');
   const unit = guild.roles.cache.get(store.getKv(`botrole:${guild.id}`) ?? '');
   if (below(unit) && !unit!.managed) await setTo(unit!, unit!.permissions.bitfield | (BOT_MEDIA & can), 'bots post embeds and files');
   // channels that hand the perks to everyone or the member role would undo all that, so those allows are cleared
@@ -362,7 +378,7 @@ const xp: Command = {
 export const levelsModule: Module = {
   name: 'levels',
   label: 'Levels and ranks',
-  about: 'Chat xp and Agency ranks from Stray to Living Legend. Reward roles, xp rates, boosts and no-xp zones are in /setup, admins move xp with /admin view:xp',
+  about: 'Chat xp and Agency ranks from Stray to Living Legend. Reward roles, xp rates, boosts and no-xp zones are in /setup, admins move xp with /admin xp',
   commands: [rank, levels, perksCmd, xp],
 };
 

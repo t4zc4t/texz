@@ -102,7 +102,7 @@ export async function onQuote(store: Store, i: MessageContextMenuCommandInteract
   if (i.guildId) remember(store, i.guildId, hung ?? here, q.author);
 }
 
-// "tz quote" as a reply to a message, or "/fun view:quote" with a message link
+// "tz quote" as a reply to a message, or "/fun quote" with a message link
 export const quote: Command = {
   name: 'quote',
   group: 'games',

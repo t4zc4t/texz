@@ -9,6 +9,8 @@ import { track } from './missions.js';
 const UA = { 'User-Agent': 'texz-discord-bot (evidence board)' };
 const boardOf = (store: Store, g: string) => store.getKv(`mediach:${g}`);
 
+const TOPIC = 'Pictures, clips and links from everyone, whatever your rank. Talk in the thread under each post. Texz\'s picture of the day and meme drops have threads of their own.';
+
 // anyone can post files and links here, whatever their rank
 export async function openBoards(client: Client, store: Store) {
   for (const guild of client.guilds.cache.values()) {
@@ -16,6 +18,7 @@ export async function openBoards(client: Client, store: Store) {
     if (!id) continue;
     const ch = await guild.channels.fetch(id).catch(() => null);
     if (!ch || ch.type !== ChannelType.GuildText) continue;
+    if (ch.topic !== TOPIC) await ch.setTopic(TOPIC, 'evidence board topic').catch(() => {});
     const now = ch.permissionOverwrites.cache.get(guild.id);
     if (now?.allow.has(PermissionFlagsBits.AttachFiles) && now.allow.has(PermissionFlagsBits.EmbedLinks)) continue;
     await ch.permissionOverwrites.edit(guild.id, { AttachFiles: true, EmbedLinks: true }, { reason: 'the evidence board is open to everyone' }).catch((e) => console.log(`evidence board perms: ${(e as Error).message}`));

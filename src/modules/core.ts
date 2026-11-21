@@ -12,7 +12,7 @@ import { setupPanel } from '../features/setup.js';
 // filled in by the registry so help and config can list every module
 // a few words on what each dashboard holds, for the help page
 const blurb: Record<string, string> = {
-  admin: 'mod, cases, giveaways, posts, setup', owo: 'huntbot, gems, zoo, weapons, timers', poketwo: 'claim help, hints, dex, race', shoob: 'rare drops, wishlist',
+  admin: 'mod, cases, giveaways, posts, setup', poketwo: 'claim help, hints, dex, race', shoob: 'rare drops, wishlist',
   anime: 'airing, search, your list, movie night, watch parties', sports: 'F1, football, international games, predictions', fun: 'hug, bonk, quizzes, ship, quotes',
   profile: 'card, favourites, rank, medals, bonds, pings', yen: 'daily, work, crime, fish, vault, rob, heists, slots, blackjack, roulette, your own colour role, role shop', misc: 'user, server, afk, reminders, private voice booth',
 };
@@ -47,7 +47,7 @@ import { entriesOf } from '../core/dashboards.js';
 let openGroup: ((ctx: Ctx, store: Store, group: string, focus: string) => Promise<unknown>) | null = null;
 export const setGroupOpener = (f: typeof openGroup) => { openGroup = f; };
 
-const icons: Record<string, string> = { core: '🗂️', owo: '🐾', moderation: '🛡️', welcome: '🌸', levels: '🎖️', utility: '🧰', anime: '📺', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴', bulletins: '🗞️', spawns: '🎯' };
+const icons: Record<string, string> = { core: '🗂️', moderation: '🛡️', welcome: '🌸', levels: '🎖️', utility: '🧰', anime: '📺', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴', bulletins: '🗞️', spawns: '🎯' };
 
 // who may see a command in help: staff things only for admins and the staff role
 let staffNow = false;
@@ -144,7 +144,7 @@ const help: Command = {
       })], components: rows });
     }
 
-    // the front page is the dashboards, the same map as /owo, /fun and the rest
+    // the front page is the dashboards, the same map as /fun, /yen and the rest
     const rows = [dashMenu];
     if (ctx.isAdmin && ctx.guildId) rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
       new ButtonBuilder().setCustomId(`nav|setup|owner=${ctx.userId},back=help`).setLabel('Setup desk').setStyle(ButtonStyle.Secondary),
@@ -152,7 +152,7 @@ const help: Command = {
     return ctx.reply({ embeds: [card({
       kind: 'help', title: 'The Agency directory', emoji: '', gif,
       body: [
-        '*Ten doors, one building. Open one to see its commands, typed or slash, with what goes after each.*',
+        `*${dashes.length} doors, one building. Open one to see its commands, typed or slash, with what goes after each.*`,
         '',
         ...dashes.map((d) => `${d.emoji} **${d.label}** · \`${prefix} ${d.name}\`\n-# ${blurb[d.name] ?? ''}`),
         '',

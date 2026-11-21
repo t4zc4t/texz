@@ -158,9 +158,11 @@ export function homePage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry
   const owner = `owner=${ctx.userId},back=${home}`;
   const rows = [];
   if (quick.length) rows.push(row(...quick.map((e) => new ButtonBuilder().setCustomId(`nav|pick|${owner},key=${e.key}`).setLabel(short(e.label, 80)).setStyle(ButtonStyle.Secondary))));
-  for (let n = 0; n < click.length && rows.length < 3; n += 25) {
-    rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|pick|${owner},m=${n}`).setPlaceholder(n ? 'More' : 'Open something').addOptions(
-      click.slice(n, n + 25).map((e) => ({ label: short(e.label, 100), value: e.key, description: short(e.about, 100) })),
+  // the buttons cover the usual ones, the menu holds only what isn't already a button
+  const menu = click.filter((e) => !quick.includes(e));
+  for (let n = 0; n < menu.length && rows.length < 3; n += 25) {
+    rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|pick|${owner},m=${n}`).setPlaceholder(quick.length ? 'Everything else' : n ? 'More' : 'Open something').addOptions(
+      menu.slice(n, n + 25).map((e) => ({ label: short(e.label, 100), value: e.key, description: short(e.about, 100) })),
     )));
   }
   if (!show.length) notes.push('Nothing to open here yet.');
@@ -184,7 +186,7 @@ function refItems(entries: Entry[], group: string, prefix: string): RefItem[] {
       const word = e.cmd.call ?? e.cmd.name;
       const vals = entries.filter((x) => x.cmd.name === e.cmd.name && x.fixed).map((x) => Object.values(x.fixed!)[0]);
       const label = menu[e.cmd.name]?.[1] ?? cap(e.cmd.as ?? e.cmd.name);
-      out.push({ key: e.key, name: e.cmd.name, text: `**${label}**\n\`${prefix} ${word} ${vals[0]}\`${e.cmd.hidden ? '' : ` · \`/${group} view:${e.cmd.as ?? e.cmd.name} input:${vals[0]}\``}\n-# ${vals.join(', ')}` });
+      out.push({ key: e.key, name: e.cmd.name, text: `**${label}**\n\`${prefix} ${word} ${vals[0]}\`${e.cmd.hidden ? '' : ` · \`/${group} ${e.cmd.as ?? e.cmd.name}\``}\n-# ${vals.join(', ')}` });
       continue;
     }
     if (e.cmd.hint) {
@@ -197,7 +199,7 @@ function refItems(entries: Entry[], group: string, prefix: string): RefItem[] {
     const ex = (e.sub ? all.find((x) => x.label === e.sub) : all[0]) ?? all[0];
     const word = e.cmd.call ?? e.cmd.name;
     const typed = ex?.typed ?? `${prefix} ${word}`;
-    const slash = e.cmd.hidden ? null : ex?.slash ?? `/${group} view:${e.cmd.as ?? e.cmd.name}`;
+    const slash = e.cmd.hidden ? null : ex?.slash ?? `/${group} ${e.cmd.as ?? e.cmd.name}`;
     const args = argsOf(e.cmd, e.sub);
     const what = args.length ? args.slice(0, 3).map((a) => `${a.shown}${a.required ? '' : '?'} ${a.about.toLowerCase()}`).join(' · ') : e.about.toLowerCase() === e.label.toLowerCase() ? '' : e.about;
     // the short names, only for the plain command so subcommands don't repeat them

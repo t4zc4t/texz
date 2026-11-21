@@ -77,7 +77,7 @@ export const booth: Command = {
     .addUserOption((o) => o.setName('user').setDescription('Who, for invite and kick'))
     .addStringOption((o) => o.setName('value').setDescription('The new name, or the limit').setMaxLength(90)).toJSON(),
   text: { aliases: ['mybooth', 'room'], args: ['do', 'user', 'value'] },
-  hint: '`{p} booth invite @someone` · `/misc view:booth`\n-# join ➕ Open a private booth to get one · also kick @someone, open, lock, name Late night, limit 4',
+  hint: '`{p} booth invite @someone` · `/misc booth`\n-# join ➕ Open a private booth to get one · also kick @someone, open, lock, name Late night, limit 4',
   run: async (ctx, store) => {
     const m = ctx.member;
     const ch = m?.voice.channel as VoiceChannel | null | undefined;

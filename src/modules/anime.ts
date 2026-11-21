@@ -286,7 +286,7 @@ const home: Command = {
       )),
     ];
     return ctx.reply({ embeds: [card({ kind: 'season', title: 'Literary Annex', emoji: '📚', gif: 'off', fields,
-      body: '*Stories on the shelf, episodes on the air.*\nSearch with `tz anime <title>` or `/anime input:<title>`. Everything else is a click away.' })], components: rows });
+      body: '*Stories on the shelf, episodes on the air.*\nSearch with `tz anime <title>` or `/anime search title:<title>`. Everything else is a click away.' })], components: rows });
   },
 };
 

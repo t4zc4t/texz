@@ -312,7 +312,7 @@ export function casePage(store: Store, guildId: string, owner: string, page: num
   const nav = (p: number, label: string, emoji: string) => new ButtonBuilder().setCustomId(`cs|${owner}|${p}|${key}`.slice(0, 100))
     .setLabel(label).setEmoji(emoji).setStyle(ButtonStyle.Secondary).setDisabled(p < 0 || p >= pages);
   const e = card({ kind: 'caseList', title: `Case archive · ${total}`, emoji: '🗄️', gif: 'off', body: `${what ? `${what}\n\n` : ''}${body}` });
-  e.setFooter({ text: `Page ${page + 1}/${pages} · /admin view:case opens one` });
+  e.setFooter({ text: `Page ${page + 1}/${pages} · /admin case opens one` });
   return { embeds: [e], components: pages > 1 ? [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(nav(page - 1, 'Newer', '◀️'), nav(page + 1, 'Older', '▶️'))] : [] };
 }
 
@@ -320,7 +320,7 @@ export async function onCaseComponent(store: Store, i: Interaction): Promise<boo
   if (!i.isButton() || !i.customId.startsWith('cs|') || !i.guildId) return false;
   const [, owner, page, user, mod, type, text] = i.customId.split('|');
   if (i.user.id !== owner) {
-    await i.reply({ content: 'Open your own with `/admin view:case`.', flags: MessageFlags.Ephemeral });
+    await i.reply({ content: 'Open your own with `/admin case`.', flags: MessageFlags.Ephemeral });
     return true;
   }
   await i.update(casePage(store, i.guildId, owner, Number(page), { user: user || undefined, mod: mod || undefined, type: type || undefined, text: text || undefined }));

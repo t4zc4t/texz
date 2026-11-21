@@ -2,11 +2,10 @@ import {
   ActionRowBuilder, ApplicationCommandOptionType, ButtonBuilder, ButtonStyle, InteractionContextType, MessageFlags, PermissionFlagsBits, type MessageActionRowComponentBuilder,
   type ChatInputCommandInteraction, type Interaction, type Message, type RESTPostAPIChatInputApplicationCommandsJSONBody,
 } from 'discord.js';
-import { armouryPage, parseArmId, filters, sorts, type Filter, type Sort } from '../features/armoury-pages.js';
 import { apply, modalFor, panel, parseRp } from '../features/panel.js';
 import type { Store } from '../db.js';
 import { core, allModules, dashList, setGroupOpener } from '../modules/core.js';
-import { owo } from '../modules/owo.js';
+import { remind, reminderSettings } from '../modules/remind.js';
 import { anime, onAnimeComponent, onGuess } from '../modules/anime.js';
 import { onF1Quiz } from '../modules/f1quiz.js';
 import { onPredict } from '../modules/predict.js';
@@ -49,7 +48,8 @@ import { askModal, entriesOf, homePage, needsInput, refPage, refPageOf, parseKey
 
 // voice moderation lives in its own file but belongs with the rest of moderation
 if (!moderation.commands.includes(vc)) moderation.commands.push(vc);
-export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule, community, actions, family];
+utility.commands.push(remind, reminderSettings);
+export const modules: Module[] = [core, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule, community, actions, family];
 allModules.push(...modules);
 useModules(modules);
 
@@ -57,7 +57,6 @@ useModules(modules);
 type Group = GroupInfo & { description: string; perms?: bigint; anywhere?: boolean; dashboard?: string; staff?: boolean; old: string[] };
 const groups: Record<string, Group> = {
   admin: { label: 'Port Mafia HQ', emoji: '☠️', about: '*The executives\' floor. Discipline, rewards and the building itself.*\nAdmins and the staff role only.', description: 'Admins only: moderation, giveaways, role pickers, posts, xp and setup', staff: true, perms: PermissionFlagsBits.ManageMessages, old: ['staff', 'mod', 'tools', 'hq', 'mafia'], extra: ['setup'] },
-  owo: { label: 'Stray Dogs Den', emoji: '🐾', about: '', description: 'OwO: huntbot, gems, zoo, weapons, quests, timers and the shop', anywhere: true, old: ['w'] },
   poketwo: { label: 'Pokédex Bureau', emoji: '🔴', about: '*Every creature on file, every catch accounted for.*\nClaim help, hints, the server Pokédex and the weekly race.', description: 'Pokétwo: claim help, hints, the Pokédex and the catch race', old: ['p2', 'pokétwo'], extra: ['pings'] },
   shoob: { label: 'Card Vault', emoji: '🃏', about: '*Some cards are worth waiting for.*\nRare drop pings and a wishlist for the characters you want.', description: 'Shoob: rare drop pings and your character wishlist', old: [], extra: ['spawns', 'pings'] },
   anime: { label: 'Literary Annex', emoji: '📚', about: '', description: 'Anime, manga and movies: what\'s airing, search, your list, movie night, watch parties', anywhere: true, old: ['annex'], extra: ['animehome'] },
@@ -68,19 +67,19 @@ const groups: Record<string, Group> = {
   misc: { label: 'Odds & Ends', emoji: '🔧', about: '*The drawer nobody labels.*\nLook people up, server info, afk, one-off reminders, your private voice booth and the bot ping.', description: 'User and server info, avatar, afk, reminders and private voice booths', anywhere: true, old: ['info', 'utils', 'odds'], extra: ['ping'] },
 };
 
-// where each command sits and the short name it goes by inside its dashboard, "/admin view:mute" or "tz admin mute"
+// where each command sits and the short name it goes by inside its dashboard, "/admin mute" or "tz admin mute"
 const place: Record<string, [string, string?]> = {
   warn: ['admin'], case: ['admin'], timeout: ['admin', 'mute'], kick: ['admin'], ban: ['admin'], unban: ['admin'], purge: ['admin'], lock: ['admin'], slowmode: ['admin', 'slow'], vc: ['admin', 'vc'],
   act: ['fun'], bonds: ['profile'], movie: ['anime'],
   rolepicker: ['admin', 'roles'], xp: ['admin'], giveaway: ['admin', 'gaw'], announce: ['admin', 'post'], serverstats: ['admin', 'stats'], backup: ['admin'],
-  reminders: ['owo', 'timers'],
+  reminders: ['misc', 'timers'],
   poll: ['fun'], choose: ['fun', 'pick'], roll: ['fun'], coin: ['fun', 'flip'], ship: ['fun'], '8ball': ['fun'], guess: ['fun'], quiz: ['fun'], trivia: ['fun'],
   onthisday: ['fun', 'otd'], crestquiz: ['fun', 'crest'], quote: ['fun'], confess: ['fun'],
   profile: ['profile', 'card'], achievements: ['profile', 'medals'], rank: ['profile'], levels: ['profile', 'top'], perks: ['profile'], quests: ['profile'], birthday: ['profile', 'bday'], pings: ['profile'],
   daily: ['yen'], mycolour: ['yen', 'mycolour'], coinflip: ['yen', 'flip'], slots: ['yen'], blackjack: ['yen', 'bj'], money: ['admin'], wallet: ['yen', 'bal'], give: ['yen'], rich: ['yen', 'top'], roleshop: ['yen', 'shop'], work: ['yen'], crime: ['yen'], beg: ['yen'], fish: ['yen'], bank: ['yen'], rob: ['yen'], roulette: ['yen'], scratch: ['yen'], heist: ['yen'], rps: ['yen'],
   booth: ['misc'], user: ['misc'], avatar: ['misc', 'av'], server: ['misc'], afk: ['misc'], remind: ['misc'],
 };
-for (const mod of [owo, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, community, spawnsModule, actions, anime]) for (const cmd of mod.commands) {
+for (const mod of [utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, community, spawnsModule, actions, anime]) for (const cmd of mod.commands) {
   const to = place[cmd.name];
   if (!to) continue;
   cmd.group = to[0];
@@ -105,7 +104,7 @@ const byText = new Map<string, Hit>();
 for (const mod of modules) for (const cmd of mod.commands) {
   byName.set(cmd.name, { mod, cmd });
   if (!cmd.hidden) bySlash.set(slashPath(cmd), { mod, cmd });
-  // typed "tz owo huntbot" mirrors "/owo view:huntbot"
+  // typed "tz fun quiz" mirrors "/fun quiz"
   if (cmd.group && !bySlash.has(`${cmd.group} ${cmd.as ?? cmd.name}`)) bySlash.set(`${cmd.group} ${cmd.as ?? cmd.name}`, { mod, cmd });
   for (const name of [...(cmd.text?.noName ? [] : [cmd.name]), ...(cmd.text?.aliases ?? [])]) byText.set(name, { mod, cmd });
 }
@@ -196,10 +195,10 @@ export const definitions: Json[] = [
     description: g.description,
     ...(g.anywhere ? everywhere : serverOnly),
     ...(g.perms ? { default_member_permissions: g.perms.toString() } : {}),
-    // one command with a view picker and a free text box, empty opens the dashboard
+    // every command in the group is a real subcommand with its own typed options, "home" opens the dashboard
     options: [
-      { type: ApplicationCommandOptionType.String, name: 'view', description: 'Leave empty for the dashboard', choices: visible.filter((c) => c.group === name).slice(0, 25).map((c) => ({ name: c.as ?? c.name, value: c.as ?? c.name })) },
-      { type: ApplicationCommandOptionType.String, name: 'input', description: 'Optional, whatever that view needs. Leave empty and I\'ll ask', max_length: 200 },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'home', description: `The ${g.label} dashboard` },
+      ...visible.filter((c) => c.group === name).slice(0, 24).map(asMember),
     ] as Opt[],
   })),
 ];
@@ -279,37 +278,19 @@ async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command, cool = tru
 export async function onSlash(store: Store, i: ChatInputCommandInteraction) {
   const g = groups[i.commandName];
   if (g) {
-    let view = i.options.getString('view');
-    const input = i.options.getString('input') ?? '';
-    // "/anime input:frieren" is a search
-    if (!view && input && i.commandName === 'anime') view = 'search';
-    const hit = view ? bySlash.get(`${i.commandName} ${view}`) : byName.get(g.dashboard!);
-    if (!hit) return;
-    // a view that needs something and got nothing asks for it, or shows its parts to pick from
-    if (view && !input) {
-      const parts = entriesOf(hit.cmd);
-      if (parts.length > 1) return run(store, fromSlash(i, null), core, pickerFor(i.commandName, parts));
-      if (parts[0] && needsInput(parts[0])) {
-        const blocked = gate(store, fromSlash(i, null), hit.mod, hit.cmd);
-        if (!blocked) return i.showModal(askModal(parts[0], i.user.id, g.dashboard!));
-      }
+    // "/admin gaw start" arrives as group gaw, sub start; "/admin mute" as sub mute
+    const nested = i.options.getSubcommandGroup(false);
+    const sub = i.options.getSubcommand(false);
+    if (!nested && (!sub || sub === 'home')) {
+      const home = byName.get(g.dashboard!);
+      return home && run(store, fromSlash(i, null), home.mod, home.cmd);
     }
-    const t = hit.cmd.text;
-    const tokens = input.split(/\s+/).filter(Boolean);
-    const args = t?.sub ? t.subArgs?.[tokens[0]?.toLowerCase() ?? ''] ?? [] : t?.args ?? [];
-    return run(store, withTokens(fromSlash(i, null), tokens, args, !!t?.sub), hit.mod, hit.cmd);
+    const hit = bySlash.get(`${i.commandName} ${nested ?? sub}`);
+    if (!hit) return;
+    return run(store, fromSlash(i, nested ? sub : null), hit.mod, hit.cmd);
   }
   const hit = bySlash.get(i.commandName);
   if (hit) return run(store, fromSlash(i), hit.mod, hit.cmd);
-}
-
-// a small page of one command's parts, like giveaway start, end and reroll
-function pickerFor(group: string, parts: Entry[]): Command {
-  const g = groups[group];
-  return {
-    name: `${group}parts`, hidden: true, data: { name: 'parts', description: parts[0].cmd.data.description },
-    run: (ctx) => ctx.reply(homePage(ctx, g.dashboard!, { ...g, label: `${g.label} · ${parts[0].cmd.as ?? parts[0].cmd.name}`, about: parts[0].cmd.data.description }, parts)),
-  };
 }
 
 export function isEnabled(store: Store, guildId: string | null, module: string) {
@@ -319,7 +300,7 @@ export function isEnabled(store: Store, guildId: string | null, module: string) 
 // names a typo can be matched to: everything people can type, minus the dashboard homes
 const typoTargets = () => [...byText.entries()].filter(([, h]) => !dashNames.has(h.cmd.name) && !h.cmd.name.endsWith('home') && h.cmd.name !== 'servers').map(([k]) => k);
 
-// "tz ws", "tz whb", "tzstatus" all work, case doesn't matter
+// "tz help", "TZ wl", "tzstatus" all work, case doesn't matter
 export function onText(store: Store, m: Message): boolean {
   const prefix = m.guildId ? store.guild(m.guildId).prefix : 'tz';
   const text = m.content.trim();
@@ -337,10 +318,10 @@ export function onText(store: Store, m: Message): boolean {
   // "tz mod warn @x" works like "/mod warn", but "tz anime frieren" is still a search
   const next = tokens[0]?.toLowerCase();
   const member = groups[name] && next
-    ? bySlash.get(`${name} ${next}`) ?? (byText.get(next)?.cmd.group === name ? byText.get(next) : undefined) ?? (name === 'owo' && byText.get(`w${next}`)?.cmd.group === 'owo' ? byText.get(`w${next}`) : undefined)
+    ? bySlash.get(`${name} ${next}`) ?? (byText.get(next)?.cmd.group === name ? byText.get(next) : undefined)
     : undefined;
   if (member) { tokens.shift(); name = member.cmd.name; }
-  // "tz fun" on its own opens the dashboard, "tz owo" too. But where a command shares the group's name and works
+  // "tz fun" on its own opens the dashboard. But where a command shares the group's name and works
   // with nothing after it, like "tz profile", the command is what people mean
   const same = byText.get(name);
   const runsBare = !!same && same.cmd.name === name && !(same.cmd.data.options ?? []).some((o) => 'required' in o && o.required);
@@ -475,18 +456,6 @@ export async function onComponent(store: Store, i: Interaction) {
     if (!hit) return;
     return run(store, fromComponent(i, opts, edit), hit.mod, hit.cmd, false);
   }
-  const arm = parseArmId(i.customId);
-  if (!arm) return;
-  if (i.user.id !== arm.userId) {
-    return i.reply({ content: 'That\'s someone else\'s case file. Open your own with `tz wa all`.', flags: MessageFlags.Ephemeral });
-  }
-  let { page, filter, sort } = arm;
-  if (i.isStringSelectMenu()) {
-    const v = i.values[0];
-    if (arm.what === 'filter' && v in filters) { filter = v as Filter; page = 0; }
-    if (arm.what === 'sort' && v in sorts) { sort = v as Sort; page = 0; }
-  }
-  await i.update(armouryPage(store, arm.userId, page, filter, sort)).catch((e) => report('armoury page', e));
 }
 
 const notYours = 'That\'s someone else\'s control room. Open your own with `tz remind`.';

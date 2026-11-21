@@ -20,7 +20,7 @@ export const rooms = {
   quotes: { name: '🖋️┃ink-and-regret', topic: 'Things people said and can never take back, framed by Texz. Right click a message → Apps → Make it a Quote.' },
   archive: { name: '⭐┃the-agency-files', topic: 'Messages the server starred enough to keep. React with ⭐ anywhere, five stars and it\'s filed here.' },
   count: { name: '🔢┃kunikidas-ledger', topic: 'Kunikida keeps the numbers. Only numbers here, one each, no two in a row. A wrong number sends it back to 1. Beating the record pays, see tz count.' },
-  confess: { name: '🕯️┃midnight-confessions', topic: 'Anonymous confessions, posted by Texz. Press the button on the pinned message, or /fun view:confess.' },
+  confess: { name: '🕯️┃midnight-confessions', topic: 'Anonymous confessions, posted by Texz. Press the button on the pinned message, or /fun confess.' },
 } as const;
 
 interface Count { channel: string | null; n: number; last: string | null; best: number; runBest?: number }

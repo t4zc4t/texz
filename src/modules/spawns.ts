@@ -757,11 +757,6 @@ async function pingsPanel(store: Store, guild: Guild, userId: string) {
     lines.push(`${mark(shoob)} 🃏 **Shoob rare drops** · tier 5 and 6 cards`);
     buttons.push(new ButtonBuilder().setCustomId('pg|shoob').setLabel('Shoob T5/T6').setEmoji('🃏').setStyle(shoob ? ButtonStyle.Success : ButtonStyle.Secondary));
   }
-  const buddy = store.buddies(guild.id).includes(userId);
-  if (store.rules(guild.id, 'owo').enabled) {
-    lines.push(`${mark(buddy)} 🤝 **OwO quest buddies** · someone needs a cookie, pray, curse or battle`);
-    buttons.push(new ButtonBuilder().setCustomId('pg|buddy').setLabel('Quest buddies').setEmoji('🤝').setStyle(buddy ? ButtonStyle.Success : ButtonStyle.Secondary));
-  }
   // your own episode alerts live here too, so every ping is in one place
   if (store.rules(guild.id, 'anime').enabled) {
     const follows = store.follows(userId).length;
@@ -777,17 +772,15 @@ async function pingsPanel(store: Store, guild: Guild, userId: string) {
     new ButtonBuilder().setCustomId('pg|personal').setLabel(`Mention me for my picks: ${p.ping === false ? 'off' : 'on'}`).setEmoji('⭐').setStyle(p.ping === false ? ButtonStyle.Secondary : ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`nav|profile|owner=${userId},sub=edit`).setLabel('Change my picks').setEmoji('✏️').setStyle(ButtonStyle.Secondary),
   ));
-  // reminders live here too: your own ones and the OwO timers
+  // your own reminders live here too
   const mineR = store.userReminders(userId);
   const own = mineR.filter((r) => r.kind === 'custom').sort((a, b) => a.due_at - b.due_at);
-  const owoOn = store.rules(guild.id, 'owo').enabled;
   const reminderLines = [
     `⏰ **Your reminders** · ${own.length ? `${own.length} set, next <t:${Math.floor(own[0].due_at / 1000)}:R>: ${own[0].note.slice(0, 60)}` : 'none, `tz remind 2h drink water` sets one'}`,
-    ...(owoOn ? [`🐾 **OwO timers** · ${mineR.filter((r) => r.kind !== 'custom').length} running`] : []),
   ];
   rows.push(row(
     new ButtonBuilder().setCustomId(`nav|remind|owner=${userId},back=pings`).setLabel('My reminders').setEmoji('⏰').setStyle(own.length ? ButtonStyle.Success : ButtonStyle.Secondary),
-    ...(owoOn ? [new ButtonBuilder().setCustomId(`nav|reminders|owner=${userId},back=pings`).setLabel('OwO reminders').setEmoji('🎛️').setStyle(ButtonStyle.Secondary)] : []),
+    new ButtonBuilder().setCustomId(`nav|reminders|owner=${userId},back=pings`).setLabel('Reminder settings').setEmoji('🎛️').setStyle(ButtonStyle.Secondary),
   ));
   const e = card({
     kind: 'help', title: 'Pings and reminders', emoji: '🔔', gif: 'off',
@@ -812,8 +805,7 @@ export async function onPingsButton(store: Store, i: Interaction) {
   const what = i.customId.split('|')[1];
   const member = await i.guild.members.fetch(i.user.id).catch(() => null);
   let problem = '';
-  if (what === 'buddy') store.setBuddy(i.guild.id, i.user.id, !store.buddies(i.guild.id).includes(i.user.id));
-  else if (what === 'personal') { const p = picksOf(store, i.guild.id, i.user.id); p.ping = p.ping === false; savePicks(store, i.guild.id, i.user.id, p); }
+  if (what === 'personal') { const p = picksOf(store, i.guild.id, i.user.id); p.ping = p.ping === false; savePicks(store, i.guild.id, i.user.id, p); }
   else if (member) {
     const role = what === 'p2' ? await rareRole(i.guild, store, true) : what === 'shoob' ? await shoobRole(i.guild, store, true) : i.guild.roles.cache.get(store.guild(i.guild.id).bulletins[what as keyof typeof boards]?.role ?? '');
     if (!role) problem = 'That role isn\'t there, an admin can fix it in /setup.';

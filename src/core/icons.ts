@@ -81,11 +81,21 @@ export function polishText(text: string) {
   }).join('\n');
 }
 
+// icons are longer than the emoji they replace, so a text near Discord's limit keeps its plain emoji
+// instead of growing past it, and anything still too long is cut at a line break
+function fit(raw: string, max: number) {
+  const t = polishText(raw);
+  if (t.length <= max) return t;
+  if (raw.length <= max) return raw;
+  const cut = raw.slice(0, max - 1);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf('\n'), max - 60))}…`;
+}
+
 export function polishEmbed(e: EmbedBuilder) {
   const d = e.data;
   if (d.title) e.setTitle(strip(d.title));
-  if (d.description) e.setDescription(polishText(d.description));
-  if (d.fields?.length) e.setFields(d.fields.map((f) => ({ ...f, name: strip(f.name), value: polishText(f.value) })));
+  if (d.description) e.setDescription(fit(d.description, 4096));
+  if (d.fields?.length) e.setFields(d.fields.map((f) => ({ ...f, name: strip(f.name), value: fit(f.value, 1024) })));
   return e;
 }
 
@@ -126,12 +136,12 @@ function polishComponent(c: Json) {
   }
 }
 function polishPayload(p: Json) {
-  if (typeof p.content === 'string') p.content = polishText(p.content);
+  if (typeof p.content === 'string') p.content = fit(p.content, 2000);
   if (Array.isArray(p.embeds)) {
     for (const e of p.embeds as Json[]) {
       if (typeof e.title === 'string') e.title = strip(e.title);
-      if (typeof e.description === 'string') e.description = polishText(e.description);
-      if (Array.isArray(e.fields)) for (const f of e.fields as Json[]) { f.name = strip(String(f.name)); f.value = polishText(String(f.value)); }
+      if (typeof e.description === 'string') e.description = fit(e.description, 4096);
+      if (Array.isArray(e.fields)) for (const f of e.fields as Json[]) { f.name = strip(String(f.name)); f.value = fit(String(f.value), 1024); }
       const foot = e.footer as Json | undefined;
       if (foot && typeof foot.text === 'string') foot.text = strip(foot.text);
     }

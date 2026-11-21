@@ -10,7 +10,6 @@ import { startGiveaways } from './modules/giveaways.js';
 import { startBirthdays } from './modules/birthdays.js';
 import { watchEpisodes } from './anime/alerts.js';
 import { wireEvents } from './events.js';
-import { watch } from './watch.js';
 import { report, startHealth, startOps, syncCommands } from './ops.js';
 import { startServerTimers } from './modules/server.js';
 import { startDailyCharacter } from './modules/anime.js';
@@ -29,6 +28,7 @@ import { onEvidence, openBoards, startEvidenceDrops } from './modules/evidence.j
 import { startPartyClock } from './modules/watchparty.js';
 import { wireFamily } from './modules/family.js';
 import { startF1Events } from './features/f1events.js';
+import { dropFanRoles } from './modules/bulletins.js';
 import { wireDuels } from './modules/hustle.js';
 import { onQuote, QUOTE_MENU, startQuoteOfWeek } from './modules/quote.js';
 import { settleAll, settleGuild } from './core/settle.js';
@@ -113,6 +113,7 @@ client.once(Events.ClientReady, (c) => {
   startEvidenceDrops(client, store);
   startPartyClock(client, store);
   startF1Events(client, store);
+  void dropFanRoles(client, store).catch(() => {});
   void openBoards(client, store).catch((e) => report('evidence board', e));
   // knowing the owner lets /setup offer the error channel to them only
   void c.application.fetch().catch(() => {});
@@ -122,7 +123,7 @@ client.once(Events.ClientReady, (c) => {
     'tz help · reading case files',
     'a crab buffet, in my dreams',
     'Chuuya lose at cards',
-    'your huntbot, lovingly',
+    'the evidence board, lovingly',
   ];
   let i = 0;
   const mood = () => c.user.setActivity(moods[i++ % moods.length], { type: ActivityType.Watching });
@@ -151,6 +152,5 @@ client.on(Events.MessageCreate, (m) => {
   void onEvidence(store, m).catch(() => {});
 });
 
-watch(client, store);
 wireEvents(client, store);
 client.login(token);

@@ -11,7 +11,7 @@ export interface Command {
   admin?: boolean;
   // seconds between uses for one person, see cooldownOf in the registry
   cooldown?: number;
-  // slash commands are grouped, /owo huntbot instead of /huntbot, so the list stays short
+  // slash commands are grouped, /fun quiz instead of /quiz, so the list stays short
   group?: string;
   // the name inside the group when it differs, /anime search for the "anime" text command
   as?: string;
@@ -35,5 +35,5 @@ export interface Module {
   commands: Command[];
 }
 
-// how the command is written as a slash command, like "/owo view:huntbot"
-export const slashPath = (c: Command) => (c.group ? `${c.group} view:${c.as ?? c.name}` : c.name);
+// how the command is written as a slash command, like "/fun quiz"
+export const slashPath = (c: Command) => (c.group ? `${c.group} ${c.as ?? c.name}` : c.name);

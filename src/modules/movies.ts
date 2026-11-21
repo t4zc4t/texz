@@ -126,7 +126,7 @@ export const movie: Command = {
   data: new SlashCommandBuilder().setName('movie').setDescription('Find a movie, get ones like it, or open the movie night picker')
     .addStringOption((o) => o.setName('title').setDescription('A title, a genre like horror, "like <title>" for similar ones, or empty for the picker').setMaxLength(100)).toJSON(),
   text: { aliases: ['movies', 'film', 'mv'], args: ['title'] },
-  hint: '`{p} movie` · `/anime view:movie`\n-# opens the movie night picker: genres, decade, language, score and length, then roll one, show ten or put three to a vote\n`{p} movie horror` · `{p} movie korean thriller 2010s` · `{p} movie short comedy 8+`\n-# ten that fit a genre, plus any of decade, language, length and score\n`{p} movie inception` · `{p} movie like interstellar`\n-# look one up with its trailer, cast and where to watch, or get ones like it',
+  hint: '`{p} movie` · `/anime movie`\n-# opens the movie night picker: genres, decade, language, score and length, then roll one, show ten or put three to a vote\n`{p} movie horror` · `{p} movie korean thriller 2010s` · `{p} movie short comedy 8+`\n-# ten that fit a genre, plus any of decade, language, length and score\n`{p} movie inception` · `{p} movie like interstellar`\n-# look one up with its trailer, cast and where to watch, or get ones like it',
   run: async (ctx) => {
     if (!hasMovies()) return ctx.reply({ content: nokey, temp: true });
     const q = (ctx.str('title') ?? '').trim();

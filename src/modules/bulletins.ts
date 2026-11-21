@@ -118,7 +118,7 @@ function remember(channel: string, ping: boolean) {
   if (ping) sentLog.set(`${channel}:ping`, [...(sentLog.get(`${channel}:ping`) ?? []), Date.now()].slice(-20));
 }
 
-async function post(client: Client, feed: Feed, content: { text?: string; embed: EmbedBuilder; ping?: boolean; buttons?: ButtonBuilder[]; react?: string[]; users?: string[]; fanRoles?: string[]; image?: Buffer | null }) {
+async function post(client: Client, feed: Feed, content: { text?: string; embed: EmbedBuilder; ping?: boolean; buttons?: ButtonBuilder[]; react?: string[]; image?: Buffer | null }) {
   if (!feed.channel) return;
   const ok = allowed(feed.channel, !!content.ping);
   if (!ok.post) return;
@@ -130,18 +130,15 @@ async function post(client: Client, feed: Feed, content: { text?: string; embed:
     return;
   }
   const ping = ok.ping && feed.role ? `<@&${feed.role}>` : '';
-  // personal picks get their own mention, a handful at most
-  const users = (content.users ?? []).slice(0, 15);
-  remember(feed.channel, !!ping || users.length > 0);
-  const fans = content.fanRoles ?? [];
-  const fan = fans.map((r) => `<@&${r}>`).join(' ');
+  // personal picks never get pinged here, they hear by DM
+  remember(feed.channel, !!ping);
   const sent = await ch.send({
-    content: [ping, fan, users.map((u) => `<@${u}>`).join(' '), content.text].filter(Boolean).join(' ') || undefined,
+    content: [ping, content.text].filter(Boolean).join(' ') || undefined,
     // a drawn card replaces the gif when there is one
     embeds: [content.image ? content.embed.setImage('attachment://card.png') : content.embed],
     files: content.image ? [{ attachment: content.image, name: 'card.png' }] : [],
     components: content.buttons?.length ? [row(...content.buttons)] : [],
-    allowedMentions: { roles: [...(ping && feed.role ? [feed.role] : []), ...fans], users },
+    allowedMentions: { roles: ping && feed.role ? [feed.role] : [], users: [] },
   }).catch((e) => { report('bulletin post', e); return null; });
   // a reaction or two so people can follow along
   for (const r of content.react ?? []) await sent?.react(r).catch(() => {});
@@ -334,27 +331,29 @@ async function f1Tick(client: Client, store: Store, guilds: [string, Bulletins][
   }
 }
 
-// more than three people for the same club or show get a role of their own, so the post pings one role
-async function fanPing(client: Client, store: Store, guildId: string, key: string, label: string, ids: string[]): Promise<{ users: string[]; role: string | null }> {
-  if (ids.length <= 3) return { users: ids, role: null };
-  const guild = client.guilds.cache.get(guildId);
-  if (!guild) return { users: ids, role: null };
-  const kvKey = `fanrole:${guildId}:${key}`;
-  let role = store.getKv(kvKey) ? guild.roles.cache.get(store.getKv(kvKey)!) ?? null : null;
-  if (!role) {
-    const made = Number(store.getKv(`fanroles:${guildId}`) ?? 0);
-    // a sensible cap, servers have a role limit
-    if (made >= 25) return { users: ids, role: null };
-    role = await guild.roles.create({ name: label.slice(0, 100), mentionable: false, reason: 'fans of the same club or show' }).catch(() => null);
-    if (!role) return { users: ids, role: null };
-    store.setKv(kvKey, role.id);
-    store.setKv(`fanroles:${guildId}`, String(made + 1));
+// fans hear about their club in their DMs, the channel only pings the bulletin role
+async function dmFans(client: Client, ids: string[], payload: { content: string; embed?: EmbedBuilder; image?: Buffer | null }) {
+  for (const id of [...new Set(ids)].slice(0, 50)) {
+    const u = await client.users.fetch(id).catch(() => null);
+    if (!u) continue;
+    const embed = payload.embed ? EmbedBuilder.from(payload.embed.toJSON()) : null;
+    await u.send({
+      content: payload.content,
+      embeds: embed ? [payload.image ? embed.setImage('attachment://card.png') : embed] : [],
+      files: payload.image ? [{ attachment: payload.image, name: 'card.png' }] : [],
+    }).catch(() => {});
   }
-  for (const id of ids) {
-    const m = guild.members.cache.get(id) ?? await guild.members.fetch(id).catch(() => null);
-    if (m && !m.roles.cache.has(role.id)) await m.roles.add(role, 'follows this').catch(() => {});
+}
+
+// the club roles the old fan pings made are cleared once, nothing makes them any more
+export async function dropFanRoles(client: Client, store: Store) {
+  for (const { key, value } of store.kvByPrefix('fanrole:')) {
+    const gid = key.split(':')[1];
+    const role = client.guilds.cache.get(gid)?.roles.cache.get(value);
+    if (role) await role.delete('fans get their pings by DM now').catch(() => {});
+    store.setKv(key, null);
   }
-  return { users: [], role: role.id };
+  for (const { key } of store.kvByPrefix('fanroles:')) store.setKv(key, null);
 }
 
 // only people who are actually in that server, and haven't switched personal pings off
@@ -399,25 +398,22 @@ async function footballTick(client: Client, store: Store, guilds: [string, Bulle
       if (m.state === 'pre' && m.date - now < 30 * 60_000 && m.date > now && store.firstTime(gid, `fb:ko:${m.id}`)) {
         const norm = (x: string) => x.toLowerCase();
         const picks = store.allPicks(gid).filter((p) => p.club && p.ping !== false && [m.home.name, m.away.name].some((n) => norm(n).includes(norm(p.club!))));
-        // fans of each side get grouped by club
-        const users: string[] = [];
-        const fanRoles: string[] = [];
-        for (const side of [m.home, m.away]) {
-          const ids = await membersAmong(client, gid, picks.filter((p) => norm(side.name).includes(norm(p.club!))).map((p) => p.user));
-          const f = await fanPing(client, store, gid, `club:${side.id}`, `${side.name} Informants`, ids);
-          users.push(...f.users);
-          if (f.role) fanRoles.push(f.role);
-        }
+        const fans = await membersAmong(client, gid, picks.map((p) => p.user));
+        const embed = card({ kind: 'fbSoon', title: `${clubDot(m.home)} ${m.home.name} vs ${m.away.name} ${clubDot(m.away)}`, emoji: '', color: names.football.color, gif: 'off', body: `${leagueOf(m)}${m.venue ? `\n🏟️ ${m.venue}` : ''}\n⏰ Kick-off <t:${unix(m.date)}:t>` });
+        const image = await matchImage(m, false);
         await post(client, b.football, {
-          users, fanRoles,
           ping: true, text: `kick-off <t:${unix(m.date)}:R>`, react: [clubDot(m.home), clubDot(m.away), '⚽'].filter((x, i, a) => a.indexOf(x) === i),
-          embed: card({ kind: 'fbSoon', title: `${clubDot(m.home)} ${m.home.name} vs ${m.away.name} ${clubDot(m.away)}`, emoji: '', color: names.football.color, gif: 'off', body: `${leagueOf(m)}${m.venue ? `\n🏟️ ${m.venue}` : ''}\n⏰ Kick-off <t:${unix(m.date)}:t>` }),
-          image: await matchImage(m, false),
+          embed, image,
         });
+        // fans of either side get it in their DMs, with no ping in the channel
+        await dmFans(client, fans, { content: `⚽ Your club kicks off <t:${unix(m.date)}:R>.`, embed, image });
       }
       if (m.state === 'post' && now - m.date < 8 * HOUR && store.firstTime(gid, `fb:ft:${m.id}`)) {
         const scorers = m.goals.map((g) => `${g.clock} ${g.who} (${g.team === m.home.id ? m.home.short : m.away.short})`).join(' · ');
         const called = scoreMatch(store, gid, m);
+        const norm2 = (x: string) => x.toLowerCase();
+        const ftFans = await membersAmong(client, gid, store.allPicks(gid).filter((p) => p.club && p.ping !== false && [m.home.name, m.away.name].some((n) => norm2(n).includes(norm2(p.club!)))).map((p) => p.user));
+        if (ftFans.length) await dmFans(client, ftFans, { content: `🏁 Full time: ${clubDot(m.home)} ${m.home.name} **${m.home.score} - ${m.away.score}** ${m.away.name} ${clubDot(m.away)}` });
         await post(client, b.football, {
           react: [m.home.winner ? '🏠' : m.away.winner ? '✈️' : '🤝'],
           embed: card({ kind: 'fbFull', title: `${clubDot(m.home)} ${m.home.name} ${m.home.score} - ${m.away.score} ${m.away.name} ${clubDot(m.away)}`, emoji: '', color: names.football.color, gif: 'off',
@@ -596,18 +592,14 @@ async function goalTick(client: Client, store: Store) {
         const side = g.team === m.home.id ? m.home : m.away;
         const fans = picks.filter((p) => norm(side.name).includes(norm(p.club!)));
         if (!fans.length) continue;
+        // a goal is a DM to that club's fans, each person once however many servers they share with Texz
+        const told = new Set<string>();
         for (const guild of client.guilds.cache.values()) {
           const b = store.guild(guild.id).bulletins.football;
-          if (!b.on || !b.channel || !store.rules(guild.id, 'bulletins').enabled) continue;
-          const here = [...new Set(fans.filter((f) => (!f.guild || f.guild === guild.id) && guild.members.cache.has(f.user)).map((f) => f.user))];
-          if (!here.length) continue;
-          const ch = client.channels.cache.get(b.channel);
-          if (!ch?.isSendable()) continue;
-          await ch.send({
-            content: `⚽ **GOAL ${side.name}!** ${g.who} ${g.clock}\n${clubDot(m.home)} ${m.home.name} **${m.home.score} - ${m.away.score}** ${m.away.name} ${clubDot(m.away)}\n${here.map((u) => `<@${u}>`).join(' ')}`,
-            allowedMentions: { users: here },
-          }).catch(() => {});
+          if (!b.on || !store.rules(guild.id, 'bulletins').enabled) continue;
+          for (const f of fans) if ((!f.guild || f.guild === guild.id) && guild.members.cache.has(f.user)) told.add(f.user);
         }
+        if (told.size) await dmFans(client, [...told], { content: `⚽ **GOAL ${side.name}!** ${g.who} ${g.clock}\n${clubDot(m.home)} ${m.home.name} **${m.home.score} - ${m.away.score}** ${m.away.name} ${clubDot(m.away)}` });
       }
     }
   }
@@ -740,7 +732,7 @@ const football: Command = {
       store.saveGuild(ctx.guildId!, g);
       return ctx.reply({ content: at >= 0 ? `➖ ${club} is off the list.` : `⭐ ${club} added, every match gets a kick-off ping and the final score.`, temp: true });
     }
-    if (sub === 'favs') return ctx.reply({ content: g.bulletins.football.favs.length ? `⭐ ${g.bulletins.football.favs.join(', ')}` : 'No favourites yet. `/sports view:football` adds one.', temp: true });
+    if (sub === 'favs') return ctx.reply({ content: g.bulletins.football.favs.length ? `⭐ ${g.bulletins.football.favs.join(', ')}` : 'No favourites yet. `/sports football` adds one.', temp: true });
     const now = Date.now();
     const all: Match[] = [];
     for (const lg of Object.keys(leagues)) all.push(...await matches(lg, new Date(now)).catch(() => []));

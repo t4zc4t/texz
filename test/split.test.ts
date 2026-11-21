@@ -35,8 +35,8 @@ test('new servers start with features off, the home server keeps what it has', (
   }
   // only once, an admin's later choice stays
   const g = store.guild('g1');
-  g.modules.owo = { ...g.modules.owo, enabled: true };
+  g.modules.anime = { ...g.modules.anime, enabled: true };
   store.saveGuild('g1', g);
   settleGuild(store, guild('g1', 'Some New Place'));
-  assert.equal(store.rules('g1', 'owo').enabled, true);
+  assert.equal(store.rules('g1', 'anime').enabled, true);
 });

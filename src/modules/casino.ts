@@ -87,7 +87,7 @@ const coinflip: Command = {
   },
 };
 
-// No Longer Human: three reels that stop one by one, and only three alike pays, like the OwO machine
+// No Longer Human: three reels that stop one by one, and only three alike pays
 // the odds are set up front so the payback stays near 95%
 const ODDS: [SlotSym, number, number][] = [ // symbol, chance in 1000, what three of them pay back
   ['cherry', 200, 1], ['lemon', 200, 2], ['bell', 50, 3], ['gem', 25, 4], ['seven', 10, 10],

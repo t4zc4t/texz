@@ -33,7 +33,7 @@ export const extraRooms = {
   evidence: { name: '📸┃evidence-board', topic: 'Pictures, clips, memes and screenshots, open to everyone. Talk in the thread under a post. The picture of the day and the meme drops have threads of their own.' },
   pokedex: { name: '🔴┃pokedex-bureau', topic: 'Pokétwo spawns and catching. Texz posts the name and the catch line under every spawn.' },
   cards: { name: '🃏┃card-vault', topic: 'Shoob card drops. Rare tiers ping the Shoob Rare Drops role.' },
-  owo: { name: '🐾┃stray-dogs-den', topic: 'OwO hunting, battling and gambling. Texz keeps your timers.' },
+  owo: { name: '🐾┃stray-dogs-den', topic: 'OwO hunting, battling and gambling.' },
   ranks: { name: '📈┃ranks-and-perks', topic: 'Every Agency rank, the level it takes and what it gets you, plus the special roles and how to earn them.' },
   patrons: { name: '💎┃agency-patrons', topic: 'Everyone who boosts the server gets thanked here. Their names go on the good page of Kunikida\'s notebook.' },
   yen: { name: '💴┃the-yen-counter', topic: 'Daily yen, wallets, giving, the rich list and the role shop. Yen commands only work here, so the rest of the server stays quiet.' },

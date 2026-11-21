@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { whenOf } from '../src/modules/owo.ts';
+import { whenOf } from '../src/modules/remind.ts';
 
 test('reminders read plain words', () => {
   const near = (at: number, ms: number) => Math.abs(at - Date.now() - ms) < 5000;

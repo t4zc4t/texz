@@ -1,6 +1,3 @@
-// OwO resets dailies, quests, cookies and the patreon minigames at midnight PST
-export const OWO_TZ = 'America/Los_Angeles';
-
 const MIN = 60_000;
 export const HOUR = 60 * MIN;
 
@@ -32,21 +29,6 @@ export function zonedTime(tz: string, y: number, mo: number, d: number, h = 0, m
   return new Date(t);
 }
 
-export function nextReset(now = new Date()): Date {
-  const { y, mo, d } = partsIn(OWO_TZ, now);
-  return zonedTime(OWO_TZ, y, mo, d + 1);
-}
-
-export function lastReset(now = new Date()): Date {
-  const { y, mo, d } = partsIn(OWO_TZ, now);
-  return zonedTime(OWO_TZ, y, mo, d);
-}
-
-// key for "today" in OwO's calendar, used to tick off daily things
-export function owoDay(now = new Date()): string {
-  const { y, mo, d } = partsIn(OWO_TZ, now);
-  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
 
 // minutes since midnight in the user's own timezone
 export function localMinutes(tz: string, at: Date): number {

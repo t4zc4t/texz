@@ -21,7 +21,7 @@ export interface GiveawayRules {
   boosterBonus: number;
   // role → tickets, the best one counts
   bonusRoles: Record<string, number>;
-  // a prize Texz hands out itself when it ends, for the daily giveaway
+  // a prize Texz hands out itself when it ends, for the weekly giveaway
   reward?: Reward;
 }
 export interface Reward { kind: 'yen' | 'crate' | 'xp' | 'pardon'; amount: number }
@@ -169,45 +169,51 @@ export async function finish(client: Client, store: Store, g: Giveaway) {
   await ch.send({ content: text, allowedMentions: { users: winners }, ...(g.message_id ? { reply: { messageReference: g.message_id, failIfNotExists: false } } : {}) }).catch(() => {});
 }
 
-// the daily giveaway: one a day, Texz hosts it, the prize is yen, XP, a crate or count pardons and pays itself out
-const DAILY: { prize: string; winners: number; reward: Reward; weight: number }[] = [
-  { prize: '¥2,500 each', winners: 2, reward: { kind: 'yen', amount: 2500 }, weight: 26 },
-  { prize: '¥5,000', winners: 1, reward: { kind: 'yen', amount: 5000 }, weight: 18 },
-  { prize: 'A mystery crate each, ¥1,000 to ¥7,000 inside', winners: 3, reward: { kind: 'crate', amount: 0 }, weight: 20 },
-  { prize: '750 XP each', winners: 2, reward: { kind: 'xp', amount: 750 }, weight: 14 },
-  { prize: 'A count pardon each', winners: 3, reward: { kind: 'pardon', amount: 1 }, weight: 12 },
-  { prize: 'The ¥20,000 jackpot', winners: 1, reward: { kind: 'yen', amount: 20000 }, weight: 5 },
-  { prize: '1,500 XP', winners: 1, reward: { kind: 'xp', amount: 1500 }, weight: 5 },
+// the weekly giveaway: one a week, Texz hosts it, the prize is yen, XP, crates or count pardons and pays itself out
+const WEEKLY: { prize: string; winners: number; reward: Reward; weight: number }[] = [
+  { prize: '¥10,000 each', winners: 3, reward: { kind: 'yen', amount: 10000 }, weight: 26 },
+  { prize: 'The ¥30,000 pot', winners: 1, reward: { kind: 'yen', amount: 30000 }, weight: 18 },
+  { prize: 'A mystery crate each, ¥1,000 to ¥7,000 inside', winners: 5, reward: { kind: 'crate', amount: 0 }, weight: 18 },
+  { prize: '3,000 XP each', winners: 3, reward: { kind: 'xp', amount: 3000 }, weight: 14 },
+  { prize: 'Three count pardons each', winners: 3, reward: { kind: 'pardon', amount: 3 }, weight: 12 },
+  { prize: 'The ¥75,000 jackpot', winners: 1, reward: { kind: 'yen', amount: 75000 }, weight: 6 },
+  { prize: '6,000 XP', winners: 1, reward: { kind: 'xp', amount: 6000 }, weight: 6 },
 ];
-const SUNDAY = { prize: 'The Sunday ¥15,000 pot, split three ways', winners: 3, reward: { kind: 'yen' as const, amount: 5000 }, weight: 0 };
-// where it goes: the channel staff set with tz gw daily #channel, or one with giveaway in its name
-async function dailyChannel(guild: Guild, store: Store) {
+// admins switch it in setup or with tz gw weekly on/off, on unless someone turned it off
+export const weeklyOn = (store: Store, g: string) => store.getKv(`gwweekly:${g}`) !== 'off';
+export const setWeekly = (store: Store, g: string, on: boolean) => store.setKv(`gwweekly:${g}`, on ? 'on' : 'off');
+// where it goes: the channel staff picked, or one with giveaway in its name
+export async function weeklyChannel(guild: Guild, store: Store) {
   const set = store.getKv(`gwdaily:${guild.id}`);
-  if (set === 'off') return null;
-  if (set) return guild.channels.fetch(set).catch(() => null);
+  if (set && set !== 'off') return guild.channels.fetch(set).catch(() => null);
   const found = guild.channels.cache.find((c) => c.type === ChannelType.GuildText && /give\s*-?away|gaw/i.test(c.name));
   return found ?? null;
 }
-// 14:30 UTC today, written as a Discord time so everyone reads it in their own clock
-const dailyAt = () => { const d = new Date(); return Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 14, 30) / 1000); };
-async function dailyGiveaway(client: Client, store: Store) {
+export const setWeeklyChannel = (store: Store, g: string, ch: string | null) => store.setKv(`gwdaily:${g}`, ch);
+// Sunday 14:30 UTC, the next one from now, as a Discord time so everyone reads it in their own clock
+export function weeklyAt(now = new Date()) {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + ((7 - now.getUTCDay()) % 7), 14, 30));
+  if (d.getTime() <= now.getTime()) d.setUTCDate(d.getUTCDate() + 7);
+  return Math.floor(d.getTime() / 1000);
+}
+async function weeklyGiveaway(client: Client, store: Store) {
   const now = new Date();
-  // 14:30 UTC is 8 pm in India, it runs until a few minutes before the next one
-  if (now.getUTCHours() * 60 + now.getUTCMinutes() < 14 * 60 + 30) return;
-  const day = now.toISOString().slice(0, 10);
+  if (now.getUTCDay() !== 0 || now.getUTCHours() * 60 + now.getUTCMinutes() < 14 * 60 + 30) return;
+  const week = now.toISOString().slice(0, 10);
   for (const guild of client.guilds.cache.values()) {
-    if (!store.rules(guild.id, 'economy').enabled || store.getKv(`gwdailydone:${guild.id}`) === day) continue;
-    const ch = await dailyChannel(guild, store);
+    if (!weeklyOn(store, guild.id) || !store.rules(guild.id, 'economy').enabled || store.getKv(`gwweeklydone:${guild.id}`) === week) continue;
+    const ch = await weeklyChannel(guild, store);
     if (!ch?.isSendable()) continue;
-    store.setKv(`gwdailydone:${guild.id}`, day);
-    let roll = Math.random() * DAILY.reduce((a, d) => a + d.weight, 0);
-    const pick = now.getUTCDay() === 0 ? SUNDAY : DAILY.find((d) => (roll -= d.weight) < 0) ?? DAILY[0];
-    const ends = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 14, 25);
+    store.setKv(`gwweeklydone:${guild.id}`, week);
+    let roll = Math.random() * WEEKLY.reduce((a, d) => a + d.weight, 0);
+    const pick = WEEKLY.find((d) => (roll -= d.weight) < 0) ?? WEEKLY[0];
+    // ends a few minutes before next Sunday's one starts
+    const ends = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 7, 14, 25);
     const r: GiveawayRules = { ...noRules(), reward: pick.reward };
-    const id = store.addGiveaway({ guild_id: guild.id, channel_id: ch.id, host_id: client.user!.id, prize: `Daily giveaway · ${pick.prize}`, winners: pick.winners, ends_at: ends, rules: JSON.stringify(r) });
+    const id = store.addGiveaway({ guild_id: guild.id, channel_id: ch.id, host_id: client.user!.id, prize: `Weekly giveaway · ${pick.prize}`, winners: pick.winners, ends_at: ends, rules: JSON.stringify(r) });
     const sent = await ch.send(view(store, store.giveaway(id)!)).catch(() => null);
     if (sent) store.updateGiveaway(id, { message_id: sent.id });
-    console.log(`daily giveaway #${id} in ${ch.id}: ${pick.prize}`);
+    console.log(`weekly giveaway #${id} in ${ch.id}: ${pick.prize}`);
   }
 }
 
@@ -215,11 +221,8 @@ export function startGiveaways(client: Client, store: Store) {
   const tick = async () => {
     for (const g of store.dueGiveaways(Date.now())) await finish(client, store, g).catch((e) => report('giveaway', e));
   };
-  setInterval(() => void dailyGiveaway(client, store).catch((e) => report('daily giveaway', e)), 5 * 60_000);
-  setTimeout(() => {
-    for (const guild of client.guilds.cache.values()) void dailyChannel(guild, store).then((c) => c && console.log(`daily giveaway channel: ${c.id}`));
-    void dailyGiveaway(client, store).catch((e) => report('daily giveaway', e));
-  }, 60_000);
+  setInterval(() => void weeklyGiveaway(client, store).catch((e) => report('weekly giveaway', e)), 5 * 60_000);
+  setTimeout(() => void weeklyGiveaway(client, store).catch((e) => report('weekly giveaway', e)), 60_000);
   setInterval(() => void tick(), 15_000);
   void tick();
 }
@@ -288,23 +291,25 @@ const giveaway: Command = {
     .addSubcommand((c) => c.setName('cancel').setDescription('Call one off without winners')
       .addIntegerOption((o) => o.setName('id').setDescription('Giveaway number').setRequired(true).setMinValue(1)))
     .addSubcommand((c) => c.setName('list').setDescription('Running giveaways here'))
-    .addSubcommand((c) => c.setName('daily').setDescription('Where Texz runs its own daily giveaway, or switch it off')
-      .addChannelOption((o) => o.setName('channel').setDescription('The channel, empty to see where it goes').addChannelTypes(ChannelType.GuildText))
-      .addBooleanOption((o) => o.setName('off').setDescription('Stop the daily giveaway')))
+    .addSubcommand((c) => c.setName('weekly').setDescription('Texz\'s own Sunday giveaway: switch it on or off, or move it')
+      .addBooleanOption((o) => o.setName('on').setDescription('On or off'))
+      .addChannelOption((o) => o.setName('channel').setDescription('Where it runs').addChannelTypes(ChannelType.GuildText)))
     .toJSON(),
   // tz gw start 1d 2 Nitro Classic, tz gw end 4, tz gw reroll 4
-  text: { aliases: ['gw', 'gaw'], sub: true, subArgs: { start: ['length', 'winners', 'prize'], end: ['id'], reroll: ['id', 'winners'], cancel: ['id'], daily: ['channel'] } },
+  text: { aliases: ['gw', 'gaw'], sub: true, subArgs: { start: ['length', 'winners', 'prize'], end: ['id'], reroll: ['id', 'winners'], cancel: ['id'], weekly: ['channel'] } },
   run: async (ctx, store) => {
     if (!ctx.guild) return ctx.reply('Giveaways live in servers.');
     const p = store.guild(ctx.guild.id).prefix;
     const sub = ctx.sub() ?? 'list';
-    if (sub === 'daily') {
+    if (sub === 'weekly' || sub === 'daily') {
       const raw = (ctx.str('channel') ?? '').toLowerCase();
-      if (ctx.bool('off') || raw === 'off') { store.setKv(`gwdaily:${ctx.guild.id}`, 'off'); return ctx.reply('🎁 The daily giveaway is off. `tz gw daily #channel` brings it back.'); }
+      const flip = ctx.bool('on') ?? (raw === 'off' ? false : raw === 'on' ? true : null);
+      if (flip !== null) setWeekly(store, ctx.guild.id, flip);
       const chId = ctx.channel('channel');
-      if (chId) { store.setKv(`gwdaily:${ctx.guild.id}`, chId); return ctx.reply(`🎁 The daily giveaway runs in <#${chId}>, every day at <t:${dailyAt()}:t> your time. Prizes pay out by themselves.`); }
-      const ch = await dailyChannel(ctx.guild, store);
-      return ctx.reply(ch ? `🎁 The daily giveaway runs in <#${ch.id}> at <t:${dailyAt()}:t> your time. \`tz gw daily #channel\` moves it, \`tz gw daily off\` stops it.` : '🎁 No daily giveaway channel yet. `tz gw daily #channel` sets one.');
+      if (chId) setWeeklyChannel(store, ctx.guild.id, chId);
+      if (!weeklyOn(store, ctx.guild.id)) return ctx.reply(`🎁 The weekly giveaway is off. \`${p} gw weekly on\` or /setup brings it back.`);
+      const ch = await weeklyChannel(ctx.guild, store);
+      return ctx.reply(ch ? `🎁 The weekly giveaway runs in <#${ch.id}>, next one <t:${weeklyAt()}:F>, your time. Prizes pay out by themselves. \`${p} gw weekly #channel\` moves it, \`${p} gw weekly off\` stops it.` : `🎁 No giveaway channel yet. \`${p} gw weekly #channel\` sets one.`);
     }
     if (sub === 'start') {
       const ms = parseLength(ctx.str('length'));
@@ -312,7 +317,7 @@ const giveaway: Command = {
       let prize = ctx.str('prize');
       // "tz gw start 1d Nitro" works without a winner count
       if (ctx.viaText && ctx.str('winners') && Number.isNaN(Number(ctx.str('winners')))) { prize = `${ctx.str('winners')} ${prize ?? ''}`.trim(); winners = 1; }
-      if (!ms || ms < 60_000 || ms > 60 * 86_400_000) return ctx.reply(`Like this: \`${p} gw start 1d 2 Nitro\` (length from a minute to 60 days, then winners, then the prize). Conditions are on \`/admin view:gaw\`.`);
+      if (!ms || ms < 60_000 || ms > 60 * 86_400_000) return ctx.reply(`Like this: \`${p} gw start 1d 2 Nitro\` (length from a minute to 60 days, then winners, then the prize). Conditions are on \`/admin gaw\`.`);
       if (!prize) return ctx.reply('What\'s the prize?');
       if (winners < 1 || winners > 20) return ctx.reply('Between 1 and 20 winners.');
       const r = noRules();

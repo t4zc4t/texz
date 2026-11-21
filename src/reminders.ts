@@ -1,27 +1,8 @@
 import { isOffline, report } from './ops.js';
 import type { Client, EmbedBuilder } from 'discord.js';
 import type { Reminder, Store } from './db.js';
-import { todoLines } from './features/daily.js';
-import { advise } from './features/huntbot.js';
-import { gemTotals } from './features/gems.js';
-import type { Huntbot } from './owo/parse.js';
-import { RED, card, say } from './theme.js';
-import { HOUR, afterQuiet, nextReset } from './time.js';
-
-const VOTE_URL = 'https://top.gg/bot/408785106942164992/vote';
-
-// keeps the two daily check-ins queued for a user, safe to call often
-export function scheduleDailies(store: Store, userId: string, now = new Date()) {
-  const s = store.settings(userId);
-  const reset = nextReset(now);
-  if (s.daily && !store.reminderOf(userId, 'reset')) {
-    store.setReminder(userId, 'reset', new Date(reset.getTime() + 5 * 60_000));
-  }
-  if (s.lastcall && !store.reminderOf(userId, 'lastcall')) {
-    const at = new Date(reset.getTime() - 2 * HOUR);
-    store.setReminder(userId, 'lastcall', at > now ? at : new Date(reset.getTime() + 22 * HOUR));
-  }
-}
+import { card, say } from './theme.js';
+import { HOUR, afterQuiet } from './time.js';
 
 const episode = (r: Reminder) => {
   const [title, ep, url] = r.note.split('|');
@@ -34,45 +15,6 @@ function text(store: Store, r: Reminder): EmbedBuilder | null {
     return card({ kind: 'episode', title: `${e.title} · episode ${e.ep}`, emoji: '📺', gif: 'off', body: `[Open on AniList](${e.url})` });
   }
   switch (r.kind) {
-    case 'huntbot': {
-      const hb = store.snapshot<Huntbot>(r.user_id, 'huntbot')?.data;
-      const a = hb ? advise(hb) : null;
-      return card({
-        kind: 'huntbotBack', title: 'Huntbot is home', emoji: '🤖',
-        body: '1. `owo hb` to collect\n2. `owo sacrifice common uncommon` for essence\n' +
-          (a?.pick ? `3. put it into **${a.pick}**\n` : '') +
-          `${a?.pick ? '4' : '3'}. send it out: \`owo autohunt ${hb?.maxRunCost ?? '<cowoncy>'}\``,
-      });
-    }
-    case 'pray':
-      return card({ kind: 'prayReady', title: 'Pray and curse are ready', emoji: '🙏', body: '`owo pray` · `owo curse @someone`' });
-    case 'hunt':
-      return card({ kind: 'huntReady', title: 'Hunt and battle ready', emoji: '🏹' });
-    case 'vote':
-      return card({ kind: 'voteReady', title: 'Vote is open', emoji: '🗳️', body: `[Vote on top.gg](${VOTE_URL}), then \`owo vote\` to claim.` });
-    case 'reset': {
-      const todo = todoLines(store, r.user_id);
-      return card({ kind: 'newDay', title: 'A new OwO day', emoji: '🌅', body: todo.join('\n') || 'Nothing on the list. Suspicious, but fine.' });
-    }
-    case 'lastcall': {
-      const todo = todoLines(store, r.user_id);
-      if (!todo.length) return null;
-      // the rest of the picture, so one message covers the evening
-      const extra: string[] = [];
-      const hbAt = store.cooldowns(r.user_id).get('huntbot');
-      if (hbAt) extra.push(hbAt <= Date.now() ? '🤖 huntbot is home, collect it' : `🤖 huntbot back <t:${Math.floor(hbAt / 1000)}:R>`);
-      const inv = store.snapshot<[number, number][]>(r.user_id, 'inv')?.data;
-      if (inv) {
-        const g = gemTotals(new Map(inv));
-        extra.push(`💎 gems left · hunting ${g.hunting} · empowering ${g.empowering} · lucky ${g.lucky}`);
-      }
-      return card({ kind: 'lastCall', title: 'Two hours to reset', emoji: '⏳', color: RED, body: todo.join('\n') + (extra.length ? `\n\n${extra.join('\n')}` : '') });
-    }
-    case 'gemlow': {
-      const kinds = r.note.split(',').filter(Boolean);
-      return card({ kind: 'gemLow', title: `Gems running out: ${kinds.join(', ')}`, emoji: '💎', color: RED,
-        body: 'Down to the last one. Buy or open lootboxes before your next hunts lose their bonus.\n`owo lb all` opens every lootbox you have.' });
-    }
     case 'custom':
       return card({ kind: 'custom', title: 'A promise kept', emoji: '📝', body: `**${r.note}**` });
     default:
@@ -81,9 +23,7 @@ function text(store: Store, r: Reminder): EmbedBuilder | null {
 }
 
 // reminder kind -> the setting that decides where it goes
-export const routeOf: Record<string, string> = {
-  huntbot: 'huntbot', pray: 'pray', vote: 'vote', reset: 'daily', lastcall: 'lastcall', gemlow: 'gems', hunt: 'huntbattle', custom: 'custom',
-};
+export const routeOf: Record<string, string> = { custom: 'custom' };
 
 // channel reminders are a short line with a ping, not a whole card
 function line(store: Store, r: Reminder): string | null {
@@ -91,20 +31,7 @@ function line(store: Store, r: Reminder): string | null {
     const e = episode(r);
     return `📺 ${say('episode')} **${e.title}** episode ${e.ep}`;
   }
-  const todo = () => todoLines(store, r.user_id).map((l) => l.replace(/^•\s*/, '')).join(', ');
   switch (r.kind) {
-    case 'huntbot': {
-      const hb = store.snapshot<Huntbot>(r.user_id, 'huntbot')?.data;
-      return `🤖 ${say('huntbotBackShort')} \`owo hb\`${hb?.maxRunCost ? ` then \`owo autohunt ${hb.maxRunCost}\`` : ''}`;
-    }
-    case 'pray': return `🙏 ${say('prayShort')} \`owo pray\``;
-    case 'vote': return `🗳️ ${say('voteShort')} <${VOTE_URL}>`;
-    case 'hunt': return `🏹 ${say('huntReady')}`;
-    case 'reset': return `🌅 ${say('newDayShort')} ${todo()}`;
-    case 'lastcall': {
-      const t = todo();
-      return t ? `⏳ ${say('lastCallShort')} ${t}` : null;
-    }
     case 'custom': return `📝 ${say('customShort')} **${r.note}**`;
     default: return r.note ? `📝 ${r.note}` : null;
   }
@@ -142,6 +69,8 @@ async function deliver(client: Client, store: Store, r: Reminder, body: EmbedBui
 }
 
 export function startScheduler(client: Client, store: Store) {
+  // the OwO reminders are gone, anything of theirs still queued goes with them
+  store.db.prepare("DELETE FROM reminders WHERE kind != 'custom' AND kind NOT LIKE 'ep:%'").run();
   const tick = async () => {
     // no internet, nothing would arrive, the reminders wait for the connection to come back
     if (isOffline() || !client.isReady()) return;
@@ -153,13 +82,7 @@ export function startScheduler(client: Client, store: Store) {
         store.db.prepare('UPDATE reminders SET due_at = ? WHERE id = ?').run(later.getTime(), r.id);
         continue;
       }
-      // the reset and last call belong to one day, once it's half a day gone they're dropped and the next ones set
-      const stale = (['reset', 'lastcall', 'hunt'].includes(r.kind) && now.getTime() - r.due_at > 12 * HOUR) || now.getTime() - r.due_at > 24 * HOUR;
-      if (stale) {
-        store.deleteReminder(r.id);
-        if (r.kind === 'reset' || r.kind === 'lastcall') scheduleDailies(store, r.user_id, new Date(now.getTime() + 60_000));
-        continue;
-      }
+      if (now.getTime() - r.due_at > 24 * HOUR) { store.deleteReminder(r.id); continue; }
       const body = text(store, r);
       // missed while the PC or the internet was down: still sent, with a note on when it was due
       if (body && now.getTime() - r.due_at > 2 * 60_000) body.setDescription(`${body.data.description ?? ''}\n-# ⏰ late, this was due <t:${Math.floor(r.due_at / 1000)}:R> while I was offline`.slice(0, 4096));
@@ -167,7 +90,6 @@ export function startScheduler(client: Client, store: Store) {
       const sent = body ? await deliver(client, store, r, body).then(() => true).catch((e) => { report('send failed', e); return false; }) : true;
       if (!sent && now.getTime() - r.due_at < 24 * HOUR) continue;
       store.deleteReminder(r.id);
-      if (r.kind === 'reset' || r.kind === 'lastcall') scheduleDailies(store, r.user_id, new Date(now.getTime() + 60_000));
     }
   };
   const sweep = async () => {

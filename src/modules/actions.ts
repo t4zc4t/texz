@@ -177,7 +177,7 @@ const act: Command = {
     .addUserOption((o) => o.setName('user').setDescription('Who, leave empty for the ones that work alone')).toJSON(),
   text: { aliases: ['action', 'interact'], args: ['action', 'user'] },
   example: 'hug @someone',
-  hint: '`{p} hug @someone` · `/fun view:act input:hug @someone`\n-# swap hug for pat, cuddle, poke, bonk, slap, punch, bite, tickle, highfive, handhold, kiss, peck, wink, blowkiss, lappillow, kabedon, handshake, nom, yeet, wave, carry, feed, stare or baka\n`{p} cry` · `/emote feeling:cry`\n-# works alone too: cry, smile, blush, dance, laugh, smug, sleep, pout, shrug, facepalm, tableflip, sip, nope, salute, clap, happy, angry, shocked, confused, think, yawn, bored, nya, wag, spin, lurk, run\n`{p} bonds` · `{p} bonds @someone`\n-# who you hug, pat and bonk the most here',
+  hint: '`{p} hug @someone` · `/fun act action:hug`\n-# swap hug for pat, cuddle, poke, bonk, slap, punch, bite, tickle, highfive, handhold, kiss, peck, wink, blowkiss, lappillow, kabedon, handshake, nom, yeet, wave, carry, feed, stare or baka\n`{p} cry` · `/emote feeling:cry`\n-# works alone too: cry, smile, blush, dance, laugh, smug, sleep, pout, shrug, facepalm, tableflip, sip, nope, salute, clap, happy, angry, shocked, confused, think, yawn, bored, nya, wag, spin, lurk, run\n`{p} bonds` · `{p} bonds @someone`\n-# who you hug, pat and bonk the most here',
   run: async (ctx, store) => {
     const action = (ctx.str('action') ?? '').toLowerCase();
     if (!acts[action]) return ctx.reply({ content: `Pick one of: ${Object.keys(acts).map((x) => `\`${x}\``).join(' ')}`, temp: true });

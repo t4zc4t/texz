@@ -20,12 +20,9 @@ export function examples(c: Command, prefix: string): { label: string; typed: st
   const opts = (c.data.options ?? []) as { name: string; description: string; type: number; options?: { name: string; type: number }[] }[];
   const subs = opts.filter((o) => o.type === 1);
   const fill = (args: string[]) => args.map((a) => sample[a] ?? a).join(' ');
-  const slashOf = (sub: string | null, args: string[]) => {
-    const base = c.group ? `/${c.group} view:${c.as ?? c.name}` : `/${c.name}${sub ? ` ${sub}` : ''}`;
-    if (!args.length) return c.group && sub ? `${base} input:${sub}` : base;
-    if (c.group) return `${base} input:${sub ? `${sub} ` : ''}${fill(args)}`;
-    return `${base} ${args.map((a) => `${a}:${sample[a] ?? a}`).join(' ')}`;
-  };
+  // the real slash form: "/admin gaw start length:1d winners:1 prize:Nitro"
+  const base = c.group ? `/${c.group} ${c.as ?? c.name}` : `/${c.name}`;
+  const slashOf = (sub: string | null, args: string[]) => `${base}${sub ? ` ${sub}` : ''}${args.map((a) => ` ${a}:${sample[a] ?? a}`).join('')}`;
   if (subs.length) {
     return subs.slice(0, 5).map((sc) => {
       const args = t.subArgs?.[sc.name] ?? [];
@@ -38,7 +35,7 @@ export function examples(c: Command, prefix: string): { label: string; typed: st
   const needed = args.filter((a) => (opts.find((o) => o.name === a) as { required?: boolean } | undefined)?.required);
   const ex = c.example ?? subSample[call] ?? fill(needed.length ? needed : args.slice(0, 1));
   const shown = needed.length ? needed : args.slice(0, 1);
-  return [{ label: call, typed: `${prefix} ${call}${ex ? ` ${ex}` : ''}`, slash: c.group && ex ? `/${c.group} view:${c.as ?? c.name} input:${ex}` : slashOf(null, shown) }];
+  return [{ label: call, typed: `${prefix} ${call}${ex ? ` ${ex}` : ''}`, slash: slashOf(null, shown) }];
 }
 
 

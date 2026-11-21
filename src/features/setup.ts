@@ -1,3 +1,4 @@
+import { weeklyOn, setWeekly, weeklyAt, setWeeklyChannel } from '../modules/giveaways.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, ChannelType, MessageFlags, ModalBuilder,
   PermissionFlagsBits, RoleSelectMenuBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle,
@@ -33,7 +34,7 @@ export const gifMoments = ['help', 'ping', 'welcome', 'goodbye', 'levelup', 'bir
 let modulesRef: Module[] = [];
 export const useModules = (m: Module[]) => { modulesRef = m; };
 const switchable = () => modulesRef.filter((m) => !m.locked);
-const icon: Record<string, string> = { owo: '🐾', anime: '📺', utility: '🧰', moderation: '🛡️', welcome: '🌸', levels: '🎖️', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴', bulletins: '🗞️' };
+const icon: Record<string, string> = { anime: '📺', utility: '🧰', moderation: '🛡️', welcome: '🌸', levels: '🎖️', giveaways: '🎁', birthdays: '🎂', server: '🏛️', economy: '💴', bulletins: '🗞️' };
 
 export function setupPanel(store: Store, guild: Guild, owner: string, page: string) {
   const g = store.guild(guild.id);
@@ -62,6 +63,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { label: 'Levels, xp and reward roles', value: 'levels', emoji: '🎖️' },
       { label: 'Birthday greetings and role', value: 'birthdays', emoji: '🎂' },
       { label: 'Bulletins: F1, football, anime', value: 'bulletins', emoji: '🗞️' },
+      { label: 'Weekly giveaway', value: 'f:giveaways', emoji: '🎁' },
       { label: 'Community: quotes, archive, counting, confessions', value: 'quotes', emoji: '🖋️' },
       { label: 'Character of the day', value: 'cotd', emoji: '🎭' },
       { label: 'Tickets', value: 'tickets', emoji: '🎫' },
@@ -73,22 +75,21 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       [[0, 'Off, keep everything'], [10, 'After 10 seconds'], [30, 'After 30 seconds'], [60, 'After a minute'], [300, 'After 5 minutes']]
         .map(([v, label]) => ({ label: `🧹 ${label}`, value: String(v), default: g.autoclean === v })),
     )));
-    comps.push(row(
-      new ButtonBuilder().setCustomId(id(owner, 'agency')).setLabel('Build the Agency').setEmoji('🏗️').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(id(owner, 'page', 'features')).setLabel('Features').setEmoji('🧩').setStyle(ButtonStyle.Secondary),
-    ));
+    comps.push(row(new ButtonBuilder().setCustomId(id(owner, 'agency')).setLabel('Build the Agency').setEmoji('🏗️').setStyle(ButtonStyle.Primary)));
     fields.push({ name: '🏗️ Build the Agency', value: 'One click lays out the whole Texz corner: a front door for welcomes, the bulletin board, the Bar Lupin for counting and confessions, and staff-only archives for logs. Existing Texz channels are moved and renamed, the right locks go on every room.', inline: false });
   }
 
   if (page === 'features') {
     title = 'Features';
     body = 'Pick a feature to switch it on or off, or to limit it to certain channels or roles.';
-    fields.push({ name: 'Right now', value: switchable().map((m) => {
+    // a few per box, each line grows when its emoji become icons
+    const lines = switchable().map((m) => {
       const r = store.rules(guild.id, m.name);
       const where = r.channels.length ? `${r.channels.length} channel${r.channels.length > 1 ? 's' : ''}` : 'everywhere';
       const who = r.roles.length ? `${r.roles.length} role${r.roles.length > 1 ? 's' : ''}` : 'everyone';
-      return `${r.enabled ? '🟢' : '⚫'} ${icon[m.name] ?? '📁'} **${m.label}** · ${where} · ${who}`;
-    }).join('\n') });
+      return `${r.enabled ? '🟢' : '⚫'} **${m.label}** · ${where} · ${who}`;
+    });
+    for (let n = 0; n < lines.length; n += 6) fields.push({ name: n ? '\u200b' : 'Right now', value: lines.slice(n, n + 6).join('\n'), inline: false });
     comps.push(row(new StringSelectMenuBuilder().setCustomId(id(owner, 'page')).setPlaceholder('🧩 Pick a feature').addOptions(
       switchable().map((m) => ({ label: m.label, value: `f:${m.name}`, emoji: icon[m.name] ?? '📁', description: m.about.slice(0, 100) })),
     )), row(
@@ -105,12 +106,22 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       title = mod.label;
       body = `${mod.about}\n\nLeave the menus empty to allow it everywhere and for everyone. Admins can always use everything.`;
       comps.push(
-        row(toggle(owner, 'mod', mod.name, 'Feature', r.enabled, icon[mod.name] ?? '📁'), ...(mod.name === 'spawns' ? [toggle(owner, 'p2help', mod.name, 'Pokétwo helper', p2HelperOn(store, guild.id), '🔎')] : []), back(owner, 'features')),
+        row(toggle(owner, 'mod', mod.name, 'Feature', r.enabled, icon[mod.name] ?? '📁'),
+          ...(mod.name === 'spawns' ? [toggle(owner, 'p2help', mod.name, 'Pokétwo helper', p2HelperOn(store, guild.id), '🔎')] : []),
+          ...(mod.name === 'giveaways' ? [toggle(owner, 'gwweekly', mod.name, 'Weekly giveaway', weeklyOn(store, guild.id), '🎁')] : []),
+          back(owner, 'features')),
         row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'modch', mod.name)).setPlaceholder('📍 Only in these channels (empty = everywhere)')
           .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(25).setDefaultChannels(r.channels.slice(0, 25))),
         row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'modrole', mod.name)).setPlaceholder('🎭 Only for these roles (empty = everyone)')
           .setMinValues(0).setMaxValues(25).setDefaultRoles(r.roles.slice(0, 25))),
       );
+      if (mod.name === 'giveaways') {
+        const set = store.getKv(`gwdaily:${guild.id}`);
+        const chSel = new ChannelSelectMenuBuilder().setCustomId(id(owner, 'gwch', mod.name)).setPlaceholder('🎁 Where the weekly giveaway runs').setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1);
+        if (set && set !== 'off') chSel.setDefaultChannels(set);
+        comps.push(row(chSel));
+        fields.push({ name: '🎁 Weekly giveaway', value: weeklyOn(store, guild.id) ? `On · every Sunday, next <t:${weeklyAt()}:F>\nin ${set && set !== 'off' ? `<#${set}>` : 'a channel with giveaway in its name'} · pays yen, XP, crates or pardons by itself. Needs the Yen feature on.` : 'Off', inline: false });
+      }
     }
   }
 
@@ -193,6 +204,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { name: '📣 Level-up posts', value: l.announce ? (l.channel ? `in <#${l.channel}>` : 'where people chat') : '*off, levels go up quietly*', inline: true },
       { name: '🎁 Reward roles', value: `${Object.keys(l.rewards).length} set`, inline: true },
       { name: '🚫 No xp in', value: l.noXpChannels.map((c) => `<#${c}>`).join(' ') || '*nowhere*', inline: false },
+      { name: '💛 Trusted role', value: store.getKv(`trusted:${guild.id}`) && store.getKv(`trusted:${guild.id}`) !== 'none' ? `<@&${store.getKv(`trusted:${guild.id}`)}> has every rank perk (pictures, stickers, links, emoji) but can't post in locked channels or run the server` : '*none*', inline: false },
     );
     comps.push(
       row(
@@ -204,6 +216,8 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       ),
       row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'lvch')).setPlaceholder('📣 Level-up channel (empty = where they chat)')
         .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1).setDefaultChannels(l.channel ? [l.channel] : [])),
+      row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'trusted')).setPlaceholder('💛 Trusted role: every rank perk, nothing more (empty = none)')
+        .setMinValues(0).setMaxValues(1).setDefaultRoles(store.getKv(`trusted:${guild.id}`) && store.getKv(`trusted:${guild.id}`) !== 'none' ? [store.getKv(`trusted:${guild.id}`)!] : [])),
       row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'noxpch')).setPlaceholder('🚫 Channels where chatting gives no xp')
         .setChannelTypes(ChannelType.GuildText, ChannelType.GuildForum, ChannelType.GuildAnnouncement).setMinValues(0).setMaxValues(25).setDefaultChannels(l.noXpChannels.slice(0, 25))),
     );
@@ -335,7 +349,8 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
         toggle(owner, 'bulon', 'anime', 'Anime', b.anime.on, '📺'),
         back(owner),
       ),
-      row(new ButtonBuilder().setCustomId(id(owner, 'f1look')).setLabel(`F1 cards: ${store.getKv(`f1theme:${guild.id}`) === 'agency' ? 'Detective Agency' : 'Port Mafia'}`).setEmoji('🎨').setStyle(ButtonStyle.Secondary)),
+      row(new ButtonBuilder().setCustomId(id(owner, 'f1look')).setLabel(`F1 cards: ${store.getKv(`f1theme:${guild.id}`) === 'agency' ? 'Detective Agency' : 'Port Mafia'}`).setEmoji('🎨').setStyle(ButtonStyle.Secondary),
+        toggle(owner, 'f1ev', '', 'F1 weekend events', store.getKv(`f1events:${guild.id}`) !== 'off', '🏎️')),
       row(
         toggle(owner, 'bulopt', 'facts', 'F1 facts', b.f1.facts, '🗞️'),
         toggle(owner, 'bulopt', 'big', 'Big matches', b.football.big, '🏟️'),
@@ -440,11 +455,11 @@ async function canGive(guild: Guild, roleId: string) {
 }
 
 const pageOf: Record<string, string> = {
-  mod: 'f', p2help: 'f', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome', boost: 'welcome', boostch: 'welcome',
+  mod: 'f', p2help: 'f', gwweekly: 'f', gwch: 'f', trusted: 'levels', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome', boost: 'welcome', boostch: 'welcome',
   arole: 'autorole', logch: 'mod', staff: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
   clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
-  qch: 'quotes', commbuild: 'quotes', recap: 'quotes', bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', bultrack: 'bulletins', f1look: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
+  qch: 'quotes', commbuild: 'quotes', recap: 'quotes', bulbuild: 'bulletins', bulon: 'bulletins', bulopt: 'bulletins', bulfav: 'bulletins', bultrack: 'bulletins', f1look: 'bulletins', f1ev: 'bulletins', cotdch: 'cotd', tkcat: 'tickets', tkstaff: 'tickets', tklog: 'tickets', tkpost: 'tickets', bdch: 'birthdays', bdrole: 'birthdays', bdmsg: 'birthdays',
   noxpch: 'levels', noxprole: 'lvxp', rboost: 'lvxp', cboost: 'lvxp', rb: 'lvxp', cb: 'lvxp', xprate: 'lvxp', event: 'lvxp', stack: 'lvxp', lvmsg: 'lvxp',
 };
 
@@ -620,9 +635,20 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
       return true;
     }
 
+    if (action === 'f1ev') {
+      const on = store.getKv(`f1events:${i.guild.id}`) === 'off';
+      store.setKv(`f1events:${i.guild.id}`, on ? 'on' : 'off');
+      void botLog(i.guild, store, `🏎️ <@${i.user.id}> switched F1 weekend events ${on ? 'on' : 'off'}.`);
+    }
     if (action === 'f1look') store.setKv(`f1theme:${i.guild.id}`, store.getKv(`f1theme:${i.guild.id}`) === 'agency' ? 'mafia' : 'agency');
     if (action === 'recap') store.setKv(`recap:${i.guild.id}`, store.getKv(`recap:${i.guild.id}`) === 'off' ? 'on' : 'off');
     if (action === 'p2help') setP2Helper(store, i.guild.id, !p2HelperOn(store, i.guild.id));
+    if (action === 'gwweekly') {
+      const on = !weeklyOn(store, i.guild.id);
+      setWeekly(store, i.guild.id, on);
+      void botLog(i.guild, store, `🎁 <@${i.user.id}> switched the weekly giveaway ${on ? 'on' : 'off'}.`);
+    }
+    if (action === 'gwch') setWeeklyChannel(store, i.guild.id, values[0] ?? null);
     if (action === 'mod') {
       g.modules[arg] = { ...defaultRules(arg), ...g.modules[arg], enabled: !store.rules(i.guild.id, arg).enabled };
       void botLog(i.guild, store, `🧩 <@${i.user.id}> switched **${switchable().find((m) => m.name === arg)?.label ?? arg}** ${g.modules[arg].enabled ? 'on' : 'off'}.`);
@@ -644,6 +670,11 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     }
     if (action === 'logch') g.mod.logChannel = values[0] ?? null;
     if (action === 'staff') store.setKv(`staffroles:${i.guild.id}`, JSON.stringify(values));
+    if (action === 'trusted') {
+      if (values[0] && !(await canGive(i.guild, values[0]))) return fail('That role sits above mine. Move my role above it in Server Settings → Roles, then try again.');
+      store.setKv(`trusted:${i.guild.id}`, values[0] ?? 'none');
+      void applyPerks(store, i.guild);
+    }
     if (action === 'am' && (arg === 'invites' || arg === 'spam' || arg === 'mentions')) g.mod[arg] = !g.mod[arg];
     if (action === 'lvch') g.levels.channel = values[0] ?? null;
     if (action === 'ann') g.levels.announce = !g.levels.announce;

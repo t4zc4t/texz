@@ -37,15 +37,8 @@ test('every slash command has a unique name', () => {
 
 test('prefix commands and aliases', async () => {
   const store = new Store(':memory:');
-  const a = fake('tz ws');
+  const a = fake('TZ ping');
   assert.equal(onText(store, a.m), true);
-  await tick();
-  assert.match(said(a.replies[0]), /Stray Dogs Den/);
-
-  const b = fake('TZ whb');
-  assert.equal(onText(store, b.m), true);
-  await tick();
-  assert.match(said(b.replies[0]), /owo hb/);
 
   assert.equal(onText(store, fake('tzatziki is great').m), false);
   assert.equal(onText(store, fake('tz nothing').m), false);
@@ -54,17 +47,17 @@ test('prefix commands and aliases', async () => {
 
 test('features switch off and stay admin only to change', async () => {
   const store = new Store(':memory:');
-  const nope = fake('tz config feature owo off');
+  const nope = fake('tz config feature anime off');
   onText(store, nope.m);
   await tick();
   assert.match(said(nope.replies[0]), /Manage Server|admin/i);
 
-  const yes = fake('tz config feature owo off', { admin: true });
+  const yes = fake('tz config feature utility off', { admin: true });
   onText(store, yes.m);
   await tick();
-  assert.equal(store.rules('g1', 'owo').enabled, false);
+  assert.equal(store.rules('g1', 'utility').enabled, false);
 
-  const blocked = fake('tz ws');
+  const blocked = fake('tz roll');
   onText(store, blocked.m);
   await tick();
   assert.match(said(blocked.replies[0]), /locked here|switched it off|Closed for today/);
@@ -72,30 +65,31 @@ test('features switch off and stay admin only to change', async () => {
 
 test('channel and role limits', async () => {
   const store = new Store(':memory:');
-  onText(store, fake('tz config channel owo add <#222222222222222222>', { admin: true }).m);
+  const refused = /<#222222222222222222>|role|select few/;
+  onText(store, fake('tz config channel utility add <#222222222222222222>', { admin: true }).m);
   await tick();
-  assert.deepEqual(store.rules('g1', 'owo').channels, ['222222222222222222']);
+  assert.deepEqual(store.rules('g1', 'utility').channels, ['222222222222222222']);
 
-  const wrong = fake('tz ws', { channel: 'c1' });
+  const wrong = fake('tz roll', { channel: 'c1' });
   onText(store, wrong.m);
   await tick();
   assert.match(said(wrong.replies[0]), /<#222222222222222222>/);
 
-  const right = fake('tz ws', { channel: '222222222222222222' });
+  const right = fake('tz roll', { channel: '222222222222222222' });
   onText(store, right.m);
   await tick();
-  assert.match(said(right.replies[0]), /Stray Dogs Den/);
+  assert.doesNotMatch(said(right.replies[0]), refused);
 
-  onText(store, fake('tz config role owo add <@&333333333333333333>', { admin: true }).m);
+  onText(store, fake('tz config role utility add <@&333333333333333333>', { admin: true }).m);
   await tick();
-  const noRole = fake('tz ws', { channel: '222222222222222222' });
+  const noRole = fake('tz roll', { channel: '222222222222222222' });
   onText(store, noRole.m);
   await tick();
   assert.match(said(noRole.replies[0]), /role|select few/);
-  const withRole = fake('tz ws', { channel: '222222222222222222', roles: ['333333333333333333'] });
+  const withRole = fake('tz roll', { channel: '222222222222222222', roles: ['333333333333333333'] });
   onText(store, withRole.m);
   await tick();
-  assert.match(said(withRole.replies[0]), /Stray Dogs Den/);
+  assert.doesNotMatch(said(withRole.replies[0]), refused);
 });
 
 test('custom prefix', async () => {
@@ -103,7 +97,7 @@ test('custom prefix', async () => {
   onText(store, fake('tz config prefix d', { admin: true }).m);
   await tick();
   assert.equal(store.guild('g1').prefix, 'd');
-  assert.equal(onText(store, fake('tz ws').m), false);
+  assert.equal(onText(store, fake('tz roll').m), false);
   assert.equal(onText(store, fake('d status').m), true);
 });
 
@@ -114,10 +108,6 @@ test('help for one command', async () => {
   await tick();
   assert.match(said(a.replies[0]), /tz setup/);
   assert.doesNotMatch(said(a.replies[0]), /At your service/);
-  const b = fake('tz help whb');
-  onText(store, b.m);
-  await tick();
-  assert.match(said(b.replies[0]), /tz whuntbot/);
 });
 
 test('reminder panel buttons', async () => {
@@ -127,28 +117,25 @@ test('reminder panel buttons', async () => {
   const ids = view.components.flatMap((r) => r.toJSON().components.map((c) => ('custom_id' in c ? c.custom_id : '')));
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.every((id) => id.length <= 100));
-  assert.equal(store.settings('123456789012345678').pray, true);
-  apply(store, '123456789012345678', 'toggle', 'pray', {}, 'c');
-  assert.equal(store.settings('123456789012345678').pray, false);
   apply(store, '123456789012345678', 'delivery', '', {}, 'c');
   assert.equal(store.settings('123456789012345678').delivery, 'channel');
   assert.match(apply(store, '123456789012345678', 'quiet', '', { hours: 'nope' }, 'c') ?? '', /format/);
   assert.equal(apply(store, '123456789012345678', 'quiet', '', { hours: '00:30-07:30' }, 'c'), null);
-  assert.equal(apply(store, '123456789012345678', 'add', '', { minutes: '30', note: 'restart huntbot' }, 'c'), null);
+  assert.equal(apply(store, '123456789012345678', 'add', '', { minutes: '30', note: 'stretch' }, 'c'), null);
   const list = store.userReminders('123456789012345678').filter((r) => r.kind === 'custom');
   assert.equal(list.length, 1);
   apply(store, '123456789012345678', 'cancel', String(list[0].id), {}, 'c');
   assert.equal(store.userReminders('123456789012345678').filter((r) => r.kind === 'custom').length, 0);
-  assert.deepEqual(parseRp('rp|1|toggle|vote'), { modal: false, userId: '1', action: 'toggle', arg: 'vote' });
+  assert.deepEqual(parseRp('rp|1|route|custom'), { modal: false, userId: '1', action: 'route', arg: 'custom' });
 });
 
 test('per reminder routes and auto delete', async () => {
   const { apply } = await import('../src/features/panel.ts');
   const store = new Store(':memory:');
   const u = '123456789012345678';
-  apply(store, u, 'route', 'pray', {}, 'c');
-  assert.equal(store.settings(u).routes.pray, 'channel');
-  assert.equal(store.settings(u).routes.huntbot, undefined);
+  apply(store, u, 'route', 'custom', {}, 'c');
+  assert.equal(store.settings(u).routes.custom, 'channel');
+  assert.equal(store.settings(u).routes.anime, undefined);
   apply(store, u, 'autodelete', '300', {}, 'c');
   assert.equal(store.settings(u).autodelete, 300);
   apply(store, u, 'autodelete', '7', {}, 'c');
@@ -161,19 +148,12 @@ const store0 = () => new Store(':memory:');
 
 test('grouped commands keep the slash list short and work typed too', async () => {
   assert.ok(definitions.length <= 30, `${definitions.length} top-level slash commands`);
-  const owo = definitions.find((d) => d.name === 'owo')!;
-  const view = (owo.options ?? []).find((o) => o.name === 'view') as { choices: { value: string }[] };
-  const subs = view.choices.map((c) => c.value);
-  assert.ok(subs.includes('huntbot') && subs.includes('top'));
-  const dash = fake('tz owo');
+  const fun = definitions.find((d) => d.name === 'fun')!;
+  assert.ok(fun);
+  const dash = fake('tz fun');
   assert.equal(onText(store0(), dash.m), true);
   await tick();
-  assert.match(said(dash.replies[0]), /Stray Dogs Den/);
-  const store = new Store(':memory:');
-  const a = fake('tz owo hb');
-  assert.equal(onText(store, a.m), true);
-  await tick();
-  assert.match(said(a.replies[0]), /owo hb/);
+  assert.match(said(dash.replies[0]), /Bar Lupin/);
 });
 
 test('quick typed answers are queued for cleanup, cards are not', async () => {
@@ -184,7 +164,7 @@ test('quick typed answers are queued for cleanup, cards are not', async () => {
   onText(store, a.m);
   await tick();
   assert.equal(store.dueDeletes(Date.now() + 31_000).length, 1);
-  const b = fake('tz ws');
+  const b = fake('tz fun');
   (b.m as unknown as { reply: (p: unknown) => Promise<unknown> }).reply = async () => ({ id: 'm2', channelId: 'c1' });
   onText(store, b.m);
   await tick();
@@ -204,21 +184,40 @@ test('commands cool down per person', async () => {
 
 test('typed commands mirror slash paths', async () => {
   const store = new Store(':memory:');
-  for (const line of ['tz owo huntbot', 'tz owo hb', 'tz owo', 'tz levels perks', 'tz fun coin', 'tz anime airing']) {
+  for (const line of ['tz misc', 'tz profile perks', 'tz fun coin', 'tz anime airing']) {
     const a = fake(line);
     assert.equal(onText(store, a.m), true, line);
     await tick();
   }
 });
 
+test('slash commands are valid for discord', () => {
+  type O = { name: string; description?: string; type?: number; required?: boolean; choices?: unknown[]; options?: O[] };
+  const name = /^[-_\p{Ll}\p{N}]{1,32}$/u;
+  const check = (o: O, path: string, depth: number) => {
+    const p = `${path} ${o.name}`;
+    assert.match(o.name, name, p);
+    assert.ok(o.description && o.description.length <= 100, p);
+    const opts = o.options ?? [];
+    assert.ok(opts.length <= 25, p);
+    assert.equal(new Set(opts.map((x) => x.name)).size, opts.length, p);
+    const subs = opts.filter((x) => (x.type ?? 0) <= 2);
+    assert.ok(!subs.length || subs.length === opts.length, `${p} mixes subcommands and options`);
+    let optional = false;
+    for (const x of opts) {
+      if ((x.type ?? 0) > 2) { if (!x.required) optional = true; else assert.ok(!optional, `${p} ${x.name} required after optional`); }
+      assert.ok((x.choices?.length ?? 0) <= 25, p);
+      if (x.type === 2) assert.equal(depth, 0, `${p} nested group`);
+      check(x, p, depth + ((x.type ?? 0) <= 2 ? 1 : 0));
+    }
+  };
+  for (const d of definitions as unknown as O[]) if ((d.type ?? 1) === 1) check(d, '', 0);
+  assert.ok(definitions.length <= 100);
+});
+
 test('every group opens a dashboard and every pick can be asked for', async () => {
   const { entriesOf, askModal, needsInput } = await import('../src/core/dashboards.ts');
   const { modules } = await import('../src/core/registry.ts');
-  for (const d of definitions.filter((x) => x.options?.some((o) => o.name === 'view'))) {
-    const view = d.options!.find((o) => o.name === 'view') as { choices?: unknown[] };
-    assert.ok((view.choices?.length ?? 0) <= 25, d.name);
-    assert.ok(d.description.length <= 100, d.name);
-  }
   let asked = 0;
   for (const m of modules) for (const c of m.commands) for (const e of entriesOf(c)) {
     if (!needsInput(e)) continue;
