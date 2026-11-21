@@ -27,8 +27,8 @@ function fake(content: string, opts: { admin?: boolean; channel?: string; roles?
 
 const tick = () => new Promise((r) => setTimeout(r, 10));
 // everything a reply says, content and embed together
-const said = (r: { content?: string; embeds?: { data: { title?: string; description?: string } }[] }) =>
-  [r.content ?? '', ...(r.embeds ?? []).map((e) => `${e.data.title ?? ''}\n${e.data.description ?? ''}`)].join('\n');
+const said = (r: { content?: string; embeds?: { data: { title?: string; description?: string; fields?: { name: string; value: string }[] } }[] }) =>
+  [r.content ?? '', ...(r.embeds ?? []).map((e) => `${e.data.title ?? ''}\n${e.data.description ?? ''}\n${(e.data.fields ?? []).map((f) => `${f.name}\n${f.value}`).join('\n')}`)].join('\n');
 
 test('every slash command has a unique name', () => {
   const names = definitions.map((d) => d.name);
@@ -243,6 +243,15 @@ test('every group opens a dashboard and every pick can be asked for', async () =
   onText(store, b.m);
   await tick();
   assert.match(said(b.replies[0]), /Fill it in|needs a bit more/);
+});
+
+test('very short names reach their commands', async () => {
+  const store = new Store(':memory:');
+  for (const line of ['tz w', 'tz d', 'tz bl', 'tz rk', 'tz ro 2d6', 'tz pi']) {
+    const a = fake(line);
+    assert.equal(onText(store, a.m), true, line);
+    await tick();
+  }
 });
 
 test('help search, two word names and did you mean', async () => {

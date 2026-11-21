@@ -44,7 +44,7 @@ import { closest } from './fuzzy.js';
 import { isStaff } from './staff.js';
 import { feedOf, playHere } from './feeds.js';
 import { fixText, setupButton, usualPerms } from './fixes.js';
-import { askModal, entriesOf, homePage, needsInput, refPage, refPageOf, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
+import { askModal, commandCard, deskPage, entriesOf, needsInput, parseKey, readModal, type Entry, type GroupInfo } from './dashboards.js';
 
 // voice moderation lives in its own file but belongs with the rest of moderation
 if (!moderation.commands.includes(vc)) moderation.commands.push(vc);
@@ -53,13 +53,35 @@ export const modules: Module[] = [core, anime, utility, moderation, welcomeModul
 allModules.push(...modules);
 useModules(modules);
 
+// a very short name for everything, now that OwO's w-names are free. Never steals a name another command already uses
+const SHORT: Record<string, string[]> = {
+  work: ['w'], crime: ['cr'], beg: ['bg'], rob: ['rb'], heist: ['hs'], rich: ['ri'], roleshop: ['rs'], mycolour: ['mc'], rps: ['rp'], wallet: ['bl'],
+  act: ['a'], quiz: ['fq'], trivia: ['tr'], poll: ['pl'], choose: ['ch'], roll: ['ro'], ship: ['sh'], confess: ['cn'], quote: ['qt'],
+  family: ['fm'], marry: ['mr'], divorce: ['dv'], adopt: ['ad'], disown: ['dn'], runaway: ['ra'], relation: ['rel'], count: ['ct'],
+  achievements: ['ach'], bonds: ['bo'], perks: ['pk'], pings: ['pg'], rank: ['rk'],
+  booth: ['bt'], reminders: ['rm'], afk: ['k'],
+  anime: ['an'], character: ['chr'], watchparty: ['wp'], alerts: ['al'], recommend: ['rec'],
+  predict: ['pr'], predtop: ['pt'],
+  dex: ['dx'], pokemon: ['hn'], race: ['rc'], spawns: ['sp'], wish: ['ws'],
+  warn: ['wn'], kick: ['kk'], ban: ['bn'], unban: ['ub'], purge: ['pu'], lock: ['lk'], slowmode: ['sm'], case: ['cs'], announce: ['ann'], rolepicker: ['rpk'], money: ['mo'], serverstats: ['ss'], backup: ['bk'],
+  setup: ['su'], ping: ['pi'],
+};
+{
+  const taken = new Set(modules.flatMap((m) => m.commands.flatMap((c) => [c.name, ...(c.text?.aliases ?? [])])));
+  for (const m of modules) for (const c of m.commands) for (const a of SHORT[c.name] ?? []) {
+    if (taken.has(a)) continue;
+    c.text = { ...c.text, aliases: [...(c.text?.aliases ?? []), a] };
+    taken.add(a);
+  }
+}
+
 // every group is one slash command and one typed word that opens its dashboard, everything else is picked from there
 type Group = GroupInfo & { description: string; perms?: bigint; anywhere?: boolean; dashboard?: string; staff?: boolean; old: string[] };
 const groups: Record<string, Group> = {
   admin: { label: 'Port Mafia HQ', emoji: '☠️', about: '*The executives\' floor. Discipline, rewards and the building itself.*\nAdmins and the staff role only.', description: 'Admins only: moderation, giveaways, role pickers, posts, xp and setup', staff: true, perms: PermissionFlagsBits.ManageMessages, old: ['staff', 'mod', 'tools', 'hq', 'mafia'], extra: ['setup'] },
   poketwo: { label: 'Pokédex Bureau', emoji: '🔴', about: '*Every creature on file, every catch accounted for.*\nClaim help, hints, the server Pokédex and the weekly race.', description: 'Pokétwo: claim help, hints, the Pokédex and the catch race', old: ['p2', 'pokétwo'], extra: ['pings'] },
   shoob: { label: 'Card Vault', emoji: '🃏', about: '*Some cards are worth waiting for.*\nRare drop pings and a wishlist for the characters you want.', description: 'Shoob: rare drop pings and your character wishlist', old: [], extra: ['spawns', 'pings'] },
-  anime: { label: 'Literary Annex', emoji: '📚', about: '', description: 'Anime, manga and movies: what\'s airing, search, your list, movie night, watch parties', anywhere: true, old: ['annex'], extra: ['animehome'] },
+  anime: { label: 'Literary Annex', emoji: '📚', about: '*Stories on the shelf, episodes on the air.*\nLook up any show, keep your list, get a ping for new episodes and plan watch parties.', description: 'Anime, manga and movies: what\'s airing, search, your list, movie night, watch parties', anywhere: true, old: ['annex'], extra: ['animehome'] },
   sports: { label: 'Paddock & Pitch', emoji: '🏁', about: '*Odds, engines and ninety minutes of chaos.*\nFormula 1, football from the big leagues, and predictions that pay.', description: 'F1, football, international games and predictions', anywhere: true, old: ['sport'], extra: ['pings'] },
   fun: { label: 'Bar Lupin', emoji: '🥃', about: '*Three glasses on the counter. Pull up a stool.*\nQuizzes that pay yen, games for the channel, confessions and dice.', description: 'Quizzes, guess the anime, family, ship, polls, quotes, confessions, dice', anywhere: true, old: ['games', 'game'] },
   profile: { label: 'Personnel File', emoji: '🪪', about: '*Everything the Agency knows about you. Mostly flattering.*\nYour card, favourites, rank, medals, closest people, birthday and every ping you get.', description: 'Your profile card, favourites, rank, medals, bonds, birthday and pings', anywhere: true, old: ['you', 'me', 'file'] },
@@ -142,11 +164,7 @@ for (const [name, g] of Object.entries(groups)) {
       const live = all.filter(({ hit }) => on(hit)).map(({ e }) => e).sort((a, b) => rank(a) - rank(b));
       const prefix = ctx.guildId ? store.guild(ctx.guildId).prefix : 'tz';
       const look = all.some(({ hit }) => on(hit)) ? glance(name, ctx, store) : null;
-      // the admin floor stays a dashboard with buttons, every other group is a list of commands to type
-      if (name === 'admin') return ctx.reply(homePage(ctx, g.dashboard!, g, live, { layout: layout[name], glance: look, off, prefix }));
-      const focus = ctx.str('focus') ?? undefined;
-      const page = ctx.int('page') ?? (focus ? refPageOf(live, name, prefix, focus) : 0);
-      return ctx.reply(refPage(ctx, g.dashboard!, g, live, { group: name, prefix, page, focus, glance: page === 0 ? look : null, off }));
+      return ctx.reply(deskPage(ctx, g.dashboard!, g, live, { layout: layout[name], glance: look, off, prefix, group: name }));
     },
   };
   core.commands.push(cmd);
@@ -157,8 +175,8 @@ for (const [name, g] of Object.entries(groups)) {
 setGroupOpener((ctx, store, group, focus) => {
   const hit = byName.get(groups[group].dashboard!);
   if (!hit) return Promise.resolve();
-  const at: Ctx = { ...ctx, str: (n) => (n === 'focus' ? focus : n === 'page' ? null : ctx.str(n)), int: (n) => (n === 'page' ? null : ctx.int(n)) };
-  return hit.cmd.run(at, store);
+  void focus;
+  return hit.cmd.run(ctx, store);
 });
 
 type Json = RESTPostAPIChatInputApplicationCommandsJSONBody;
@@ -451,6 +469,15 @@ export async function onComponent(store: Store, i: Interaction) {
       // picked from a dashboard, Back returns to that dashboard
       opts.back ??= groups[found.hit.cmd.group ?? '']?.dashboard ?? 'help';
       return run(store, fromComponent(i, opts, edit), found.hit.mod, found.hit.cmd, false);
+    }
+    // "how does this work": the command's card, with a button to run it
+    if (name0 === 'info') {
+      const key = i.isStringSelectMenu() ? i.values[0] : opts.key;
+      const found = key ? findEntry(key) : null;
+      if (!found) return;
+      const ctx = fromComponent(i, opts, edit);
+      const prefix = i.guildId ? store.guild(i.guildId).prefix : 'tz';
+      return ctx.reply(commandCard(ctx, found.hit.cmd, { prefix, back: opts.back ?? groups[found.hit.cmd.group ?? '']?.dashboard ?? 'help', entry: found.e }));
     }
     const hit = byName.get(name0);
     if (!hit) return;

@@ -131,117 +131,111 @@ function chunks(title: string, lines: string[]) {
   return out;
 }
 
-// the front page of a group: things that work with a click up top, things you type below with an example each
-export function homePage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry[], o: { layout?: Layout; glance?: string | null; off?: string[]; prefix?: string } = {}) {
+const cap = (x: string) => x.replace(/^./, (c) => c.toUpperCase());
+const tidy = (x: string) => x.trim().replace(/\.$/, '');
+
+// the shortest thing to type for a command, "tz w" beats "tz work"
+export function shortest(c: Command): string {
+  const all = [c.call ?? c.name, ...(c.text?.aliases ?? [])].filter((a) => !a.includes(' '));
+  return all.sort((a, b) => a.length - b.length)[0] ?? c.name;
+}
+// what to type for one menu line: "w", "gw start", "f1 next"
+function wordOf(e: Entry) {
+  const base = shortest(e.cmd);
+  if (e.sub) return `${base} ${e.sub}`;
+  if (e.fixed) return `${base} ${Object.values(e.fixed)[0].toLowerCase()}`;
+  return base;
+}
+
+// the entries of a group in the order its sections give, with anything left over at the end
+function sectioned(entries: Entry[], layout?: Layout): [string, Entry[]][] {
+  const used = new Set<string>();
+  const out: [string, Entry[]][] = [];
+  for (const [title, keys] of layout?.sections ?? []) {
+    const list = keys.flatMap((k) => entries.filter((e) => e.key === k || (e.cmd.name === k && !used.has(e.key) && (e.sub || e.fixed ? !keys.some((x) => x === e.key) : true))));
+    const fresh = list.filter((e) => !used.has(e.key));
+    fresh.forEach((e) => used.add(e.key));
+    if (fresh.length) out.push([title, fresh]);
+  }
+  const rest = entries.filter((e) => !used.has(e.key));
+  if (rest.length) out.push([out.length ? '📎 Also here' : '📂 Everything', rest]);
+  return out;
+}
+
+// a group's desk: what's in it at a glance, each command with its short name and a line on what it does,
+// the everyday ones as buttons and the rest in a menu that explains them
+export function deskPage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry[], o: { layout?: Layout; glance?: string | null; off?: string[]; prefix?: string; group: string }) {
   const prefix = o.prefix ?? 'tz';
   const show = entries.filter((e) => !e.cmd.admin || ctx.isAdmin);
-  const click = show.filter((e) => !isTyped(e));
-  const typed = show.filter(isTyped);
-  const byKey = new Map(click.map((e) => [e.key, e]));
-  const used = new Set<string>();
-  const fields: { name: string; value: string; inline: boolean }[] = [];
-  for (const [title, keys] of o.layout?.sections ?? []) {
-    const list = keys.map((k) => byKey.get(k)).filter((e): e is Entry => !!e);
-    list.forEach((e) => used.add(e.key));
-    if (list.length) fields.push({ name: title.replace(/^\S+\s/, ''), value: list.map((e) => e.label).join('\n'), inline: true });
-  }
-  const rest = click.filter((e) => !used.has(e.key));
-  if (rest.length) fields.push({ name: fields.length ? 'More' : 'Click to open', value: rest.map((e) => e.label).join('\n').slice(0, 1024), inline: true });
-  if (typed.length) fields.push(...chunks('Type these', typed.map((e) => typedLine(e, prefix))));
-  const quickKeys = (o.layout?.quick ?? click.map((e) => e.key)).filter((k) => byKey.has(k));
-  const quick = quickKeys.map((k) => byKey.get(k)!).slice(0, 5);
+  const groups = sectioned(show, o.layout);
+  const build = (about: number) => groups.flatMap(([title, list]) => chunks(title, list.map((e) => (about
+    ? `**${cap(e.label)}** · \`${prefix} ${wordOf(e)}\`\n-# ${short(tidy(e.about), about)}`
+    : `\`${prefix} ${wordOf(e)}\` ${cap(e.label)}`))));
+  // a big desk like the admin floor gets shorter descriptions so it still fits one card, and none only as a last resort
+  const size = (f: { name: string; value: string }[]) => f.reduce((n, x) => n + x.name.length + x.value.length, 0);
+  let fields = build(90);
+  if (size(fields) > 5000) fields = build(48);
+  if (size(fields) > 5000) fields = build(0);
   const notes = [
     o.glance,
     info.about,
-    o.off?.length ? `-# ${o.off.join(', ')} ${o.off.length === 1 ? 'is' : 'are'} switched off here${ctx.isAdmin ? ', turn it on in \`/setup\` → Features' : ''}.` : null,
+    o.off?.length ? `-# ${o.off.join(', ')} ${o.off.length === 1 ? 'is' : 'are'} switched off here${ctx.isAdmin ? ', switch it on in \`/setup\`' : ''}.` : null,
+    `-# Buttons run straight away · the menu explains anything first · slash works too: \`/${o.group}\``,
   ].filter(Boolean);
   const owner = `owner=${ctx.userId},back=${home}`;
-  const rows = [];
-  if (quick.length) rows.push(row(...quick.map((e) => new ButtonBuilder().setCustomId(`nav|pick|${owner},key=${e.key}`).setLabel(short(e.label, 80)).setStyle(ButtonStyle.Secondary))));
-  // the buttons cover the usual ones, the menu holds only what isn't already a button
-  const menu = click.filter((e) => !quick.includes(e));
-  for (let n = 0; n < menu.length && rows.length < 3; n += 25) {
-    rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|pick|${owner},m=${n}`).setPlaceholder(quick.length ? 'Everything else' : n ? 'More' : 'Open something').addOptions(
-      menu.slice(n, n + 25).map((e) => ({ label: short(e.label, 100), value: e.key, description: short(e.about, 100) })),
+  const quickKeys = (o.layout?.quick ?? []).filter((k) => show.some((e) => e.key === k));
+  const quick = quickKeys.map((k) => show.find((e) => e.key === k)!).slice(0, 4);
+  const rows = [row(
+    ...quick.map((e) => new ButtonBuilder().setCustomId(`nav|pick|${owner},key=${e.key}`).setLabel(short(cap(e.label), 40)).setStyle(ButtonStyle.Secondary).setEmoji(e.emoji ?? '▫️')),
+    new ButtonBuilder().setCustomId(`nav|help|owner=${ctx.userId}`).setLabel('Directory').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
+  )];
+  const menuList = show.filter((e) => !quick.includes(e));
+  for (let n = 0; n < menuList.length && rows.length < 3; n += 25) {
+    rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|info|${owner},m=${n}`).setPlaceholder(n ? '📖 Even more' : '📖 Everything else, pick one to see how it works').addOptions(
+      menuList.slice(n, n + 25).map((e) => ({ label: short(cap(e.label), 100), value: e.key, description: short(`${prefix} ${wordOf(e)} · ${tidy(e.about)}`, 100), ...(e.emoji ? { emoji: e.emoji } : {}) })),
     )));
   }
-  if (!show.length) notes.push('Nothing to open here yet.');
   return {
-    embeds: [card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: `${notes.join('\n')}${typed.length ? '\n-# ? means you can leave it out' : ''}`, fields })],
+    embeds: [card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: notes.join('\n'), fields })],
     components: rows,
   };
 }
 
-// the command list of a group, the way people use it: the typed command, the slash one, and what goes after
-interface RefItem { key: string; name: string; text: string }
-function refItems(entries: Entry[], group: string, prefix: string): RefItem[] {
-  const seen = new Set<string>();
-  const out: RefItem[] = [];
-  const cap = (x: string) => x.replace(/^./, (c) => c.toUpperCase());
-  for (const e of entries) {
-    // a command with a few fixed choices, like on this day f1, football or anime, is one line
-    if (e.fixed) {
-      if (seen.has(e.cmd.name)) continue;
-      seen.add(e.cmd.name);
-      const word = e.cmd.call ?? e.cmd.name;
-      const vals = entries.filter((x) => x.cmd.name === e.cmd.name && x.fixed).map((x) => Object.values(x.fixed!)[0]);
-      const label = menu[e.cmd.name]?.[1] ?? cap(e.cmd.as ?? e.cmd.name);
-      out.push({ key: e.key, name: e.cmd.name, text: `**${label}**\n\`${prefix} ${word} ${vals[0]}\`${e.cmd.hidden ? '' : ` · \`/${group} ${e.cmd.as ?? e.cmd.name}\``}\n-# ${vals.join(', ')}` });
-      continue;
-    }
-    if (e.cmd.hint) {
-      if (seen.has(e.cmd.name)) continue;
-      seen.add(e.cmd.name);
-      out.push({ key: e.key, name: e.cmd.name, text: `**${e.label}**\n${e.cmd.hint.replaceAll('{p}', prefix)}` });
-      continue;
-    }
-    const all = examples(e.cmd, prefix);
-    const ex = (e.sub ? all.find((x) => x.label === e.sub) : all[0]) ?? all[0];
-    const word = e.cmd.call ?? e.cmd.name;
-    const typed = ex?.typed ?? `${prefix} ${word}`;
-    const slash = e.cmd.hidden ? null : ex?.slash ?? `/${group} ${e.cmd.as ?? e.cmd.name}`;
-    const args = argsOf(e.cmd, e.sub);
-    const what = args.length ? args.slice(0, 3).map((a) => `${a.shown}${a.required ? '' : '?'} ${a.about.toLowerCase()}`).join(' · ') : e.about.toLowerCase() === e.label.toLowerCase() ? '' : e.about;
-    // the short names, only for the plain command so subcommands don't repeat them
-    const short = !e.sub ? (e.cmd.text?.aliases ?? []).filter((a) => !a.includes(' ') && a.length < (e.cmd.call ?? e.cmd.name).length).slice(0, 3) : [];
-    const also = short.length ? ` · also ${short.map((a) => `\`${prefix} ${a}\``).join(' ')}` : '';
-    out.push({ key: e.key, name: e.cmd.name, text: `**${cap(e.label)}**${also}\n\`${typed}\`${slash ? ` · \`${slash}\`` : ''}${what ? `\n-# ${what}` : ''}` });
+// one command explained: what it does, how to type it, the slash form, what goes after it and its short names,
+// with a button to run it and one back to where you came from
+export function commandCard(ctx: Ctx, cmd: Command, o: { prefix: string; back: string; entry?: Entry }) {
+  const prefix = o.prefix;
+  const entries = entriesOf(cmd).filter((e) => !e.cmd.admin || ctx.isAdmin);
+  const e = o.entry ?? (entries.length === 1 ? entries[0] : undefined);
+  const exs = examples(cmd, prefix);
+  const fields: { name: string; value: string; inline: boolean }[] = [];
+  if (cmd.hint && !e?.sub) fields.push({ name: 'Type it', value: cmd.hint.replaceAll('{p}', prefix).slice(0, 1024), inline: false });
+  else {
+    const list = e?.sub ? exs.filter((x) => x.label === e.sub) : exs;
+    fields.push({ name: 'Type it', value: list.map((x) => `\`${x.typed}\`${list.length > 1 && x.about ? `\n-# ${tidy(x.about)}` : ''}`).join('\n').slice(0, 1024) || `\`${prefix} ${cmd.call ?? cmd.name}\``, inline: false });
+    if (!cmd.hidden && list.length === 1) fields.push({ name: 'Or with slash', value: `\`${list[0].slash}\``, inline: false });
   }
-  return out;
-}
-
-// pages by length, so a page never gets long enough to scroll past
-function paginate(items: RefItem[], max = 1000) {
-  const pages: RefItem[][] = [[]];
-  let len = 0;
-  for (const it of items) {
-    if (len + it.text.length > max && pages[pages.length - 1].length) { pages.push([]); len = 0; }
-    pages[pages.length - 1].push(it);
-    len += it.text.length + 2;
+  const args = argsOf(cmd, e?.sub);
+  if (args.length && !cmd.hint) fields.push({ name: 'What goes after it', value: args.map((a) => `\`${a.shown}\` ${a.about}${a.required ? '' : ' · *optional*'}`).join('\n').slice(0, 1024), inline: false });
+  const names = [cmd.call ?? cmd.name, ...(cmd.text?.aliases ?? [])].filter((a, n, all) => !a.includes(' ') && all.indexOf(a) === n).sort((a, b) => a.length - b.length).slice(0, 5);
+  if (names.length > 1) fields.push({ name: 'Short names', value: names.map((a) => `\`${prefix} ${a}\``).join(' · '), inline: true });
+  if (cmd.admin || cmd.group === 'admin') fields.push({ name: 'Who', value: 'Admins and the staff role', inline: true });
+  const label = e ? cap(e.label) : menu[cmd.name]?.[1] ?? cap(cmd.name);
+  const about = tidy(e?.about ?? cmd.data.description);
+  const owner = `owner=${ctx.userId},back=${o.back}`;
+  const rows = [];
+  if (e) rows.push(row(
+    new ButtonBuilder().setCustomId(`nav|pick|${owner},key=${e.key}`).setLabel(needsInput(e) ? 'Fill it in and run' : 'Do it now').setEmoji('▶️').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`nav|${o.back}|owner=${ctx.userId}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
+  ));
+  else {
+    rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|pick|${owner}`).setPlaceholder('▶️ Pick one to run').addOptions(
+      entries.slice(0, 25).map((x) => ({ label: short(cap(x.label), 100), value: x.key, description: short(tidy(x.about), 100), ...(x.emoji ? { emoji: x.emoji } : {}) })),
+    )));
+    rows.push(row(new ButtonBuilder().setCustomId(`nav|${o.back}|owner=${ctx.userId}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary)));
   }
-  return pages;
-}
-
-export function refPageOf(entries: Entry[], group: string, prefix: string, name: string) {
-  const pages = paginate(refItems(entries, group, prefix));
-  return Math.max(0, pages.findIndex((p) => p.some((x) => x.name === name)));
-}
-
-// the reference page of a group: every command with both ways to run it, a few per page
-export function refPage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry[], o: { group: string; prefix: string; page?: number; focus?: string; glance?: string | null; off?: string[] }) {
-  const pages = paginate(refItems(entries.filter((e) => !e.cmd.admin || ctx.isAdmin), o.group, o.prefix));
-  const n = Math.min(Math.max(0, o.page ?? 0), pages.length - 1);
-  const list = pages[n].map((x) => (x.name === o.focus ? `▸ ${x.text}` : x.text)).join('\n\n');
-  const head = n === 0 ? [o.glance, info.about, o.off?.length ? `-# ${o.off.join(', ')} ${o.off.length === 1 ? 'is' : 'are'} switched off here${ctx.isAdmin ? ', turn it on in \`/setup\` → Features' : ''}.` : null].filter(Boolean).join('\n') : null;
-  const owner = `owner=${ctx.userId}`;
-  const nav = row(
-    new ButtonBuilder().setCustomId(`nav|${home}|${owner},page=${n - 1}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(n === 0),
-    new ButtonBuilder().setCustomId(`nav|${home}|${owner},page=${n},x=1`).setLabel(`${n + 1} / ${pages.length}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
-    new ButtonBuilder().setCustomId(`nav|${home}|${owner},page=${n + 1}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(n >= pages.length - 1),
-    new ButtonBuilder().setCustomId(`nav|help|${owner}`).setLabel('Home').setStyle(ButtonStyle.Primary),
-  );
   return {
-    embeds: [card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: `${head ? `${head}\n\n` : ''}${list || 'Nothing here yet.'}\n\n-# ? means you can leave it out · slash replies only show to you` })],
-    components: [nav],
+    embeds: [card({ kind: 'help', title: label, emoji: e?.emoji ?? '', gif: 'off', body: `${about}.\n-# Slash replies only show to you, typed ones to the channel.`, fields })],
+    components: rows,
   };
 }

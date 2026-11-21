@@ -12,9 +12,15 @@ import { setupPanel } from '../features/setup.js';
 // filled in by the registry so help and config can list every module
 // a few words on what each dashboard holds, for the help page
 const blurb: Record<string, string> = {
-  admin: 'mod, cases, giveaways, posts, setup', poketwo: 'claim help, hints, dex, race', shoob: 'rare drops, wishlist',
-  anime: 'airing, search, your list, movie night, watch parties', sports: 'F1, football, international games, predictions', fun: 'hug, bonk, quizzes, ship, quotes',
-  profile: 'card, favourites, rank, medals, bonds, pings', yen: 'daily, work, crime, fish, vault, rob, heists, slots, blackjack, roulette, your own colour role, role shop', misc: 'user, server, afk, reminders, private voice booth',
+  admin: 'Warnings, mutes and bans, case files, giveaways, planned posts and setup',
+  poketwo: 'Claim help, hint solver, the server Pokédex and the weekly catch race',
+  shoob: 'Rare drop pings and a wishlist for the characters you want',
+  anime: 'What\'s airing, search, your list, movie night and watch parties',
+  sports: 'F1 weekends and standings, football scores and predictions that pay',
+  fun: 'Hugs and bonks, quizzes that pay yen, family, ships, quotes and polls',
+  profile: 'Your card, favourites, rank, medals, quests, bonds and birthday',
+  yen: 'Daily yen, jobs, fishing, the vault, heists, the casino and the role shop',
+  misc: 'Look people up, server info, afk, reminders and a private voice booth',
 };
 
 // the dashboards, filled in by the registry, so help can list them
@@ -41,7 +47,7 @@ function rulesText(store: Store, guildId: string) {
 }
 
 import { examples, argsOf } from '../core/examples.js';
-import { entriesOf } from '../core/dashboards.js';
+import { commandCard } from '../core/dashboards.js';
 
 // set by the registry: opens a group's command list at the page with this command on it
 let openGroup: ((ctx: Ctx, store: Store, group: string, focus: string) => Promise<unknown>) | null = null;
@@ -94,7 +100,7 @@ const help: Command = {
 
     // a dashboard name opens that dashboard's own page
     const dash = want ? dashes.find((d) => d.name === want || d.label.toLowerCase() === want) : undefined;
-    if (dash) return ctx.reply({ content: `Opening **${dash.label}**, or type \`${prefix} ${dash.name}\` next time.`, components: [new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(new ButtonBuilder().setCustomId(`nav|${dash.home}|owner=${ctx.userId}`).setLabel(`Open ${dash.label}`).setEmoji(dash.emoji).setStyle(ButtonStyle.Primary))], temp: true });
+    if (dash && openGroup) return openGroup(ctx, store, dash.name, '');
 
     if (want) {
       // an admin command asked for by name gets a straight answer instead of a near miss
@@ -110,54 +116,32 @@ const help: Command = {
         const near = closest(want.split(/\s+/)[0], all.flatMap(({ c }) => [c.name, ...(c.text?.aliases ?? [])]));
         return ctx.reply({ embeds: [card({ kind: 'missing', title: `Nothing on "${want}"`, emoji: '🔍', gif: 'off', body: `${near ? `Did you mean \`${prefix} help ${near}\`?\n` : ''}Try other words, like \`${prefix} help money\` or \`${prefix} help ping me\`, or open a dashboard below.` })], components: [dashMenu] });
       }
-      const { m, c } = pick;
-      // a command that lives in a group shows up on that group's list, marked, with the ones around it
-      if (openGroup && c.group && c.group !== 'admin' && dashList.some((d) => d.name === c.group)) {
-        const focus = c.hidden ? m.commands.find((x) => !x.hidden && x.group === c.group)?.name ?? c.name : c.name;
-        return openGroup(ctx, store, c.group, focus);
-      }
-      const ex = examples(c, prefix);
-      const others = found.filter((x) => x.id !== c.name).map((x) => all.find(({ c: o }) => o.name === x.id)!).filter(Boolean).slice(0, 5);
-      const rows = [];
-      if (others.length) rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-        new StringSelectMenuBuilder().setCustomId(`nav|help|as=feature,owner=${ctx.userId}`).setPlaceholder('Not it? Other matches')
-          .addOptions(others.map(({ c: o }) => ({ label: `${prefix} ${o.call ?? o.name}`, value: o.name, description: o.data.description.slice(0, 100) }))),
-      ));
-      rows.push(dashMenu);
+      const { c } = pick;
       const group = dashList.find((d) => d.name === c.group);
-      const parts = argsOf(c);
-      const form = entriesOf(c)[0];
-      if (form && (c.data.options ?? []).length) rows.unshift(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-        new ButtonBuilder().setCustomId(`nav|pick|owner=${ctx.userId},back=${group?.home ?? 'help'},key=${form.key}`).setLabel('Fill in a form instead').setStyle(ButtonStyle.Secondary),
-      ));
-      return ctx.reply({ embeds: [card({
-        kind: 'help', title: `${prefix} ${c.call ?? c.name}`, emoji: '', gif,
-        body: `${c.data.description}.`,
-        fields: [
-          ...ex.map((e) => ({ name: ex.length > 1 ? `${e.label}${e.about ? ` · ${e.about}`.slice(0, 200) : ''}` : 'Try it', value: `\`${e.typed}\`${c.hidden ? '' : `\n\`${e.slash}\``}`, inline: false })),
-          ...(parts.length ? [{ name: 'What goes after it', value: parts.map((a) => `\`${a.shown}\` ${a.about}${a.required ? '' : ' · optional'}`).join('\n').slice(0, 1024), inline: false }] : []),
-          ...(c.text?.aliases?.length ? [{ name: 'Shorter', value: c.text.aliases.filter((a) => !a.includes(' ')).slice(0, 4).map((a) => `\`${prefix} ${a}\``).join(' · ') || '—', inline: true }] : []),
-          ...(group ? [{ name: 'Lives in', value: `${group.label} · \`${prefix} ${group.name}\``, inline: true }] : []),
-          ...(c.admin ? [{ name: 'Who', value: 'Admins and the staff role', inline: true }] : []),
-          { name: '\u200b', value: !exact && found.length ? `-# Closest match for "${want}". Leave anything you're not sure about out and I'll ask.` : '-# Leave anything out and I\'ll ask. Slash replies only show to you, typed ones to everyone.', inline: false },
-        ],
-      })], components: rows });
+      const view = commandCard(ctx, c, { prefix, back: group?.home ?? 'help' });
+      const others = found.filter((x) => x.id !== c.name).map((x) => all.find(({ c: o }) => o.name === x.id)!).filter(Boolean).slice(0, 5);
+      if (others.length) view.components.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+        new StringSelectMenuBuilder().setCustomId(`nav|help|as=feature,owner=${ctx.userId}`).setPlaceholder('🔍 Not it? Other matches')
+          .addOptions(others.map(({ c: o }) => ({ label: `${prefix} ${o.call ?? o.name}`, value: o.name, description: o.data.description.slice(0, 100) }))),
+      ) as never);
+      if (!exact && found.length) view.embeds[0].setFooter({ text: `Closest match for "${want}"` });
+      return ctx.reply(view);
     }
 
-    // the front page is the dashboards, the same map as /fun, /yen and the rest
+    // the front page: every door with what's behind it, one menu to walk through
     const rows = [dashMenu];
     if (ctx.isAdmin && ctx.guildId) rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-      new ButtonBuilder().setCustomId(`nav|setup|owner=${ctx.userId},back=help`).setLabel('Setup desk').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`nav|setup|owner=${ctx.userId},back=help`).setLabel('Setup desk').setEmoji('🛠️').setStyle(ButtonStyle.Secondary),
     ));
     return ctx.reply({ embeds: [card({
       kind: 'help', title: 'The Agency directory', emoji: '', gif,
       body: [
-        `*${dashes.length} doors, one building. Open one to see its commands, typed or slash, with what goes after each.*`,
+        `*${dashes.length} doors, one building. Every door holds a desk: what's there, what each thing does, and buttons to run it.*`,
         '',
-        ...dashes.map((d) => `${d.emoji} **${d.label}** · \`${prefix} ${d.name}\`\n-# ${blurb[d.name] ?? ''}`),
-        '',
-        `Looking for one thing? \`${prefix} help hug\` opens the right page with it marked. Plain words work too: \`${prefix} help money\``,
+        `🔍 Looking for one thing? \`${prefix} help hug\` or plain words, \`${prefix} help money\`.`,
+        `⚡ Everything has a very short name too, like \`${prefix} d\` for daily or \`${prefix} w\` for work.`,
       ].join('\n'),
+      fields: dashes.map((d) => ({ name: `${d.emoji} ${d.label}`, value: `${blurb[d.name] ?? d.description}\n\`${prefix} ${d.name}\` · \`/${d.name}\``, inline: true })),
     })], components: rows });
   },
 };
