@@ -43,44 +43,10 @@ const bank = {
     'Your whole little empire on one page. Mine would just say "napped, ate crab".',
     'A good detective always knows where his client stands. You stand... right here.',
   ],
-  huntbot: [
-    'Your little robot hunts while you rest. I admire that philosophy deeply.',
-    'I studied your huntbot. The answer was obvious, but I\'ll pretend it took effort.',
-    'Essence maths. Kunikida-kun would build a spreadsheet. I just know.',
-    'If only Kunikida-kun followed my schedule as loyally as this huntbot follows yours.',
-  ],
-  gems: [
-    'Gems are like a good scheme. Pair them right and everything falls into place at once~',
-    'Ranpo-san would call this obvious. He\'s right. I\'m just prettier about it.',
-    'Shiny little stones, perfectly matched. I\'d make a lovely jeweller, if jewellers napped more.',
-  ],
-  zoo: [
-    'So many spare animals... the ones you love stay. The rest can pay rent in essence.',
-    'I counted your zoo. Twice. The second time purely out of boredom.',
-    'Kyouka-chan asked me to be gentle with the animals. I promised. Mostly.',
-  ],
-  armoury: [
-    'An armoury! Let\'s see which of these are treasures and which are... decoration.',
-    'An arsenal worthy of the Port Mafia. Please don\'t tell them I said that.',
-    'Weapons say a lot about a person. Yours say "hoarder". Affectionately.',
-  ],
-  armouryAll: [
-    'Every blade, staff and... fish? you own, lined up for inspection. I don\'t judge.',
-    'The full arsenal. Kunikida-kun would alphabetise it. I sorted it by sparkle.',
-  ],
   team: [
     'Partners are everything. Trust me, I once had a hat-wearing chibi for one.',
     'Let\'s see who holds what. A sword in the wrong hands is a tragedy. Or a comedy.',
     'Your trio, inspected. Better teamwork than the Agency on a Monday, I\'ll admit.',
-  ],
-  weapon: [
-    'Numbers never lie. People do, constantly, delightfully. But numbers? Never.',
-    'Who should wield this? Let\'s let the evidence decide, like proper detectives.',
-    'A genius does this in his head. I wrote it down anyway, for the sceptics.',
-  ],
-  questsDone: [
-    'Every quest done? How diligent. You\'re making me look bad, please stop.',
-    'All finished. You\'ve earned a nap. I\'ve earned three, for supervising.',
   ],
   quests: [
     'Little mysteries, little rewards. Here\'s what\'s still open on your board.',
@@ -110,7 +76,6 @@ const bank = {
   anDay: ['Today\'s screenings, in order. Plan your procrastination accordingly.', 'What airs today. A detective keeps a tight schedule, mostly of naps.'],
   anEp: ['A new episode just landed. Drop everything. Well, most things.', 'Fresh episode, still warm. Go on.'],
   ship: ['A detective\'s favourite case: two people and a lot of evidence.', 'Answer honestly. I can tell when you lie, mostly.'],
-  gemLow: ['Your gem pouch is nearly empty. Even a detective needs supplies.', 'Last gem standing. Restock before your hunts get sad.'],
   shop: [
     'Window shopping with a detective. I point at things, you pay for them. Fair, no?',
     'Today\'s stock, already sorted by what actually helps you. You\'re welcome~',
@@ -160,15 +125,11 @@ const bank = {
     'Noted~ I\'ll remember so you don\'t have to. That\'s what partners are for.',
     'Leave it to me. I may nap, but I never forget a promise. Mostly.',
   ],
-  remindCancel: ['Cancelled. Consider it forgotten. I\'m wonderfully good at forgetting things.'],
-  buddyJoin: ['Welcome to my network of informants. Every great detective needs a few~'],
-  buddyLeave: ['Leaving the network? Fine. I\'ll pretend I didn\'t notice. I noticed.'],
   ask: [
     'is calling in a favour from the network~',
     'needs a small kindness. The Agency runs on these.',
     'sent word through my informants. Who answers first gets my eternal respect.',
   ],
-  askCooldown: ['Patience, partner. Pester informants too often and they vanish into the night.'],
   settings: [
     'Your preferences, filed and stamped. Look at me, doing paperwork voluntarily.',
     'Every switch and lever, right here. Kunikida-kun would weep with pride.',
@@ -201,15 +162,6 @@ const bank = {
     'Well, that didn\'t go to plan. Plans rarely survive contact with me. Try again?',
   ],
   gif: ['A moving picture for the moment. Taste matters, even for detectives.'],
-  huntbotBackShort: [
-    'your huntbot is home, collect the loot before it gets ideas.',
-    'the little robot is back, tail wagging.',
-    'huntbot returned. Loyal thing. Unlike some partners I could name.',
-  ],
-  prayShort: ['prayers recharged~ go bless someone. Or curse them. I won\'t tell.', 'pray and curse are ready again.'],
-  voteShort: ['voting\'s open again, crab money awaits.', 'twelve hours passed, go vote~'],
-  newDayShort: ['a brand new OwO day! Today\'s duties:', 'the clock reset, here\'s the list:'],
-  lastCallShort: ['two hours left and these are still open:', 'last call before the reset, partner:'],
   customShort: ['you asked me to remind you:', 'as promised~'],
   anime: [
     'An anime case! I\'ve gathered the evidence. Spoiler-free, I\'m not a monster.',
@@ -333,26 +285,7 @@ const bank = {
     'Crimes against good taste.',
     'They know what they did~',
   ],
-  huntbotBack: [
-    'Your huntbot is home, carrying gifts like a loyal little hound.',
-    'Ding! The robot returns. Collect its haul before it develops a personality.',
-  ],
-  prayReady: [
-    'Prayers and curses recharged. Use them wisely. Or chaotically. I won\'t judge.',
-    'Pray and curse are ready. Bless a friend, curse a rival, live a little~',
-  ],
-  voteReady: ['Voting is open again. Democracy and crab money, everybody wins.', 'Twelve hours passed. Your vote awaits~'],
-  huntReady: ['Hunt and battle are ready. Off you go~'],
-  newDay: [
-    'A brand new OwO day! Kunikida-kun would want you to start right now. I\'d want you to nap first.',
-    'The clock reset. I planned your whole day already, it\'s right below.',
-  ],
-  lastCall: [
-    'Two hours until the reset and these are still open. I wouldn\'t hurry. You should.',
-    'Last call, partner. These slip away at the reset:',
-  ],
   custom: ['You asked me to remind you, so here I am, as promised~'],
-  captcha: ['Urgent! OwO wants proof you\'re human in {where}. Answer it now, ignoring it gets you banned from the bot.'],
 };
 
 export type Kind = keyof typeof bank;

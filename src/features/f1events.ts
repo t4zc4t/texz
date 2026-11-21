@@ -51,6 +51,16 @@ async function syncSession(guild: Guild, store: Store, room: string | null, seas
   if (made) store.setKv(key, made.id);
 }
 
+// switched off: the upcoming sessions come down, ones already live are left to finish
+export async function clearF1Events(guild: Guild, store: Store) {
+  for (const { key, value } of store.kvByPrefix(`f1ev:${guild.id}:`)) {
+    const ev = value ? await guild.scheduledEvents.fetch(value).catch(() => null) : null;
+    if (ev && ev.status !== GuildScheduledEventStatus.Scheduled) continue;
+    if (ev) await ev.delete().catch(() => {});
+    store.setKv(key, null);
+  }
+}
+
 export function startF1Events(client: Client, store: Store) {
   const tick = async () => {
     const guilds = [...client.guilds.cache.values()].filter((g) => store.rules(g.id, 'bulletins').enabled && store.guild(g.id).bulletins.f1.on && store.getKv(`f1events:${g.id}`) !== 'off');

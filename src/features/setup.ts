@@ -1,3 +1,4 @@
+import { clearF1Events } from './f1events.js';
 import { weeklyOn, setWeekly, weeklyAt, setWeeklyChannel } from '../modules/giveaways.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, ChannelType, MessageFlags, ModalBuilder,
@@ -63,7 +64,7 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       { label: 'Levels, xp and reward roles', value: 'levels', emoji: '🎖️' },
       { label: 'Birthday greetings and role', value: 'birthdays', emoji: '🎂' },
       { label: 'Bulletins: F1, football, anime', value: 'bulletins', emoji: '🗞️' },
-      { label: 'Weekly giveaway', value: 'f:giveaways', emoji: '🎁' },
+      { label: 'Weekly giveaway', value: 'gw', emoji: '🎁' },
       { label: 'Community: quotes, archive, counting, confessions', value: 'quotes', emoji: '🖋️' },
       { label: 'Character of the day', value: 'cotd', emoji: '🎭' },
       { label: 'Tickets', value: 'tickets', emoji: '🎫' },
@@ -108,21 +109,24 @@ export function setupPanel(store: Store, guild: Guild, owner: string, page: stri
       comps.push(
         row(toggle(owner, 'mod', mod.name, 'Feature', r.enabled, icon[mod.name] ?? '📁'),
           ...(mod.name === 'spawns' ? [toggle(owner, 'p2help', mod.name, 'Pokétwo helper', p2HelperOn(store, guild.id), '🔎')] : []),
-          ...(mod.name === 'giveaways' ? [toggle(owner, 'gwweekly', mod.name, 'Weekly giveaway', weeklyOn(store, guild.id), '🎁')] : []),
           back(owner, 'features')),
         row(new ChannelSelectMenuBuilder().setCustomId(id(owner, 'modch', mod.name)).setPlaceholder('📍 Only in these channels (empty = everywhere)')
           .setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(25).setDefaultChannels(r.channels.slice(0, 25))),
         row(new RoleSelectMenuBuilder().setCustomId(id(owner, 'modrole', mod.name)).setPlaceholder('🎭 Only for these roles (empty = everyone)')
           .setMinValues(0).setMaxValues(25).setDefaultRoles(r.roles.slice(0, 25))),
       );
-      if (mod.name === 'giveaways') {
-        const set = store.getKv(`gwdaily:${guild.id}`);
-        const chSel = new ChannelSelectMenuBuilder().setCustomId(id(owner, 'gwch', mod.name)).setPlaceholder('🎁 Where the weekly giveaway runs').setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1);
-        if (set && set !== 'off') chSel.setDefaultChannels(set);
-        comps.push(row(chSel));
-        fields.push({ name: '🎁 Weekly giveaway', value: weeklyOn(store, guild.id) ? `On · every Sunday, next <t:${weeklyAt()}:F>\nin ${set && set !== 'off' ? `<#${set}>` : 'a channel with giveaway in its name'} · pays yen, XP, crates or pardons by itself. Needs the Yen feature on.` : 'Off', inline: false });
-      }
     }
+  }
+
+  if (page === 'gw') {
+    title = 'Weekly giveaway';
+    const set = store.getKv(`gwdaily:${guild.id}`);
+    const on = weeklyOn(store, guild.id);
+    body = 'Every Sunday I host a giveaway of my own: yen, XP, mystery crates or count pardons, paid out by myself when it ends. It needs the Yen feature on.';
+    fields.push({ name: 'Right now', value: on ? `On · next one <t:${weeklyAt()}:F>\nin ${set && set !== 'off' ? `<#${set}>` : 'a channel with giveaway in its name'}` : 'Off', inline: false });
+    const chSel = new ChannelSelectMenuBuilder().setCustomId(id(owner, 'gwch')).setPlaceholder('🎁 Where it runs').setChannelTypes(ChannelType.GuildText).setMinValues(0).setMaxValues(1);
+    if (set && set !== 'off') chSel.setDefaultChannels(set);
+    comps.push(row(toggle(owner, 'gwweekly', '', 'Weekly giveaway', on, '🎁'), back(owner)), row(chSel));
   }
 
   if (page === 'welcome') {
@@ -455,7 +459,7 @@ async function canGive(guild: Guild, roleId: string) {
 }
 
 const pageOf: Record<string, string> = {
-  mod: 'f', p2help: 'f', gwweekly: 'f', gwch: 'f', trusted: 'levels', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome', boost: 'welcome', boostch: 'welcome',
+  mod: 'f', p2help: 'f', gwweekly: 'gw', gwch: 'gw', trusted: 'levels', modch: 'f', modrole: 'f', wch: 'welcome', gch: 'welcome', wtext: 'welcome', gtext: 'welcome', wreset: 'welcome', boost: 'welcome', boostch: 'welcome',
   arole: 'autorole', logch: 'mod', staff: 'mod', am: 'mod', lvch: 'levels', lvon: 'levels', ann: 'levels', rwrole: 'rewards', rwdel: 'rewards', rw: 'rewards',
   rwranks: 'rewards', rwnew: 'rewards', rwedit: 'rewards', gifm: 'gifs', gif: 'gifs', prefix: 'home',
   clean: 'home', errch: 'mod', sbch: 'starboard', sbmin: 'starboard', sbemoji: 'starboard', sbself: 'starboard',
@@ -638,6 +642,7 @@ export async function onSetup(store: Store, i: Interaction): Promise<boolean> {
     if (action === 'f1ev') {
       const on = store.getKv(`f1events:${i.guild.id}`) === 'off';
       store.setKv(`f1events:${i.guild.id}`, on ? 'on' : 'off');
+      if (!on) void clearF1Events(i.guild, store);
       void botLog(i.guild, store, `🏎️ <@${i.user.id}> switched F1 weekend events ${on ? 'on' : 'off'}.`);
     }
     if (action === 'f1look') store.setKv(`f1theme:${i.guild.id}`, store.getKv(`f1theme:${i.guild.id}`) === 'agency' ? 'mafia' : 'agency');
