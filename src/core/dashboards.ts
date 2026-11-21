@@ -185,11 +185,9 @@ export function deskPage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry
     o.off?.length ? `-# ${o.off.join(', ')} ${o.off.length === 1 ? 'is' : 'are'} switched off here${ctx.isAdmin ? ', switch it on in \`/setup\`' : ''}.` : null,
   ].filter(Boolean) : [];
   const owner = `owner=${ctx.userId},back=${home}`;
-  const quickKeys = (o.layout?.quick ?? []).filter((k) => show.some((e) => e.key === k));
-  const quick = quickKeys.map((k) => show.find((e) => e.key === k)!).slice(0, 4);
   const rows = [];
-  if (quick.length) rows.push(row(...quick.map((e) => new ButtonBuilder().setCustomId(`nav|pick|${owner},key=${e.key}`).setLabel(short(cap(e.label), 40)).setStyle(ButtonStyle.Secondary).setEmoji(e.emoji ?? '▫️'))));
-  const menuList = show.filter((e) => !quick.includes(e));
+  // the desk explains, typing runs: one menu for a closer look at any command, nothing to press that just repeats it
+  const menuList = show;
   for (let m = 0; m < menuList.length && rows.length < 3; m += 25) {
     rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|info|${owner},m=${m}`).setPlaceholder(m ? '📖 Even more' : '📖 Pick a command to see how it works').addOptions(
       menuList.slice(m, m + 25).map((e) => ({ label: short(cap(e.label), 100), value: e.key, description: short(`${prefix} ${wordOf(e)} · ${tidy(e.about)}`, 100), ...(e.emoji ? { emoji: e.emoji } : {}) })),
@@ -204,7 +202,7 @@ export function deskPage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry
     new ButtonBuilder().setCustomId(`nav|help|owner=${ctx.userId}`).setLabel('Directory').setEmoji('🗂️').setStyle(ButtonStyle.Secondary),
   ));
   const e = card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: notes.join('\n') || '​', fields: pages[n] });
-  e.setFooter({ text: `${pages.length > 1 ? `Page ${n + 1} of ${pages.length} · ` : ''}buttons run it, the menu explains it first · /${o.group} works too` });
+  e.setFooter({ text: `${pages.length > 1 ? `Page ${n + 1} of ${pages.length} · ` : ''}type any of these · /${o.group} works too · the menu explains one in detail` });
   return { embeds: [e], components: rows };
 }
 
@@ -229,18 +227,8 @@ export function commandCard(ctx: Ctx, cmd: Command, o: { prefix: string; back: s
   if (cmd.admin || cmd.group === 'admin') fields.push({ name: 'Who', value: 'Admins and the staff role', inline: true });
   const label = e ? cap(e.label) : menu[cmd.name]?.[1] ?? cap(cmd.name);
   const about = tidy(e?.about ?? cmd.data.description);
-  const owner = `owner=${ctx.userId},back=${o.back}`;
-  const rows = [];
-  if (e) rows.push(row(
-    new ButtonBuilder().setCustomId(`nav|pick|${owner},key=${e.key}`).setLabel(needsInput(e) ? 'Fill it in and run' : 'Do it now').setEmoji('▶️').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(`nav|${o.back}|owner=${ctx.userId}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
-  ));
-  else {
-    rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|pick|${owner}`).setPlaceholder('▶️ Pick one to run').addOptions(
-      entries.slice(0, 25).map((x) => ({ label: short(cap(x.label), 100), value: x.key, description: short(tidy(x.about), 100), ...(x.emoji ? { emoji: x.emoji } : {}) })),
-    )));
-    rows.push(row(new ButtonBuilder().setCustomId(`nav|${o.back}|owner=${ctx.userId}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary)));
-  }
+  // just the explanation and a way back, running it is typing it
+  const rows = [row(new ButtonBuilder().setCustomId(`nav|${o.back}|owner=${ctx.userId}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary))];
   return {
     embeds: [card({ kind: 'help', title: label, emoji: e?.emoji ?? '', gif: 'off', body: `${about}.\n-# Slash replies only show to you, typed ones to the channel.`, fields })],
     components: rows,
