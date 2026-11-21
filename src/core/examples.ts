@@ -6,7 +6,7 @@ export const sample: Record<string, string> = {
   season: 'fall', year: '2026', when: '9pm', show: 'Frieren', type: 'manga', question: 'will it rain tomorrow?', options: 'pizza, burger, ramen',
   dice: '2d6', reason: 'spamming links', length: '10m', id: '123456789012345678', hint: 'p_k_ch_', filter: 'best', topic: 'f1', feature: 'birthday',
   what: 'cookie', days: '7', on: 'on', all: 'Best opening? | Unravel | Gurenge', level: '10', date: '14 march', role: '@Gamers', channel: '#general',
-  view: 'standings', club: 'Inter Miami', link: '(reply to a message)',
+  view: 'standings', club: 'Inter Miami', status: 'watching', character: 'Gojo', search: 'spam', link: '(reply to a message)',
 };
 const subSample: Record<string, string> = { 'remind': '2h drink water', 'giveaway start': '1d 1 Nitro', 'birthday set': '14 march', 'football fav': 'Inter Miami', 'wish add': 'Gojo', 'xp give': '@someone 500', 'xp level': '@someone 10', 'announce add': '#news 9pm Movie night tonight',
   'roleshop buy': '1', 'roleshop remove': '1', 'roleshop add': '@Gamers 500', 'giveaway end': '3', 'giveaway reroll': '3', 'giveaway cancel': '3', 'announce delete': '2',
@@ -24,7 +24,7 @@ export function examples(c: Command, prefix: string): { label: string; typed: st
   const base = c.group ? `/${c.group} ${c.as ?? c.name}` : `/${c.name}`;
   const slashOf = (sub: string | null, args: string[]) => `${base}${sub ? ` ${sub}` : ''}${args.map((a) => ` ${a}:${sample[a] ?? a}`).join('')}`;
   if (subs.length) {
-    return subs.slice(0, 5).map((sc) => {
+    return subs.map((sc) => {
       const args = t.subArgs?.[sc.name] ?? [];
       const ex = subSample[`${call} ${sc.name}`] ?? fill(args);
       return { label: sc.name, about: sc.description, typed: `${prefix} ${call} ${sc.name}${ex ? ` ${ex}` : ''}`, slash: slashOf(sc.name, args) };

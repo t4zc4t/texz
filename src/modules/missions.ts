@@ -1,4 +1,4 @@
-import { ActionRowBuilder, AttachmentBuilder, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder, type Interaction, type MessageActionRowComponentBuilder } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, MessageFlags, SlashCommandBuilder, StringSelectMenuBuilder, type Interaction, type MessageActionRowComponentBuilder } from 'discord.js';
 import { medalSheet, tierName, tierOf } from '../features/medals.js';
 import type { Store } from '../db.js';
 import type { Command } from '../core/module.js';
@@ -402,10 +402,25 @@ export const achievements: Command = {
       }).join('\n').slice(0, 1024),
       inline: false,
     }));
+    // a couple of medal groups per page, the picture shows them all at once
+    const pages: typeof fields[] = [[]];
+    let size = 0;
+    for (const f of fields) {
+      if (size && size + f.value.length > 900) { pages.push([]); size = 0; }
+      pages[pages.length - 1].push(f);
+      size += f.value.length;
+    }
+    const n = Math.min(Math.max(0, ctx.int('page') ?? 0), pages.length - 1);
     const rows: ActionRowBuilder<MessageActionRowComponentBuilder>[] = [];
+    const back = ctx.str('back') ? `,back=${ctx.str('back')}` : '';
+    if (pages.length > 1) rows.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`nav|achievements|owner=${ctx.userId},user=${id},page=${n - 1}${back}`).setEmoji('◀️').setStyle(ButtonStyle.Secondary).setDisabled(n === 0),
+      new ButtonBuilder().setCustomId(`nav|achievements|owner=${ctx.userId},user=${id},page=${n + 1}${back}`).setEmoji('▶️').setStyle(ButtonStyle.Secondary).setDisabled(n >= pages.length - 1),
+    ));
     const e = card({ kind: 'help', title: mine ? 'Your achievements' : `${member?.displayName ?? 'Their'} achievements`, emoji: '🎖️', gif: 'off', line: '',
-      body: `**${have.length} of ${BADGES.length}** earned. Bronze, silver, gold, and purple relics for the rare ones.`, fields })
+      body: `**${have.length} of ${BADGES.length}** earned. Bronze, silver, gold, and purple relics for the rare ones.`, fields: pages[n] })
       .setImage('attachment://achievements.png');
+    if (pages.length > 1) e.setFooter({ text: `Page ${n + 1} of ${pages.length}` });
     return ctx.reply({ embeds: [e], files: [new AttachmentBuilder(png, { name: 'achievements.png' })], components: rows });
   },
 };

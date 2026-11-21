@@ -89,7 +89,6 @@ function listPanel(store: Store, userId: string) {
   }
   components.push(row(
     new ButtonBuilder().setCustomId(rpId(userId, 'add')).setLabel('New reminder').setEmoji('➕').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(rpId(userId, 'view', 'list')).setLabel('Refresh').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(rpId(userId, 'view', 'settings')).setLabel('Settings').setEmoji('🎛️').setStyle(ButtonStyle.Primary),
   ));
   return { embeds: [embed], components };

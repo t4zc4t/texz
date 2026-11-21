@@ -80,7 +80,7 @@ export const booth: Command = {
   hint: '`{p} booth invite @someone` · `/misc booth`\n-# join ➕ Open a private booth to get one · also kick @someone, open, lock, name Late night, limit 4',
   run: async (ctx, store) => {
     const m = ctx.member;
-    const ch = m?.voice.channel as VoiceChannel | null | undefined;
+    const ch = m?.voice?.channel as VoiceChannel | null | undefined;
     if (!m || !ch || owner(store, ch.id) !== m.id) return ctx.reply({ content: `You need to be sitting in your own booth. Join **${HUB}** to get one.`, temp: true });
     const what = (ctx.str('do') ?? '').toLowerCase();
     let value = ctx.str('value');

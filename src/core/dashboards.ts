@@ -164,41 +164,48 @@ function sectioned(entries: Entry[], layout?: Layout): [string, Entry[]][] {
 
 // a group's desk: what's in it at a glance, each command with its short name and a line on what it does,
 // the everyday ones as buttons and the rest in a menu that explains them
-export function deskPage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry[], o: { layout?: Layout; glance?: string | null; off?: string[]; prefix?: string; group: string }) {
+export function deskPage(ctx: Ctx, home: string, info: GroupInfo, entries: Entry[], o: { layout?: Layout; glance?: string | null; off?: string[]; prefix?: string; group: string; page?: number }) {
   const prefix = o.prefix ?? 'tz';
   const show = entries.filter((e) => !e.cmd.admin || ctx.isAdmin);
-  const groups = sectioned(show, o.layout);
-  const build = (about: number) => groups.flatMap(([title, list]) => chunks(title, list.map((e) => (about
-    ? `**${cap(e.label)}** · \`${prefix} ${wordOf(e)}\`\n-# ${short(tidy(e.about), about)}`
-    : `\`${prefix} ${wordOf(e)}\` ${cap(e.label)}`))));
-  // a big desk like the admin floor gets shorter descriptions so it still fits one card, and none only as a last resort
-  const size = (f: { name: string; value: string }[]) => f.reduce((n, x) => n + x.name.length + x.value.length, 0);
-  let fields = build(90);
-  if (size(fields) > 5000) fields = build(48);
-  if (size(fields) > 5000) fields = build(0);
-  const notes = [
+  const line = (e: Entry) => `**${cap(e.label)}** · \`${prefix} ${wordOf(e)}\`\n-# ${short(tidy(e.about), 80)}`;
+  // whole sections per page, a page stops before it gets long enough to scroll
+  const pages: { name: string; value: string; inline: boolean }[][] = [[]];
+  let size = 0;
+  for (const [title, list] of sectioned(show, o.layout)) {
+    const f = chunks(title, list.map(line));
+    const add = f.reduce((n, x) => n + x.name.length + x.value.length, 0);
+    if (size && size + add > 1400) { pages.push([]); size = 0; }
+    pages[pages.length - 1].push(...f);
+    size += add;
+  }
+  const n = Math.min(Math.max(0, o.page ?? 0), pages.length - 1);
+  const notes = n === 0 ? [
     o.glance,
     info.about,
     o.off?.length ? `-# ${o.off.join(', ')} ${o.off.length === 1 ? 'is' : 'are'} switched off here${ctx.isAdmin ? ', switch it on in \`/setup\`' : ''}.` : null,
-    `-# Buttons run straight away · the menu explains anything first · slash works too: \`/${o.group}\``,
-  ].filter(Boolean);
+  ].filter(Boolean) : [];
   const owner = `owner=${ctx.userId},back=${home}`;
   const quickKeys = (o.layout?.quick ?? []).filter((k) => show.some((e) => e.key === k));
   const quick = quickKeys.map((k) => show.find((e) => e.key === k)!).slice(0, 4);
-  const rows = [row(
-    ...quick.map((e) => new ButtonBuilder().setCustomId(`nav|pick|${owner},key=${e.key}`).setLabel(short(cap(e.label), 40)).setStyle(ButtonStyle.Secondary).setEmoji(e.emoji ?? '▫️')),
-    new ButtonBuilder().setCustomId(`nav|help|owner=${ctx.userId}`).setLabel('Directory').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
-  )];
+  const rows = [];
+  if (quick.length) rows.push(row(...quick.map((e) => new ButtonBuilder().setCustomId(`nav|pick|${owner},key=${e.key}`).setLabel(short(cap(e.label), 40)).setStyle(ButtonStyle.Secondary).setEmoji(e.emoji ?? '▫️'))));
   const menuList = show.filter((e) => !quick.includes(e));
-  for (let n = 0; n < menuList.length && rows.length < 3; n += 25) {
-    rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|info|${owner},m=${n}`).setPlaceholder(n ? '📖 Even more' : '📖 Everything else, pick one to see how it works').addOptions(
-      menuList.slice(n, n + 25).map((e) => ({ label: short(cap(e.label), 100), value: e.key, description: short(`${prefix} ${wordOf(e)} · ${tidy(e.about)}`, 100), ...(e.emoji ? { emoji: e.emoji } : {}) })),
+  for (let m = 0; m < menuList.length && rows.length < 3; m += 25) {
+    rows.push(row(new StringSelectMenuBuilder().setCustomId(`nav|info|${owner},m=${m}`).setPlaceholder(m ? '📖 Even more' : '📖 Pick a command to see how it works').addOptions(
+      menuList.slice(m, m + 25).map((e) => ({ label: short(cap(e.label), 100), value: e.key, description: short(`${prefix} ${wordOf(e)} · ${tidy(e.about)}`, 100), ...(e.emoji ? { emoji: e.emoji } : {}) })),
     )));
   }
-  return {
-    embeds: [card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: notes.join('\n'), fields })],
-    components: rows,
-  };
+  // page arrows only when there's more than one page, the directory always
+  rows.push(row(
+    ...(pages.length > 1 ? [
+      new ButtonBuilder().setCustomId(`nav|${home}|owner=${ctx.userId},page=${n - 1}`).setEmoji('◀️').setStyle(ButtonStyle.Secondary).setDisabled(n === 0),
+      new ButtonBuilder().setCustomId(`nav|${home}|owner=${ctx.userId},page=${n + 1}`).setEmoji('▶️').setStyle(ButtonStyle.Secondary).setDisabled(n >= pages.length - 1),
+    ] : []),
+    new ButtonBuilder().setCustomId(`nav|help|owner=${ctx.userId}`).setLabel('Directory').setEmoji('🗂️').setStyle(ButtonStyle.Secondary),
+  ));
+  const e = card({ kind: 'help', title: info.label, emoji: info.emoji, gif: 'off', body: notes.join('\n') || '​', fields: pages[n] });
+  e.setFooter({ text: `${pages.length > 1 ? `Page ${n + 1} of ${pages.length} · ` : ''}buttons run it, the menu explains it first · /${o.group} works too` });
+  return { embeds: [e], components: rows };
 }
 
 // one command explained: what it does, how to type it, the slash form, what goes after it and its short names,

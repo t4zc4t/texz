@@ -71,6 +71,10 @@ export const menu: Record<string, [string, string, string?]> = {
   today: ['🎭', 'Character of the day', 'Today\'s anime character, with who they are and where they\'re from'],
   anime: ['🔍', 'Anime lookup', 'Score, episodes, studio, where to watch and the trailer'],
   alerts: ['🔔', 'Episode alerts', 'The shows you get a ping for when a new episode is out'],
+  vc: ['🎙️', 'Voice moderation'], giveaway: ['🎁', 'Giveaways'], case: ['🗄️', 'Case files'], announce: ['📣', 'Planned posts'], xp: ['🎚️', 'Xp tools'],
+  money: ['💴', 'Yen tools'], backup: ['💾', 'Setup backup'], birthday: ['🎂', 'Birthdays'], watchlist: ['📋', 'Your anime list'], mycolour: ['🎨', 'Your own role'],
+  roleshop: ['🛍️', 'Role shop'], football: ['⚽', 'Football'], wish: ['💝', 'Shoob wishlist'], profile: ['🪪', 'Profile'], f1: ['🏎️', 'Formula 1'],
+  recommend: ['🎲', 'Something random'],
 };
 
 // sections and the quick buttons of each generic dashboard

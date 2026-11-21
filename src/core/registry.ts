@@ -164,7 +164,7 @@ for (const [name, g] of Object.entries(groups)) {
       const live = all.filter(({ hit }) => on(hit)).map(({ e }) => e).sort((a, b) => rank(a) - rank(b));
       const prefix = ctx.guildId ? store.guild(ctx.guildId).prefix : 'tz';
       const look = all.some(({ hit }) => on(hit)) ? glance(name, ctx, store) : null;
-      return ctx.reply(deskPage(ctx, g.dashboard!, g, live, { layout: layout[name], glance: look, off, prefix, group: name }));
+      return ctx.reply(deskPage(ctx, g.dashboard!, g, live, { layout: layout[name], glance: look, off, prefix, group: name, page: ctx.int('page') ?? 0 }));
     },
   };
   core.commands.push(cmd);

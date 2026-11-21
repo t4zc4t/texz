@@ -119,7 +119,7 @@ const help: Command = {
       const { c } = pick;
       const group = dashList.find((d) => d.name === c.group);
       const view = commandCard(ctx, c, { prefix, back: group?.home ?? 'help' });
-      const others = found.filter((x) => x.id !== c.name).map((x) => all.find(({ c: o }) => o.name === x.id)!).filter(Boolean).slice(0, 5);
+      const others = exact ? [] : found.filter((x) => x.id !== c.name).map((x) => all.find(({ c: o }) => o.name === x.id)!).filter(Boolean).slice(0, 5);
       if (others.length) view.components.push(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
         new StringSelectMenuBuilder().setCustomId(`nav|help|as=feature,owner=${ctx.userId}`).setPlaceholder('🔍 Not it? Other matches')
           .addOptions(others.map(({ c: o }) => ({ label: `${prefix} ${o.call ?? o.name}`, value: o.name, description: o.data.description.slice(0, 100) }))),
