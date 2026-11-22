@@ -6,6 +6,7 @@ import { card } from '../theme.js';
 import { passiveOf, weaponOf } from '../owo/catalog.js';
 import { OwoState } from '../owo/state.js';
 import { dismantleList, rangesFrom, report, SHARDS } from '../owo/advice.js';
+import { baseOf, planFor, type Arm, type Candidate } from '../owo/team.js';
 
 // The Stray Dogs Den: everything Texz has learnt about your OwO account by watching your normal
 // OwO commands. It only reads and advises, it never plays for you.
@@ -61,7 +62,7 @@ const team: Command = {
   name: 'owoteam',
   as: 'team',
   group: 'owo',
-  data: new SlashCommandBuilder().setName('team').setDescription('Your OwO teams with levels, stats, xp to the next level and weapons').toJSON(),
+  data: new SlashCommandBuilder().setName('team').setDescription('Your OwO teams and advice on which pet should hold which weapon, judged at equal level').toJSON(),
   text: { aliases: ['oteam'], noName: true },
   run: async (ctx, store) => {
     const st = stateOf(store);
@@ -89,9 +90,50 @@ const team: Command = {
         };
       }),
     ]);
-    return ctx.reply({ embeds: [card({ kind: 'help', title: 'Your OwO teams', emoji: '🐾', gif: 'off', line: '', body: '-# From your last `w team`. Team building advice comes here soon.', fields })] });
+    const adv = teamAdvice(store, ctx.userId);
+    let body = '-# From your last `w team`.';
+    if (adv) {
+      const { plan } = adv;
+      const lines = plan.changes.length
+        ? plan.changes.map((c) => `• ${c.text}${c.cmds.length ? `\n\`\`\`${c.cmds.join('\n')}\`\`\`` : ''}`)
+        : [`✅ **Right pets on the right weapons.** Out of your ${adv.pets} pets, compared at level ${plan.L} so levels don't decide it, these fit their weapons best.`];
+      const later = plan.later.map((l) => `-# Later: **${l.c.name}** would beat a current pick at equal level, but it's level ${l.c.level}, about ${l.wins.toLocaleString()} wins (~${l.days} days) away.`);
+      const notes = [
+        adv.pets < 6 ? '-# I only know a few of your pets, run `w pets` so I can weigh them all.' : null,
+        adv.exact < adv.pets ? `-# ${adv.pets - adv.exact} pet${adv.pets - adv.exact === 1 ? '' : 's'} judged from their own numbers, a \`w dex\` makes those exact.` : null,
+      ].filter(Boolean);
+      body = [`**🧭 Team advice**`, ...lines, ...later, ...notes, '', '-# Your weapon types are your call, I judge who holds them and which copy. Pace: about ' + plan.pace + ' battles a day.'].join('\n');
+    }
+    return ctx.reply({ embeds: [card({ kind: 'help', title: 'Your OwO teams', emoji: '🐾', gif: 'off', line: '', body: body.slice(0, 4000), fields })] });
   },
 };
+
+// everyone who could be on the team: pets you've levelled, plus zoo animals the shared dex knows, at level 1
+export function teamAdvice(store: Store, userId: string) {
+  const st = stateOf(store);
+  const teams = st.teams(userId);
+  if (!teams.length) return null;
+  const pets = st.pets(userId);
+  const cands: Candidate[] = pets.map((p) => {
+    const d = st.dex(p.animal);
+    return { animal: p.animal, name: p.name, level: p.level, xp: p.xp, base: d ? { hp: d.hp, wp: d.wp, str: d.str, mag: d.mag, pr: d.pr, mr: d.mr } : baseOf(p), exact: !!d };
+  });
+  for (const a of st.zoo(userId)?.animals ?? []) {
+    if (cands.some((c) => c.animal === a.animal)) continue;
+    const d = st.dex(a.animal);
+    if (d) cands.push({ animal: a.animal, name: a.animal, level: 1, xp: 0, base: { hp: d.hp, wp: d.wp, str: d.str, mag: d.mag, pr: d.pr, mr: d.mr }, exact: true });
+  }
+  const weapons = st.weapons(userId);
+  const arms: Arm[] = weapons.map((w) => ({ id: w.id, type: w.name ?? (w.type ? weaponOf(w.type).name : '?'), quality: w.quality ?? 0, wpCost: w.wpCost }));
+  const active = [...teams].sort((a, b) => b.at - a.at)[0];
+  const held = new Map(pets.filter((p) => p.weapon_id).map((p) => [p.animal, arms.find((a) => a.id === p.weapon_id) ?? null]));
+  // battles a day from the log, or a fair guess until there's a week of it
+  const week = st.battles(userId, Date.now() - 7 * 86_400_000);
+  const span = week.length ? Math.max(1, (Date.now() - Math.min(...week.map((b) => b.at))) / 86_400_000) : 0;
+  const pace = week.length >= 20 ? Math.round(week.length / span) : 60;
+  const plan = planFor(active.animals.map((a) => ({ animal: a, arm: held.get(a) ?? null })), cands, arms, pace);
+  return plan ? { plan, pets: cands.length, exact: cands.filter((c) => c.exact).length } : null;
+}
 
 const PAGE = 10;
 const weaponsCmd: Command = {

@@ -77,7 +77,7 @@ export const menu: Record<string, [string, string, string?]> = {
   roleshop: ['🛍️', 'Role shop'], football: ['⚽', 'Football'], wish: ['💝', 'Shoob wishlist'], profile: ['🪪', 'Profile'], f1: ['🏎️', 'Formula 1'],
   recommend: ['🎲', 'Something random'],
   owosync: ['📡', 'What I know', 'Everything Texz has learnt about your OwO account and when it last saw it'],
-  owoteam: ['🐾', 'Your teams', 'Pets with level, xp to the next one, stats and the weapon each holds'],
+  owoteam: ['🐾', 'Your teams', 'Your pets and weapons, plus advice on who should hold what, judged at equal level'],
   owoweapons: ['🗡️', 'Your weapons', 'Every weapon Texz knows, best first, with passives, wear and who holds it'],
   owozoo: ['🦁', 'Your zoo', 'Animals by rank, zoo points and everything you have ever caught'],
   owohb: ['🤖', 'Your HuntBot', 'Trait levels, essence, the biggest run and when it is back'],
