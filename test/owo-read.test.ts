@@ -123,3 +123,18 @@ test('who OwO is talking to', () => {
   assert.equal(R.addressee(s('checklist')).id, '111111111111111111');
   assert.equal(R.addressee(s('battle_won')).name, 'Kunikida');
 });
+
+test('pets list and dex cards, base stats line up with the level formula', () => {
+  const p = R.pets(s('pets'))!;
+  assert.ok(p.pets.length >= 3);
+  const owl = p.pets.find((x) => x.animal === 'gowl')!;
+  const d = R.dex(s('dex'))!;
+  assert.equal(d.animal, 'gowl');
+  assert.equal(d.rank, 'legendary');
+  // hp is 500 + 2 * base * level, str is 100 + base * level
+  assert.equal(owl.hp, 500 + 2 * d.hp * owl.level);
+  assert.equal(owl.str, 100 + d.str * owl.level);
+  const b = R.baseFrom(owl);
+  assert.equal(b.hp, d.hp);
+  assert.equal(b.mag, d.mag);
+});

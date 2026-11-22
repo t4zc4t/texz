@@ -132,6 +132,51 @@ export function team(s: Said): Team | null {
   };
 }
 
+// ---------- every pet, from w pets ----------
+
+export interface PetRow { animal: string; name: string; level: number; xp: number; xpNeed: number; hp: number; wp: number; str: number; mag: number; pr: number; mr: number }
+
+export function pets(s: Said): { owner: string | null; pets: PetRow[] } | null {
+  const e = s.embeds.find((x) => /'s pets$/i.test(x.author ?? ''));
+  if (!e) return null;
+  const out: PetRow[] = [];
+  for (const f of e.fields ?? []) {
+    const head = f.name.match(/(?:<a?:(\w+):\d+>|:(\w+):)\s*(.+)/);
+    const lvl = f.value.match(/Lvl\.?\s*(\d+)\s*`\[([\d,]+)\/([\d,]+)\]`/);
+    const stats = [...f.value.replace(/`\[[\d,/]+\]`/, '').matchAll(/`(\d+)%?`/g)].map((m) => Number(m[1]));
+    if (!head || !lvl || stats.length < 6) continue;
+    out.push({ animal: head[1] ?? head[2], name: head[3].trim(), level: Number(lvl[1]), xp: num(lvl[2]), xpNeed: num(lvl[3]), hp: stats[0], wp: stats[1], str: stats[2], mag: stats[3], pr: stats[4], mr: stats[5] });
+  }
+  return { owner: e.author!.replace(/'s pets$/i, ''), pets: out };
+}
+
+// ---------- one animal's dex card, base stats included ----------
+
+export interface Dex { animal: string; rank: string | null; hp: number; str: number; pr: number; wp: number; mag: number; mr: number; points: number | null; sell: number | null; essence: number | null; aliases: string[] }
+
+export function dex(s: Said): Dex | null {
+  const e = s.embeds.find((x) => /\*\*Rank:\*\*/.test(x.description ?? '') && /\*\*Alias:\*\*/.test(x.description ?? ''));
+  if (!e) return null;
+  const d = e.description!;
+  const animal = (e.title ?? '').match(/(?:<a?:(\w+):\d+>|:(\w+):)/);
+  const stat = (k: string) => Number(d.match(new RegExp(`<:${k}:\\d+>\\s*\`(\\d+)\``))?.[1] ?? NaN);
+  const out = { hp: stat('hp'), str: stat('att'), pr: stat('pr'), wp: stat('wp'), mag: stat('mag'), mr: stat('mr') };
+  if (!animal || Object.values(out).some((v) => Number.isNaN(v))) return null;
+  const n = (re: RegExp) => { const m = d.match(re); return m ? num(m[1]) : null; };
+  return {
+    animal: animal[1] ?? animal[2], rank: d.match(/\*\*Rank:\*\*\s*(?:<a?:\w+:\d+>\s*)?(\w+)/)?.[1]?.toLowerCase() ?? null, ...out,
+    points: n(/\*\*Points:\*\*\s*([\d,]+)/), sell: n(/\*\*Sell:\*\*\s*([\d,]+)/), essence: n(/\*\*Sacrifice:\*\*\s*([\d,]+)/),
+    aliases: (d.match(/\*\*Alias:\*\*\s*([^\n]+)/)?.[1] ?? '').split(',').map((x) => x.trim()).filter(Boolean),
+  };
+}
+
+// base stats from a pet's own numbers, OwO grows each stat in a straight line with level:
+// hp and wp 500 + 2*base*level, str and mag 100 + base*level. Resistances only show as a rounded %, so those are rough
+export function baseFrom(p: { level: number; hp: number; wp: number; str: number; mag: number }) {
+  const L = Math.max(1, p.level);
+  return { hp: (p.hp - 500) / (2 * L), wp: (p.wp - 500) / (2 * L), str: (p.str - 100) / L, mag: (p.mag - 100) / L };
+}
+
 // ---------- zoo ----------
 
 export const RANKS = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'special', 'gem', 'legendary', 'fabled', 'bot', 'distorted', 'patreon', 'cpatreon', 'hidden'] as const;

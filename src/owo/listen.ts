@@ -27,7 +27,7 @@ const names: Record<string, string> = {
   daily: 'daily', vote: 'vote', pray: 'pray', curse: 'curse', cookie: 'cookie', rep: 'cookie',
   quest: 'quest', q: 'quest', checklist: 'checklist', cl: 'checklist',
   cowoncy: 'cash', cash: 'cash', money: 'cash', bal: 'cash',
-  shop: 'shop', dex: 'dex', d: 'dex',
+  shop: 'shop', dex: 'dex', d: 'dex', pets: 'pets', pet: 'pets',
 };
 
 export function owoCommand(content: string): { name: string; args: string } | null {
@@ -102,6 +102,10 @@ export function apply(state: OwoState, userId: string, s: read.Said, now = Date.
   const seen: string[] = [];
   const t = read.team(s);
   if (t?.pets.length) { state.saveTeam(userId, t, now); seen.push('team'); }
+  const pl = read.pets(s);
+  if (pl?.pets.length) { state.savePets(userId, pl.pets, now); seen.push('pets'); }
+  const dx = read.dex(s);
+  if (dx) { state.saveDex(dx, now); seen.push('dex'); }
   const z = read.zoo(s);
   if (z?.animals.length) { state.saveZoo(userId, z, now); seen.push('zoo'); }
   const w = read.weapon(s);
@@ -156,7 +160,12 @@ async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean)
   const who = edited && owners.has(m.id) ? { userId: owners.get(m.id)!, cmd: null } : await ownerOf(m, s);
   // edits matter too: rerolls and page flips change the message in place
   keep(JSON.stringify({ at: new Date().toISOString(), cmd: who?.cmd ?? '?', edited, content: s.content, embeds: m.embeds.map((e) => e.toJSON()), components: m.components.map((c) => c.toJSON()) }));
-  if (!who) return;
+  // a dex card belongs to nobody in particular, base stats are the same for everyone
+  if (!who) {
+    const dx = read.dex(s);
+    if (dx && store.rules(m.guildId ?? null, 'owo').enabled) new OwoState(store.db).saveDex(dx);
+    return;
+  }
   remember(m.id, who.userId);
   // a server that switched the OwO helper off doesn't teach Texz anything
   if (!store.rules(m.guildId ?? null, 'owo').enabled) return;

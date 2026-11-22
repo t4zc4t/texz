@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { Battle, Huntbot, ListedWeapon, Team, WeaponCard, Zoo } from './read.js';
+import type { Battle, Dex, Huntbot, ListedWeapon, PetRow, Team, WeaponCard, Zoo } from './read.js';
 
 // What Texz knows about someone's OwO account, learnt from OwO's own replies. OwO accounts are the
 // same in every server, so this is per person, not per server. Nothing is ever wiped because it wasn't
@@ -28,6 +28,10 @@ function ready(db: DatabaseSync) {
     CREATE TABLE IF NOT EXISTS owo_huntbot (user_id TEXT PRIMARY KEY, traits TEXT NOT NULL, essence INTEGER, max_run TEXT, back_at INTEGER, at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS owo_bits (user_id TEXT NOT NULL, what TEXT NOT NULL, value TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, what));
     CREATE TABLE IF NOT EXISTS owo_battles (user_id TEXT NOT NULL, at INTEGER NOT NULL, result TEXT NOT NULL, turns INTEGER, xp INTEGER, streak INTEGER);
+    CREATE TABLE IF NOT EXISTS owo_dex (
+      animal TEXT PRIMARY KEY, rank TEXT, hp INTEGER, str INTEGER, pr INTEGER, wp INTEGER, mag INTEGER, mr INTEGER,
+      points INTEGER, sell INTEGER, essence INTEGER, aliases TEXT, at INTEGER NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS owo_battles_user ON owo_battles (user_id, at);
   `);
   tables.add(db);
@@ -59,6 +63,32 @@ export class OwoState {
           .run(userId, p.weapon.id, p.weapon.type, p.weapon.rarity, p.weapon.quality, JSON.stringify(p.weapon.passives), p.animal, now);
       }
     }
+  }
+
+  // the pets list has every pet but no weapons, so weapons on pets stay as the team card left them
+  savePets(userId: string, list: PetRow[], now = Date.now()) {
+    for (const p of list) {
+      this.db.prepare(`INSERT INTO owo_pets (user_id, animal, name, level, xp, xp_need, hp, wp, str, mag, pr, mr, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (user_id, animal) DO UPDATE SET name = excluded.name, level = excluded.level, xp = excluded.xp, xp_need = excluded.xp_need, hp = excluded.hp,
+        wp = excluded.wp, str = excluded.str, mag = excluded.mag, pr = excluded.pr, mr = excluded.mr, at = excluded.at`)
+        .run(userId, p.animal, p.name, p.level, p.xp, p.xpNeed, p.hp, p.wp, p.str, p.mag, p.pr, p.mr, now);
+    }
+  }
+
+  // base stats are the same for everyone, so one dex card teaches Texz that animal for the whole server
+  saveDex(d: Dex, now = Date.now()) {
+    this.db.prepare(`INSERT INTO owo_dex (animal, rank, hp, str, pr, wp, mag, mr, points, sell, essence, aliases, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (animal) DO UPDATE SET rank = excluded.rank, hp = excluded.hp, str = excluded.str, pr = excluded.pr, wp = excluded.wp, mag = excluded.mag,
+      mr = excluded.mr, points = excluded.points, sell = excluded.sell, essence = COALESCE(excluded.essence, owo_dex.essence), aliases = excluded.aliases, at = excluded.at`)
+      .run(d.animal, d.rank, d.hp, d.str, d.pr, d.wp, d.mag, d.mr, d.points, d.sell, d.essence, JSON.stringify(d.aliases), now);
+  }
+
+  dex(animal: string) {
+    return this.db.prepare('SELECT * FROM owo_dex WHERE animal = ?').get(animal) as { animal: string; rank: string | null; hp: number; str: number; pr: number; wp: number; mag: number; mr: number } | undefined;
+  }
+
+  dexCount() {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM owo_dex').get() as { n: number }).n;
   }
 
   saveWeaponCard(userId: string, w: WeaponCard, now = Date.now()) {
