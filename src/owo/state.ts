@@ -39,6 +39,7 @@ function ready(db: DatabaseSync) {
     CREATE TABLE IF NOT EXISTS owo_catches (user_id TEXT NOT NULL, at INTEGER NOT NULL, animal TEXT NOT NULL, rank TEXT, source TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS owo_catches_user ON owo_catches (user_id, at);
     CREATE TABLE IF NOT EXISTS owo_tally (user_id TEXT NOT NULL, source TEXT NOT NULL, rank TEXT NOT NULL, n INTEGER NOT NULL, since INTEGER NOT NULL, PRIMARY KEY (user_id, source, rank));
+    CREATE TABLE IF NOT EXISTS owo_emoji (name TEXT PRIMARY KEY, id TEXT NOT NULL, animated INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS owo_walls (id INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER, url TEXT NOT NULL, at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS owo_wall_owned (user_id TEXT NOT NULL, id INTEGER NOT NULL, equipped INTEGER DEFAULT 0, PRIMARY KEY (user_id, id));
   `);
@@ -254,6 +255,16 @@ export class OwoState {
     }
     for (const r of this.db.prepare('SELECT animal, rank FROM owo_dex WHERE rank IS NOT NULL').all() as { animal: string; rank: string }[]) if (!out.has(r.animal)) out.set(r.animal, r.rank.toLowerCase());
     return out;
+  }
+
+  // OwO's animal pictures are custom emojis: remember each one's id so it can be drawn later
+  learnEmojis(text: string) {
+    const up = this.db.prepare('INSERT INTO owo_emoji (name, id, animated) VALUES (?, ?, ?) ON CONFLICT (name) DO UPDATE SET id = excluded.id, animated = excluded.animated');
+    for (const m of text.matchAll(/<(a?):(\w+):(\d{15,20})>/g)) up.run(m[2], m[3], m[1] ? 1 : 0);
+  }
+
+  emojiOf(name: string) {
+    return this.db.prepare('SELECT id, animated FROM owo_emoji WHERE name = ?').get(name) as { id: string; animated: number } | undefined;
   }
 
   saveWallpaper(userId: string | null, w: Wallpaper, now = Date.now()) {

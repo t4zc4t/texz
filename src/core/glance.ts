@@ -139,7 +139,7 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
     sections: [
       ['📡 What I know', ['owosync']],
       ['🐾 Your account', ['owoteam', 'owozoo', 'owohb', 'owopings']],
-      ['📒 Logs and dailies', ['owobattles', 'owocatches', 'owocollect']],
+      ['📒 Logs and dailies', ['owobattles', 'owocatches', 'owocollect', 'owowall']],
       ['🗡️ Weapons', ['owoweapons', 'owoweapon', 'owodismantle', 'ororeroll']],
       ['🧹 Your data', ['owoforget']],
     ],

@@ -462,7 +462,7 @@ export async function onComponent(store: Store, i: Interaction) {
       }
       const ctx = fromComponent(i, opts, edit);
       // pick something that needs a name or a number, and a small form asks for it
-      if (needsInput(found.e)) {
+      if (needsInput(found.e) || opts.form) {
         const blocked = gate(store, ctx, found.hit.mod, found.hit.cmd);
         if (blocked) return run(store, ctx, found.hit.mod, found.hit.cmd, false);
         return i.showModal(askModal(found.e, i.user.id, opts.back ?? groups[found.hit.cmd.group ?? '']?.dashboard ?? 'help'));

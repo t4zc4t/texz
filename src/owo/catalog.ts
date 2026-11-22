@@ -48,3 +48,16 @@ export const RARE_RANKS = new Set(['mythic', 'special', 'patreon', 'legendary', 
 export function rankOfAnimal(animal: string, learnt: Map<string, string>): string | null {
   return PLAIN_RANK.get(animal) ?? learnt.get(animal) ?? null;
 }
+
+// OwO's wallpapers: number 2xx is the picture background/xx.png on OwO's image host.
+// Price in cowoncy when it's in the shop, 'gone' when it was taken out, 'event' for event-only ones
+export const WALL_HOST = 'https://owobotcdn.com/background/';
+export const wallUrl = (id: number) => `${WALL_HOST}${id - 200}.png`;
+export function wallPrice(id: number): number | 'gone' | 'event' | null {
+  if (id >= 201 && id <= 215) return 35_000;
+  if ((id >= 216 && id <= 231) || id === 254 || id === 255 || (id >= 275 && id <= 281)) return 'gone';
+  if ((id >= 232 && id <= 253) || (id >= 256 && id <= 274)) return 40_000;
+  if (id >= 282 && id <= 290) return 'event';
+  return null;
+}
+export const WALL_IDS = Array.from({ length: 90 }, (_, i) => 201 + i);

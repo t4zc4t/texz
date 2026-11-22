@@ -7,6 +7,7 @@ import { passiveOf, weaponOf } from '../owo/catalog.js';
 import { OwoState } from '../owo/state.js';
 import { dismantleList, rangesFrom, report, SHARDS } from '../owo/advice.js';
 import { baseOf, planFor, type Arm, type Candidate } from '../owo/team.js';
+import { WALL_IDS, wallPrice, wallUrl } from '../owo/catalog.js';
 import { battleStats, catchStats, collectibles, levelForecast } from '../owo/stats.js';
 import { wallCard } from '../owo/wallcard.js';
 import { fetchAvatar } from '../features/rankcard.js';
@@ -490,51 +491,105 @@ const collectCmd: Command = {
   },
 };
 
-// wallpaper pictures, kept a while so flipping back and forth doesn't fetch again
-const wallCache = new Map<string, Buffer>();
+// wallpaper and pet pictures, kept a while so flipping back and forth doesn't fetch again
+const picCache = new Map<string, Buffer>();
 async function picture(url: string) {
-  if (wallCache.has(url)) return wallCache.get(url)!;
+  if (picCache.has(url)) return picCache.get(url)!;
   const res = await fetch(url, { signal: AbortSignal.timeout(6000) }).catch(() => null);
   if (!res?.ok) return null;
   const b = Buffer.from(await res.arrayBuffer());
-  wallCache.set(url, b);
-  if (wallCache.size > 40) wallCache.delete(wallCache.keys().next().value!);
+  picCache.set(url, b);
+  if (picCache.size > 80) picCache.delete(picCache.keys().next().value!);
   return b;
 }
 
-// the wallpaper preview goes live once its look is signed off
-export const wallCmd: Command = {
+interface WallPrefs { title?: string; accent?: string; about?: string; level?: number }
+const HEX = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i;
+const hexOf = (x: string) => {
+  const m = x.trim().match(HEX);
+  if (!m) return null;
+  const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1];
+  return `#${h.toLowerCase()}`;
+};
+
+const wallCmd: Command = {
   name: 'owowall',
   as: 'wallpaper',
   group: 'owo',
-  data: new SlashCommandBuilder().setName('wallpaper').setDescription('Try an OwO wallpaper behind your profile before you buy it')
-    .addIntegerOption((o) => o.setName('id').setDescription('The wallpaper number from w shop wallpaper, like 205')).toJSON(),
-  text: { aliases: ['owp', 'owall'], noName: true, args: ['id'] },
+  data: new SlashCommandBuilder().setName('wallpaper').setDescription('See any OwO wallpaper behind your own profile before you buy it')
+    .addIntegerOption((o) => o.setName('id').setDescription('Wallpaper number, like 248').setMinValue(201).setMaxValue(999))
+    .addStringOption((o) => o.setName('title').setDescription('Your title under the name, - to clear').setMaxLength(60))
+    .addStringOption((o) => o.setName('accent').setDescription('Name and title colour as a hex code, like #c8283c').setMaxLength(7))
+    .addStringOption((o) => o.setName('about').setDescription('Your about me, - to clear').setMaxLength(150))
+    .addIntegerOption((o) => o.setName('level').setDescription('Your OwO level').setMinValue(1).setMaxValue(9999)).toJSON(),
+  text: { aliases: ['owp', 'owall'], noName: true, args: ['id', 'accent', 'title'] },
   run: async (ctx, store) => {
     const st = stateOf(store);
-    const all = st.wallpapers(ctx.userId);
-    if (!all.length) return ctx.reply('I haven\'t seen the wallpaper shop yet. Open `w shop wallpaper` and flip through the pages once, then I can show any of them behind your profile.');
-    const want = ctx.int('id') ?? Number(ctx.str('id') ?? NaN);
-    const w = all.find((x) => x.id === want) ?? all.find((x) => x.equipped) ?? all[0];
-    const n = all.indexOf(w);
-    const img = await picture(w.url);
-    if (!img) return ctx.reply(`I couldn't load the picture for \`${w.id}\` ${w.name}. Flip to it in \`w shop wallpaper\` once more and try again.`);
-    const team = st.teams(ctx.userId).sort((a, b) => b.at - a.at)[0];
-    const pets = new Map(st.pets(ctx.userId).map((p) => [p.animal, p.name]));
-    const z = st.zoo(ctx.userId);
+    const bits = st.bits(ctx.userId);
+    const prefs = { ...((bits.get('wallprefs')?.value ?? {}) as WallPrefs) };
+    // typed: tz o wp 248 #c8283c No Longer Human
+    let rawId = ctx.str('id');
+    let accent = ctx.str('accent');
+    let title = ctx.str('title');
+    if (ctx.viaText) {
+      // the number can be left out: tz o wp #c8283c No Longer Human
+      if (rawId && !/^\d+$/.test(rawId)) { title = [accent, title].filter(Boolean).join(' ') || null; accent = rawId; rawId = null; }
+      if (accent && !hexOf(accent)) { title = [accent, title].filter(Boolean).join(' '); accent = null; }
+    }
+    if (accent) {
+      const h = hexOf(accent);
+      if (!h) return ctx.reply('That colour needs to be a hex code, like `#c8283c`.');
+      prefs.accent = h;
+    }
+    if (title) prefs.title = title.trim() === '-' ? '' : title.trim();
+    const about = ctx.str('about');
+    if (about) prefs.about = about.trim() === '-' ? '' : about.trim();
+    const level = ctx.int('level');
+    if (level) prefs.level = level;
+    if (accent || title || about || level) st.setBit(ctx.userId, 'wallprefs', prefs);
+
+    // every wallpaper OwO has, plus any newer ones seen in the shop
+    const seen = new Map(st.wallpapers(ctx.userId).map((w) => [w.id, w]));
+    const ids = [...new Set([...WALL_IDS, ...seen.keys()])].sort((x, y) => x - y);
+    const want = ctx.int('id') ?? (Number(rawId) || null);
+    const last = bits.get('wall:last')?.value as number | undefined;
+    const equipped = [...seen.values()].find((w) => w.equipped)?.id;
+    const id = want ?? last ?? equipped ?? ids[0];
+    st.setBit(ctx.userId, 'wall:last', id);
+    const known = seen.get(id);
+    const img = await picture(known?.url ?? wallUrl(id));
+    if (!img) return ctx.reply(`There's no wallpaper \`${id}\` on OwO's side. They run from ${ids[0]} to ${ids[ids.length - 1]}.`);
+
+    // the profile bits Texz knows: name, avatar, cookies, the newest team and its pets' pictures
+    const team = st.teams(ctx.userId).sort((x, y) => y.at - x.at)[0];
+    const pets = new Map(st.pets(ctx.userId).map((p) => [p.animal, p]));
     const m = ctx.member ?? (ctx.guild ? await ctx.guild.members.fetch(ctx.userId).catch(() => null) : null);
     const avatar = m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null;
+    const petPics = await Promise.all((team?.animals ?? []).map(async (a) => {
+      const e = st.emojiOf(a);
+      return { image: e ? await picture(`https://cdn.discordapp.com/emojis/${e.id}.png?size=64`) : null, label: a, level: pets.get(a)?.level ?? null };
+    }));
+    const cookies = bits.get('cookies')?.value;
     const png = await wallCard({
-      wallpaper: img, avatar, name: ctx.displayName, title: 'your title', wallName: `${w.id} ${w.name}`,
-      team: (team?.animals ?? []).map((a) => pets.get(a) ?? a),
-      lines: [['Zoo points', z?.points ? z.points.toLocaleString() : '—'], ['Wallpaper', w.name]],
+      wallpaper: img, avatar,
+      name: (bits.get('owoName')?.value as string | undefined) ?? ctx.displayName,
+      title: prefs.title ?? '', accent: prefs.accent ?? '#ffffff',
+      level: prefs.level ?? null, rank: null, xp: null,
+      cookies: typeof cookies === 'number' ? cookies : null,
+      teamName: team?.name ?? 'Team', pets: petPics,
+      about: prefs.about ?? "I'm just a plain human.", partner: null,
     });
-    const nav = (to: number, label: string, emoji: string) => new ButtonBuilder().setCustomId(`nav|owowall|owner=${ctx.userId},id=${all[(to + all.length) % all.length].id}`).setLabel(label).setEmoji(emoji).setStyle(ButtonStyle.Secondary);
-    const price = w.owned ? (w.equipped ? 'yours, equipped' : 'yours') : w.price ? `${fmt(w.price)} cowoncy` : 'price not seen';
+
+    const n = ids.indexOf(id);
+    const nav = (to: number, label: string, emoji: string) => new ButtonBuilder().setCustomId(`nav|owowall|owner=${ctx.userId},id=${ids[(to + ids.length) % ids.length]}`).setLabel(label).setEmoji(emoji).setStyle(ButtonStyle.Secondary);
+    const edit = new ButtonBuilder().setCustomId(`nav|pick|owner=${ctx.userId},key=owowall,form=1,back=none`).setLabel('Title and colour').setEmoji('🎨').setStyle(ButtonStyle.Secondary);
+    const p = known?.price ?? wallPrice(id);
+    const price = known?.owned ? (known.equipped ? 'yours, on your profile' : 'yours') : typeof p === 'number' ? `${fmt(p)} cowoncy` : p === 'gone' ? 'not sold any more' : p === 'event' ? 'event only' : 'price not seen yet';
+    const how = known?.owned ? `\`w wallpaper\` to put it on` : typeof p === 'number' ? `\`w buy ${id}\` to buy it` : '';
     return ctx.reply({
-      content: `🖼️ **\`${w.id}\` ${w.name}** · ${price} · ${n + 1} of ${all.length} I've seen\n-# ${w.owned ? `\`w wallpaper\` to equip it` : `\`w buy ${w.id}\` to buy it`}. The boxes follow OwO's profile layout closely, not pixel for pixel.`,
-      files: [new AttachmentBuilder(png, { name: 'wallpaper.png' })],
-      components: all.length > 1 ? [row(nav(n - 1, 'Previous', '◀️'), nav(n + 1, 'Next', '▶️'))] : [],
+      content: `🖼️ **Wallpaper ${id}** · ${price}${how ? ` · ${how}` : ''}\n-# Level, rank and xp only show what you set here, OwO keeps those in its own picture. \`tz o wp ${id} #c8283c Your title\` sets the colour and title.`,
+      files: [new AttachmentBuilder(png, { name: `wallpaper-${id}.png` })],
+      components: [row(nav(n - 10, '−10', '⏪'), nav(n - 1, 'Previous', '◀️'), nav(n + 1, 'Next', '▶️'), nav(n + 10, '+10', '⏩'), edit)],
       embeds: [],
     });
   },
@@ -544,5 +599,5 @@ export const owo: Module = {
   name: 'owo',
   label: 'OwO helper',
   about: 'Learns your OwO account from your normal commands and helps with teams, weapons and HuntBot',
-  commands: [synced, team, weaponsCmd, weaponCmd, dismantle, rerollHelp, zooCmd, hbCmd, battlesCmd, catchesCmd, collectCmd, pingsCmd, forget],
+  commands: [synced, team, weaponsCmd, weaponCmd, dismantle, rerollHelp, zooCmd, hbCmd, battlesCmd, catchesCmd, collectCmd, wallCmd, pingsCmd, forget],
 };

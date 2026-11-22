@@ -7,6 +7,7 @@ import { OwoState } from '../src/owo/state.ts';
 import { apply } from '../src/owo/listen.ts';
 import { battleStats, catchStats, collectibles, levelForecast } from '../src/owo/stats.ts';
 import { wallCard } from '../src/owo/wallcard.ts';
+import { wallPrice, wallUrl } from '../src/owo/catalog.ts';
 import { createCanvas } from '@napi-rs/canvas';
 
 const raw = JSON.parse(readFileSync(new URL('./samples/owo/replies.json', import.meta.url), 'utf8')) as Record<string, { content: string; embeds: unknown[]; components: unknown[] }>;
@@ -69,8 +70,11 @@ test('wallpapers from the shop are kept, owned ones per person', async () => {
   const g = img.getContext('2d');
   g.fillStyle = '#336';
   g.fillRect(0, 0, 800, 450);
-  const png = await wallCard({ wallpaper: img.toBuffer('image/png'), avatar: null, name: 'Kunikida', title: 'your title', wallName: '205 Sakura Night', team: ['owl', 'deer'], lines: [['Zoo points', '1,234']] });
+  const png = await wallCard({ wallpaper: img.toBuffer('image/png'), avatar: null, name: 'Kunikida', title: 'Detective', accent: '#3fa7ff', level: 14, rank: null, xp: [10, 20], cookies: 3, teamName: 'Agency', pets: [{ image: null, label: 'owl', level: 3 }], about: 'Ideals first.', partner: 'Ranpo' });
   assert.ok(png.length > 1000);
+  assert.equal(wallUrl(248), 'https://owobotcdn.com/background/48.png');
+  assert.equal(wallPrice(201), 35_000);
+  assert.equal(wallPrice(220), 'gone');
 });
 
 import { mkdtempSync, writeFileSync } from 'node:fs';

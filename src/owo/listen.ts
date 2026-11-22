@@ -241,6 +241,7 @@ async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean)
   if (!who) {
     const dx = read.dex(s);
     if (dx && store.rules(m.guildId ?? null, 'owo').enabled) new OwoState(store.db).saveDex(dx);
+    if (store.rules(m.guildId ?? null, 'owo').enabled) new OwoState(store.db).learnEmojis(read.allText(s));
     // the wallpaper shop is the same for everyone too
     const wp = read.wallpaper(s);
     if (wp && store.rules(m.guildId ?? null, 'owo').enabled) new OwoState(store.db).saveWallpaper(null, wp);
@@ -250,6 +251,7 @@ async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean)
   // a server that switched the OwO helper off doesn't teach Texz anything
   if (!store.rules(m.guildId ?? null, 'owo').enabled) return;
   apply(new OwoState(store.db), who.userId, s, Date.now(), edited);
+  new OwoState(store.db).learnEmojis(read.allText(s));
   syncPings(store, who.userId, m.channelId);
   const cap = read.captcha(s);
   if (cap && !edited) await captchaAlarm(m.client, store, m, who.userId, cap.strike);
@@ -327,7 +329,16 @@ export function backfillHistory(store: Store) {
   console.log(`owo history: ${n} older battles and hunts added for ${people.length} ${people.length === 1 ? 'person' : 'people'}`);
 }
 
+// the animal emoji ids already in the saved log, read once
+function learnOldEmojis(store: Store) {
+  if (!debugFile || store.getKv('owo:emojis')) return;
+  const st = new OwoState(store.db);
+  for (const file of ['owo-debug.old.log', debugFile]) if (existsSync(file)) st.learnEmojis(readFileSync(file, 'utf8'));
+  store.setKv('owo:emojis', '1');
+}
+
 export function listenToOwo(client: Client, store: Store) {
+  try { learnOldEmojis(store); } catch (e) { report('owo emojis', e); }
   if (!store.getKv('owo:huntsLive')) store.setKv('owo:huntsLive', String(Date.now()));
   setTimeout(() => { try { backfill(store); } catch (e) { report('owo backfill', e); } }, 20_000);
   startOrders(client, store);
