@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { Battle, Dex, Reroll, RollSide, Huntbot, ListedWeapon, PetRow, Team, WeaponCard, Zoo } from './read.js';
+import type { Battle, Dex, Reroll, RollSide, Huntbot, ListedWeapon, PetRow, Team, Wallpaper, WeaponCard, Zoo } from './read.js';
 
 // What Texz knows about someone's OwO account, learnt from OwO's own replies. OwO accounts are the
 // same in every server, so this is per person, not per server. Nothing is ever wiped because it wasn't
@@ -36,6 +36,11 @@ function ready(db: DatabaseSync) {
       key TEXT PRIMARY KEY, weapon TEXT NOT NULL, rarity TEXT, quality REAL, wear TEXT, wp_cost INTEGER, rolls TEXT, passives TEXT, source TEXT, at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS owo_battles_user ON owo_battles (user_id, at);
+    CREATE TABLE IF NOT EXISTS owo_catches (user_id TEXT NOT NULL, at INTEGER NOT NULL, animal TEXT NOT NULL, rank TEXT, source TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS owo_catches_user ON owo_catches (user_id, at);
+    CREATE TABLE IF NOT EXISTS owo_tally (user_id TEXT NOT NULL, source TEXT NOT NULL, rank TEXT NOT NULL, n INTEGER NOT NULL, since INTEGER NOT NULL, PRIMARY KEY (user_id, source, rank));
+    CREATE TABLE IF NOT EXISTS owo_walls (id INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER, url TEXT NOT NULL, at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS owo_wall_owned (user_id TEXT NOT NULL, id INTEGER NOT NULL, equipped INTEGER DEFAULT 0, PRIMARY KEY (user_id, id));
   `);
   tables.add(db);
   return db;
@@ -219,7 +224,49 @@ export class OwoState {
   }
 
   forget(userId: string) {
-    for (const t of ['owo_pets', 'owo_teams', 'owo_weapons', 'owo_zoo', 'owo_huntbot', 'owo_bits', 'owo_battles']) this.db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(userId);
+    for (const t of ['owo_pets', 'owo_teams', 'owo_weapons', 'owo_zoo', 'owo_huntbot', 'owo_bits', 'owo_battles', 'owo_catches', 'owo_tally', 'owo_wall_owned']) this.db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(userId);
+  }
+
+  // what came in, rank by rank: hunts and HuntBot counted apart. Rare ones (mythic and up, or anything unusual) also go in the log
+  logCatches(userId: string, source: 'hunt' | 'huntbot', byRank: Record<string, number>, rare: { animal: string; rank: string | null }[], now = Date.now()) {
+    const up = this.db.prepare(`INSERT INTO owo_tally (user_id, source, rank, n, since) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (user_id, source, rank) DO UPDATE SET n = n + excluded.n, since = MIN(since, excluded.since)`);
+    for (const [rank, n] of Object.entries(byRank)) if (n > 0) up.run(userId, source, rank, n, now);
+    const add = this.db.prepare('INSERT INTO owo_catches (user_id, at, animal, rank, source) VALUES (?, ?, ?, ?, ?)');
+    for (const r of rare) add.run(userId, now, r.animal, r.rank, source);
+  }
+
+  catches(userId: string | null, limit = 15) {
+    return (userId
+      ? this.db.prepare('SELECT * FROM owo_catches WHERE user_id = ? ORDER BY at DESC LIMIT ?').all(userId, limit)
+      : this.db.prepare('SELECT * FROM owo_catches ORDER BY at DESC LIMIT ?').all(limit)) as { user_id: string; at: number; animal: string; rank: string | null; source: string }[];
+  }
+
+  tally(userId: string) {
+    return this.db.prepare('SELECT source, rank, n, since FROM owo_tally WHERE user_id = ?').all(userId) as { source: string; rank: string; n: number; since: number }[];
+  }
+
+  // every animal's rank Texz has seen, from anyone's zoo and the dex
+  rankMap() {
+    const out = new Map<string, string>();
+    for (const r of this.db.prepare('SELECT animals FROM owo_zoo').all() as { animals: string }[]) {
+      for (const a of JSON.parse(r.animals) as Zoo['animals']) out.set(a.animal, a.rank);
+    }
+    for (const r of this.db.prepare('SELECT animal, rank FROM owo_dex WHERE rank IS NOT NULL').all() as { animal: string; rank: string }[]) if (!out.has(r.animal)) out.set(r.animal, r.rank.toLowerCase());
+    return out;
+  }
+
+  saveWallpaper(userId: string | null, w: Wallpaper, now = Date.now()) {
+    this.db.prepare(`INSERT INTO owo_walls (id, name, price, url, at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (id) DO UPDATE SET name = excluded.name, price = COALESCE(excluded.price, owo_walls.price), url = excluded.url, at = excluded.at`).run(w.id, w.name, w.price, w.url, now);
+    if (!userId || !w.owned) return;
+    if (w.equipped) this.db.prepare('UPDATE owo_wall_owned SET equipped = 0 WHERE user_id = ?').run(userId);
+    this.db.prepare(`INSERT INTO owo_wall_owned (user_id, id, equipped) VALUES (?, ?, ?) ON CONFLICT (user_id, id) DO UPDATE SET equipped = MAX(owo_wall_owned.equipped, excluded.equipped)`).run(userId, w.id, w.equipped ? 1 : 0);
+  }
+
+  wallpapers(userId: string) {
+    return this.db.prepare(`SELECT w.*, o.user_id IS NOT NULL AS owned, COALESCE(o.equipped, 0) AS equipped FROM owo_walls w
+      LEFT JOIN owo_wall_owned o ON o.id = w.id AND o.user_id = ? ORDER BY w.id`).all(userId) as { id: number; name: string; price: number | null; url: string; at: number; owned: number; equipped: number }[];
   }
 
   // ---------- reads ----------

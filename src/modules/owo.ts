@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, type MessageActionRowComponentBuilder } from 'discord.js';
 import type { Ctx } from '../core/ctx.js';
 import type { Command, Module } from '../core/module.js';
 import type { Store } from '../db.js';
@@ -7,7 +7,10 @@ import { passiveOf, weaponOf } from '../owo/catalog.js';
 import { OwoState } from '../owo/state.js';
 import { dismantleList, rangesFrom, report, SHARDS } from '../owo/advice.js';
 import { baseOf, planFor, type Arm, type Candidate } from '../owo/team.js';
-import { PINGS, pingsOf, setPing, type PingKind } from '../owo/pings.js';
+import { battleStats, catchStats, collectibles, levelForecast } from '../owo/stats.js';
+import { wallCard } from '../owo/wallcard.js';
+import { fetchAvatar } from '../features/rankcard.js';
+import { PINGS, nextOwoDay, pingsOf, setPing, type PingKind } from '../owo/pings.js';
 import { advise, sellPlan, upgradeWord, type HbLevels, type HbTrait, type Hold } from '../owo/huntbot.js';
 
 // The Stray Dogs Den: everything Texz has learnt about your OwO account by watching your normal
@@ -42,7 +45,8 @@ export function owoGlance(store: Store, userId: string) {
   const known = [st.teams(userId).length ? 'team' : '', st.weapons(userId).length ? `${st.weapons(userId).length} weapons` : '', st.zoo(userId) ? 'zoo' : '', st.huntbot(userId) ? 'HuntBot' : ''].filter(Boolean);
   const hb = st.huntbot(userId);
   if (!known.length) return 'Nothing synced yet. Just play: `w team`, `w zoo`, `w hb` and `w weapon` teach me your account.';
-  return `📡 Synced: ${known.join(', ')}${hb?.backAt && hb.backAt > Date.now() ? ` · 🤖 HuntBot back ${at(hb.backAt)}` : ''}`;
+  const left = collectibles(st, userId).filter((x) => !x.done).length;
+  return `📡 Synced: ${known.join(', ')}${hb?.backAt && hb.backAt > Date.now() ? ` · 🤖 HuntBot back ${at(hb.backAt)}` : ''}${left ? ` · 🎀 ${left} collectible${left > 1 ? 's' : ''} left today` : ''}`;
 }
 
 const synced: Command = {
@@ -407,9 +411,138 @@ const pingsCmd: Command = {
   },
 };
 
+const when = (ms: number) => `<t:${Math.floor(ms / 1000)}:d>`;
+const pctOf = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '–');
+const rankWord: Record<string, string> = { mythic: 'mythic', unknown: 'not sure which rank' };
+
+const battlesCmd: Command = {
+  name: 'owobattles',
+  as: 'battles',
+  group: 'owo',
+  data: new SlashCommandBuilder().setName('battles').setDescription('Your battle log: win rate, xp, streaks and how long until each pet levels').toJSON(),
+  text: { aliases: ['obattles', 'obt'], noName: true },
+  run: async (ctx, store) => {
+    const st = stateOf(store);
+    const b = battleStats(st, ctx.userId);
+    if (!b.since) return ctx.reply('No battles logged yet. Just battle as normal, `w b`, and I\'ll keep the log.');
+    const fields = b.windows.filter((w, i) => w.n && (i === 0 || w.n !== b.windows[i - 1].n)).map((w) => ({
+      name: w.label,
+      value: `**${w.n.toLocaleString()}** battles · won **${pctOf(w.won, w.n)}**${w.lost ? ` · lost ${w.lost}` : ''}${w.tie ? ` · tied ${w.tie}` : ''}\n${Math.round(w.xp / w.n).toLocaleString()} xp a battle · ${(w.turns / w.n).toFixed(1)} turns\n-# about ${Math.round(w.n / w.days).toLocaleString()} battles and ${fmt(w.xp / w.days)} xp a day`,
+      inline: true,
+    }));
+    const f = levelForecast(st, ctx.userId);
+    if (f?.pets.length) fields.push({
+      name: '📈 Next level, at your pace',
+      value: f.pets.map((p) => `**${p.name}** Lvl ${p.level} → ${p.level + 1}: ${p.battles === Infinity ? '?' : `${p.battles.toLocaleString()} battles, ${days(p.days)}`}`).join('\n') + `\n-# From your last 7 days: ${Math.round(f.xpPer)} xp a battle, ${Math.round(f.perDay)} battles a day. HuntBot xp comes on top.`,
+      inline: false,
+    });
+    return ctx.reply({ embeds: [card({
+      kind: 'help', title: 'Your battle log', emoji: '⚔️', gif: 'off', line: '',
+      body: `🔥 Streak **${b.current ?? 0}** · best seen **${b.best ?? 0}**\n-# Logged since ${when(b.since)}, from OwO's battle messages.`,
+      fields,
+    })] });
+  },
+};
+
+const catchesCmd: Command = {
+  name: 'owocatches',
+  as: 'catches',
+  group: 'owo',
+  data: new SlashCommandBuilder().setName('catches').setDescription('Your catch log: rare catches, totals by rank and how lucky you have been').toJSON(),
+  text: { aliases: ['ocatches', 'oc'], noName: true },
+  run: async (ctx, store) => {
+    const st = stateOf(store);
+    const c = catchStats(st, ctx.userId);
+    const log = st.catches(ctx.userId, 12);
+    if (!c.since) return ctx.reply('Nothing caught yet that I\'ve seen. Hunt as normal, `w h`, and bring HuntBot home, I\'ll keep the log.');
+    const line = (list: [string, number][]) => list.map(([r, n]) => `${rankWord[r] ?? r} **${n.toLocaleString()}**`).join(' · ') || 'nothing yet';
+    const luck = (list: { rank: string; got: number; expected: number }[]) => list.map((x) => `${x.rank}: **${x.got}** vs ~${x.expected < 10 ? x.expected.toFixed(1) : Math.round(x.expected)} expected${x.expected >= 1 ? ` (${x.got >= x.expected ? 'lucky' : 'unlucky'}, ${Math.round((x.got / x.expected) * 100)}%)` : ''}`).join('\n');
+    const fields = [
+      { name: `🏹 Hunts · ${c.hunts.toLocaleString()}`, value: line(c.hunt), inline: false },
+      { name: '🤖 HuntBot', value: line(c.bot), inline: false },
+    ];
+    const lk = [luck(c.luckHunt) && `**Hunts**\n${luck(c.luckHunt)}`, luck(c.luckBot) && `**HuntBot**\n${luck(c.luckBot)}`].filter(Boolean).join('\n');
+    if (lk) fields.push({ name: '🍀 Luck against OwO\'s odds', value: lk.slice(0, 1024), inline: false });
+    fields.push({ name: '✨ Rare catches', value: log.map((x) => `${x.rank ? `**${x.rank}**` : '**?**'} ${x.animal} · ${x.source === 'huntbot' ? 'HuntBot' : 'hunt'} ${at(x.at)}`).join('\n').slice(0, 1024) || 'None yet, mythic and up land here.', inline: false });
+    return ctx.reply({ embeds: [card({
+      kind: 'help', title: 'Your catch log', emoji: '🏹', gif: 'off', line: '',
+      body: `-# Counted since ${when(c.since)} from your hunts and HuntBot returns. Gem and luck boosts aren't taken out, so luck reads a little high while they're on.`,
+      fields,
+    })] });
+  },
+};
+
+const collectCmd: Command = {
+  name: 'owocollect',
+  as: 'collectibles',
+  group: 'owo',
+  data: new SlashCommandBuilder().setName('collectibles').setDescription('All your daily collectibles at once: what is done today and your streaks').toJSON(),
+  text: { aliases: ['ocollect', 'ocl', 'collect'], noName: true },
+  run: async (ctx, store) => {
+    const list = collectibles(stateOf(store), ctx.userId);
+    if (!list.length) return ctx.reply('I haven\'t seen any collectibles yet. Use them once as normal (`w alastor`, `w run`, `w piku`...) and they show up here.');
+    const left = list.filter((x) => !x.done);
+    return ctx.reply({ embeds: [card({
+      kind: 'help', title: 'Your collectibles', emoji: '🎀', gif: 'off', line: '',
+      body: `${left.length ? `**${left.length}** still to do today: ${left.map((x) => `\`${x.cmd}\``).join(' · ')}` : 'All done for today.'}\n-# OwO's day resets <t:${Math.floor(nextOwoDay() / 1000)}:R>. Turn on the new-day ping in \`tz o pings\` for a nudge.`,
+      fields: list.map((x) => ({ name: `${x.done ? '✅' : '⬜'} ${x.label}`, value: `${x.line}\n-# \`${x.cmd}\``, inline: true })),
+    })] });
+  },
+};
+
+// wallpaper pictures, kept a while so flipping back and forth doesn't fetch again
+const wallCache = new Map<string, Buffer>();
+async function picture(url: string) {
+  if (wallCache.has(url)) return wallCache.get(url)!;
+  const res = await fetch(url, { signal: AbortSignal.timeout(6000) }).catch(() => null);
+  if (!res?.ok) return null;
+  const b = Buffer.from(await res.arrayBuffer());
+  wallCache.set(url, b);
+  if (wallCache.size > 40) wallCache.delete(wallCache.keys().next().value!);
+  return b;
+}
+
+// the wallpaper preview goes live once its look is signed off
+export const wallCmd: Command = {
+  name: 'owowall',
+  as: 'wallpaper',
+  group: 'owo',
+  data: new SlashCommandBuilder().setName('wallpaper').setDescription('Try an OwO wallpaper behind your profile before you buy it')
+    .addIntegerOption((o) => o.setName('id').setDescription('The wallpaper number from w shop wallpaper, like 205')).toJSON(),
+  text: { aliases: ['owp', 'owall'], noName: true, args: ['id'] },
+  run: async (ctx, store) => {
+    const st = stateOf(store);
+    const all = st.wallpapers(ctx.userId);
+    if (!all.length) return ctx.reply('I haven\'t seen the wallpaper shop yet. Open `w shop wallpaper` and flip through the pages once, then I can show any of them behind your profile.');
+    const want = ctx.int('id') ?? Number(ctx.str('id') ?? NaN);
+    const w = all.find((x) => x.id === want) ?? all.find((x) => x.equipped) ?? all[0];
+    const n = all.indexOf(w);
+    const img = await picture(w.url);
+    if (!img) return ctx.reply(`I couldn't load the picture for \`${w.id}\` ${w.name}. Flip to it in \`w shop wallpaper\` once more and try again.`);
+    const team = st.teams(ctx.userId).sort((a, b) => b.at - a.at)[0];
+    const pets = new Map(st.pets(ctx.userId).map((p) => [p.animal, p.name]));
+    const z = st.zoo(ctx.userId);
+    const m = ctx.member ?? (ctx.guild ? await ctx.guild.members.fetch(ctx.userId).catch(() => null) : null);
+    const avatar = m ? await fetchAvatar(m.displayAvatarURL({ extension: 'png', forceStatic: true, size: 256 })) : null;
+    const png = await wallCard({
+      wallpaper: img, avatar, name: ctx.displayName, title: 'your title', wallName: `${w.id} ${w.name}`,
+      team: (team?.animals ?? []).map((a) => pets.get(a) ?? a),
+      lines: [['Zoo points', z?.points ? z.points.toLocaleString() : '—'], ['Wallpaper', w.name]],
+    });
+    const nav = (to: number, label: string, emoji: string) => new ButtonBuilder().setCustomId(`nav|owowall|owner=${ctx.userId},id=${all[(to + all.length) % all.length].id}`).setLabel(label).setEmoji(emoji).setStyle(ButtonStyle.Secondary);
+    const price = w.owned ? (w.equipped ? 'yours, equipped' : 'yours') : w.price ? `${fmt(w.price)} cowoncy` : 'price not seen';
+    return ctx.reply({
+      content: `🖼️ **\`${w.id}\` ${w.name}** · ${price} · ${n + 1} of ${all.length} I've seen\n-# ${w.owned ? `\`w wallpaper\` to equip it` : `\`w buy ${w.id}\` to buy it`}. The boxes follow OwO's profile layout closely, not pixel for pixel.`,
+      files: [new AttachmentBuilder(png, { name: 'wallpaper.png' })],
+      components: all.length > 1 ? [row(nav(n - 1, 'Previous', '◀️'), nav(n + 1, 'Next', '▶️'))] : [],
+      embeds: [],
+    });
+  },
+};
+
 export const owo: Module = {
   name: 'owo',
   label: 'OwO helper',
   about: 'Learns your OwO account from your normal commands and helps with teams, weapons and HuntBot',
-  commands: [synced, team, weaponsCmd, weaponCmd, dismantle, rerollHelp, zooCmd, hbCmd, pingsCmd, forget],
+  commands: [synced, team, weaponsCmd, weaponCmd, dismantle, rerollHelp, zooCmd, hbCmd, battlesCmd, catchesCmd, collectCmd, pingsCmd, forget],
 };

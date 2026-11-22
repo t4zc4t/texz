@@ -8,6 +8,7 @@ import { rangesFrom, verdict } from './advice.js';
 import { card } from '../theme.js';
 import { startOrders } from './orders.js';
 import { captchaAlarm, rearmDays, syncPings } from './pings.js';
+import { RARE_RANKS, rankOfAnimal } from './catalog.js';
 
 // Texz only ever reads here. It never sends OwO commands, presses OwO's buttons or touches captchas.
 
@@ -32,6 +33,8 @@ const names: Record<string, string> = {
   quest: 'quest', q: 'quest', checklist: 'checklist', cl: 'checklist',
   cowoncy: 'cash', cash: 'cash', money: 'cash', bal: 'cash',
   shop: 'shop', dex: 'dex', d: 'dex', pets: 'pets', pet: 'pets',
+  wallpaper: 'wallpaper', wp: 'wallpaper', wallpapers: 'wallpaper', background: 'wallpaper', backgrounds: 'wallpaper',
+  profile: 'profile', run: 'run', piku: 'piku', puppy: 'puppy', alastor: 'alastor', babyyoda: 'babyyoda',
 };
 
 export function owoCommand(content: string): { name: string; args: string } | null {
@@ -102,7 +105,21 @@ function keep(line: string) {
   } catch { /* the log is a nice to have */ }
 }
 
-export function apply(state: OwoState, userId: string, s: read.Said, now = Date.now()) {
+function tallyHunt(state: OwoState, userId: string, hu: read.Hunt, now: number) {
+  const learnt = state.rankMap();
+  const byRank: Record<string, number> = {};
+  const rare: { animal: string; rank: string | null }[] = [];
+  for (const a of hu.found) {
+    const r = rankOfAnimal(a, learnt);
+    byRank[r ?? 'unknown'] = (byRank[r ?? 'unknown'] ?? 0) + 1;
+    if (!r || RARE_RANKS.has(r)) rare.push({ animal: a, rank: r });
+  }
+  byRank.hunts = 1;
+  state.logCatches(userId, 'hunt', byRank, rare, now);
+}
+
+
+export function apply(state: OwoState, userId: string, s: read.Said, now = Date.now(), edited = false) {
   const seen: string[] = [];
   state.touch(userId, now);
   const t = read.team(s);
@@ -143,8 +160,26 @@ export function apply(state: OwoState, userId: string, s: read.Said, now = Date.
   if (h) { state.saveHuntbot(userId, h, now); seen.push('huntbot'); }
   const hn = read.huntbotNote(s);
   if (hn?.kind === 'sent' || hn?.kind === 'hunting') state.setHuntbotBack(userId, now + hn.backInMs);
-  if (hn?.kind === 'back') { state.setHuntbotBack(userId, null); state.addEssence(userId, hn.essence); }
-  const b = read.battle(s);
+  if (hn?.kind === 'back' && !edited) {
+    state.setHuntbotBack(userId, null);
+    state.addEssence(userId, hn.essence);
+    const rare = hn.caught.filter((c) => RARE_RANKS.has(c.rank)).flatMap((c) => Array.from({ length: Math.min(c.count, 20) }, () => ({ animal: c.animal, rank: c.rank })));
+    state.logCatches(userId, 'huntbot', hn.byRank, rare, now);
+    seen.push('catches');
+  }
+  // a hunt only counts once, OwO doesn't edit them but Discord can resend an edit
+  const hu = !edited ? read.hunt(s) : null;
+  if (hu?.found.length) {
+    tallyHunt(state, userId, hu, now);
+    const nm = read.addressee(s).name;
+    if (nm) state.setBit(userId, 'owoName', nm, now);
+    seen.push('catches');
+  }
+  const wp = read.wallpaper(s);
+  if (wp) { state.saveWallpaper(userId, wp, now); seen.push('wallpaper'); }
+  const b = !edited ? read.battle(s) : null;
+  // the name OwO calls them, so their older OwO history can be found in the saved log
+  if (b?.owner) state.setBit(userId, 'owoName', b.owner, now);
   if (b) {
     state.logBattle(userId, b, now);
     if (b.streak !== null) state.setBit(userId, 'streak', b.streak, now);
@@ -206,12 +241,15 @@ async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean)
   if (!who) {
     const dx = read.dex(s);
     if (dx && store.rules(m.guildId ?? null, 'owo').enabled) new OwoState(store.db).saveDex(dx);
+    // the wallpaper shop is the same for everyone too
+    const wp = read.wallpaper(s);
+    if (wp && store.rules(m.guildId ?? null, 'owo').enabled) new OwoState(store.db).saveWallpaper(null, wp);
     return;
   }
   remember(m.id, who.userId);
   // a server that switched the OwO helper off doesn't teach Texz anything
   if (!store.rules(m.guildId ?? null, 'owo').enabled) return;
-  apply(new OwoState(store.db), who.userId, s);
+  apply(new OwoState(store.db), who.userId, s, Date.now(), edited);
   syncPings(store, who.userId, m.channelId);
   const cap = read.captcha(s);
   if (cap && !edited) await captchaAlarm(m.client, store, m, who.userId, cap.strike);
@@ -243,10 +281,57 @@ function backfill(store: Store) {
   console.log(`owo backfill: ${n} weapon readings, ${st.samples().length} unique samples`);
 }
 
+// once per person, as soon as Texz knows the name OwO uses for them: their battles, hunts and collectibles
+// already sitting in the saved log go into their history, so the logs start full instead of empty
+export function backfillHistory(store: Store) {
+  if (!debugFile) return;
+  const st = new OwoState(store.db);
+  const people = (store.db.prepare("SELECT user_id, value FROM owo_bits WHERE what = 'owoName'").all() as { user_id: string; value: string }[])
+    .map((r) => ({ userId: r.user_id, name: JSON.parse(r.value) as string }))
+    .filter((p) => !st.bits(p.userId).get('histfill'));
+  if (!people.length) return;
+  const byName = new Map(people.map((p) => [p.name.toLowerCase(), p.userId]));
+  const live = new Map(people.map((p) => [p.userId, Math.min(...st.battles(p.userId).map((b) => b.at), Date.now())]));
+  // hunts have been counted live since this first went out, older ones come from the saved log
+  const huntsFrom = Number(store.getKv('owo:huntsLive') ?? Date.now());
+  const seen = new Set<string>();
+  let n = 0;
+  for (const file of ['owo-debug.old.log', debugFile]) {
+    if (!existsSync(file)) continue;
+    for (const line of readFileSync(file, 'utf8').split('\n')) {
+      if (!line) continue;
+      try {
+        const j = JSON.parse(line) as { at: string; edited?: boolean; embeds?: { id?: string }[] };
+        const at = Date.parse(j.at);
+        const s = read.said(j);
+        const b = read.battle(s);
+        if (b?.owner) {
+          const uid = byName.get(b.owner.toLowerCase());
+          const key = `b:${j.embeds?.[0]?.id ?? `${b.owner}|${s.embeds[0]?.footer}|${Math.floor(at / 60_000)}`}`;
+          // only what came before the live log started, never counted twice
+          if (uid && at < live.get(uid)! && !seen.has(key)) { seen.add(key); st.logBattle(uid, b, at); n++; }
+          continue;
+        }
+        const name = read.addressee(s).name?.toLowerCase();
+        const uid = name ? byName.get(name) : undefined;
+        if (!uid || j.edited) continue;
+        const key = `${j.at}|${s.content}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const hu = read.hunt(s);
+        if (hu?.found.length && at < huntsFrom) { tallyHunt(st, uid, hu, at); n++; }
+      } catch { /* a broken line is skipped */ }
+    }
+  }
+  for (const p of people) st.setBit(p.userId, 'histfill', Date.now());
+  console.log(`owo history: ${n} older battles and hunts added for ${people.length} ${people.length === 1 ? 'person' : 'people'}`);
+}
+
 export function listenToOwo(client: Client, store: Store) {
+  if (!store.getKv('owo:huntsLive')) store.setKv('owo:huntsLive', String(Date.now()));
   setTimeout(() => { try { backfill(store); } catch (e) { report('owo backfill', e); } }, 20_000);
   startOrders(client, store);
-  setInterval(() => { try { rearmDays(store); } catch (e) { report('owo pings', e); } }, 10 * 60_000);
+  setInterval(() => { try { rearmDays(store); backfillHistory(store); } catch (e) { report('owo pings', e); } }, 10 * 60_000);
   client.on(Events.MessageCreate, (m) => {
     if (!m.guildId) return;
     if (m.author.id === read.OWO_BOT_ID) return void onOwo(store, m, false).catch((e) => report('owo read', e));

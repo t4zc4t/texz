@@ -20,7 +20,7 @@ function text(store: Store, r: Reminder): EmbedBuilder | null {
     case 'owo:hb':
       return card({ kind: 'custom', title: 'Your HuntBot is back', emoji: '🤖', gif: 'off', body: 'Collect it and send it out again with `w hb`.\n-# `tz o hb` shows where the essence should go. `tz o pings` to change this.' });
     case 'owo:day':
-      return card({ kind: 'custom', title: 'A new OwO day', emoji: '🌅', gif: 'off', body: '`w daily` · `w cookie @someone` · `w quest` · `w checklist`\n-# `tz o pings` to change this.' });
+      return card({ kind: 'custom', title: 'A new OwO day', emoji: '🌅', gif: 'off', body: `\`w daily\` · \`w cookie @someone\` · \`w quest\` · \`w checklist\`${r.note ? `\nCollectibles: ${r.note}` : ''}\n-# \`tz o pings\` to change this.` });
     default:
       return r.note ? card({ kind: 'custom', title: 'Reminder', emoji: '📝', body: r.note }) : null;
   }
@@ -38,7 +38,7 @@ function line(store: Store, r: Reminder): string | null {
   switch (r.kind) {
     case 'custom': return `📝 ${say('customShort')} **${r.note}**`;
     case 'owo:hb': return '🤖 Your HuntBot is back, `w hb` to collect and send it again.';
-    case 'owo:day': return '🌅 New OwO day: `w daily` · `w cookie` · `w quest` · `w checklist`';
+    case 'owo:day': return `🌅 New OwO day: \`w daily\` · \`w cookie\` · \`w quest\` · \`w checklist\`${r.note ? ` · ${r.note}` : ''}`;
     default: return r.note ? `📝 ${r.note}` : null;
   }
 }

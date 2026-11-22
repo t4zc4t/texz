@@ -40,6 +40,12 @@ export function nextOwoDay(now = Date.now()) {
   return Math.floor(at / 1000) * 1000 + 60_000; // a minute late so OwO has really reset
 }
 
+// the collectibles someone keeps up, as the commands to type, for the new-day ping
+function dailies(st: OwoState, userId: string) {
+  const known = ['alastor', 'babyyoda', 'run', 'piku', 'puppy'];
+  return [...st.bits(userId).keys()].map((k) => k.split(':')).filter(([kind, g]) => (kind === 'pet' || kind === 'game') && known.includes(g)).map(([, g]) => `\`w ${g}\``).join(' · ');
+}
+
 // keep the queued reminders in line with what Texz knows: HuntBot's return time and the next OwO day
 export function syncPings(store: Store, userId: string, channelId: string | null, now = Date.now()) {
   const st = new OwoState(store.db);
@@ -49,7 +55,7 @@ export function syncPings(store: Store, userId: string, channelId: string | null
   if (want.hb && hb?.backAt && hb.backAt > now) {
     if (!queued || Math.abs(queued.due_at - hb.backAt) > 60_000) store.setReminder(userId, 'owo:hb', new Date(hb.backAt), '', channelId ?? queued?.channel_id ?? null);
   } else if (queued && !(hb?.backAt && hb.backAt > now)) store.deleteReminder(queued.id);
-  if (want.day && !store.reminderOf(userId, 'owo:day')) store.setReminder(userId, 'owo:day', new Date(nextOwoDay(now)), '', channelId ?? store.lastChannel(userId));
+  if (want.day && !store.reminderOf(userId, 'owo:day')) store.setReminder(userId, 'owo:day', new Date(nextOwoDay(now)), dailies(st, userId), channelId ?? store.lastChannel(userId));
 }
 
 // every opted-in person gets their next OwO day queued again after the last one went out
@@ -57,7 +63,7 @@ export function rearmDays(store: Store) {
   const rows = store.db.prepare("SELECT user_id, value FROM owo_bits WHERE what = 'pings'").all() as { user_id: string; value: string }[];
   for (const r of rows) {
     const p = JSON.parse(r.value) as Partial<Record<PingKind, boolean>>;
-    if (p.day && !store.reminderOf(r.user_id, 'owo:day')) store.setReminder(r.user_id, 'owo:day', new Date(nextOwoDay()), '', store.lastChannel(r.user_id));
+    if (p.day && !store.reminderOf(r.user_id, 'owo:day')) store.setReminder(r.user_id, 'owo:day', new Date(nextOwoDay()), dailies(new OwoState(store.db), r.user_id), store.lastChannel(r.user_id));
   }
 }
 

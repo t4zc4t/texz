@@ -31,3 +31,20 @@ export function passiveOf(icon: string): { name: string; rarity: string | null }
   if (m && PASSIVES[m[2]]) return { name: PASSIVES[m[2]], rarity: RARITY[m[1]] };
   return { name: PASSIVES[icon] ?? icon, rarity: null };
 }
+
+// the five animals of each plain rank, from OwO's animal list; everything rarer is a custom emoji learnt from zoos
+const PLAIN: Record<string, string[]> = {
+  common: ['bee', 'bug', 'snail', 'beetle', 'butterfly'],
+  uncommon: ['baby_chick', 'mouse2', 'rooster', 'rabbit2', 'chipmunk'],
+  rare: ['sheep', 'pig2', 'cow2', 'dog2', 'cat2'],
+  epic: ['crocodile', 'tiger2', 'penguin', 'elephant', 'whale'],
+  mythic: ['dragon', 'unicorn', 'snowman2', 'ghost', 'dove'],
+};
+const PLAIN_RANK = new Map(Object.entries(PLAIN).flatMap(([r, list]) => list.map((a) => [a, r] as const)));
+export const RANK_ORDER = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'special', 'gem', 'patreon', 'legendary', 'fabled', 'cpatreon', 'bot', 'distorted', 'hidden'];
+// mythic and everything beyond it is worth a line in the catch log
+export const RARE_RANKS = new Set(['mythic', 'special', 'patreon', 'legendary', 'fabled', 'cpatreon', 'bot', 'distorted', 'hidden']);
+
+export function rankOfAnimal(animal: string, learnt: Map<string, string>): string | null {
+  return PLAIN_RANK.get(animal) ?? learnt.get(animal) ?? null;
+}

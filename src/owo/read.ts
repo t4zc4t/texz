@@ -5,7 +5,7 @@
 export const OWO_BOT_ID = '408785106942164992';
 
 export interface Field { name: string; value: string }
-export interface Embedish { author?: string | null; title?: string | null; description?: string | null; fields?: Field[]; footer?: string | null }
+export interface Embedish { author?: string | null; title?: string | null; description?: string | null; fields?: Field[]; footer?: string | null; image?: string | null }
 export interface Said {
   content: string;
   embeds: Embedish[];
@@ -36,8 +36,8 @@ export function allText(s: Said): string {
 // turns a discord.js-style message JSON (content, embeds, components) into a Said
 export function said(raw: { content?: string | null; embeds?: unknown[]; components?: unknown[] }): Said {
   const embeds: Embedish[] = (raw.embeds ?? []).map((x) => {
-    const e = x as { author?: { name?: string }; title?: string; description?: string; fields?: Field[]; footer?: { text?: string } };
-    return { author: e.author?.name ?? null, title: e.title ?? null, description: e.description ?? null, fields: e.fields ?? [], footer: e.footer?.text ?? null };
+    const e = x as { author?: { name?: string }; title?: string; description?: string; fields?: Field[]; footer?: { text?: string }; image?: { url?: string } };
+    return { author: e.author?.name ?? null, title: e.title ?? null, description: e.description ?? null, fields: e.fields ?? [], footer: e.footer?.text ?? null, image: e.image?.url ?? null };
   });
   const blocks: string[] = [];
   const buttons: Said['buttons'] = [];
@@ -375,7 +375,7 @@ export function huntbot(s: Said): Huntbot | null {
 export type HuntbotNote =
   | { kind: 'sent'; spent: number; backInMs: number; animals: number; essence: number; xp: number }
   | { kind: 'hunting'; backInMs: number; percent: number; captured: number }
-  | { kind: 'back'; animals: number; essence: number; xp: number; byRank: Record<string, number> }
+  | { kind: 'back'; animals: number; essence: number; xp: number; byRank: Record<string, number>; caught: { animal: string; rank: string; count: number }[] }
   | { kind: 'password' };
 
 export function huntbotNote(s: Said): HuntbotNote | null {
@@ -388,14 +388,20 @@ export function huntbotNote(s: Said): HuntbotNote | null {
   const back = t.match(/I AM BACK WITH ([\d,]+) ANIMALS,[\s\S]*?([\d,]+) ESSENCE, AND ([\d,]+) EXPERIENCE/i);
   if (back) {
     const byRank: Record<string, number> = {};
+    const caught: { animal: string; rank: string; count: number }[] = [];
     for (const line of t.split('\n')) {
       const head = line.match(/^\s*<a?:(\w+):\d+>\s*\*\*\|/);
       if (!head) continue;
+      const rank = head[1].toLowerCase();
       let n = 0;
-      for (const m of line.matchAll(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g)) n += Number(unsup(m[0]));
-      byRank[head[1].toLowerCase()] = n;
+      for (const m of line.slice(head[0].length).matchAll(/(?:<a?:(\w+):\d+>|:(\w+):)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g)) {
+        const c = Number(unsup(m[3]));
+        n += c;
+        caught.push({ animal: m[1] ?? m[2], rank, count: c });
+      }
+      byRank[rank] = n;
     }
-    return { kind: 'back', animals: num(back[1]), essence: num(back[2]), xp: num(back[3]), byRank };
+    return { kind: 'back', animals: num(back[1]), essence: num(back[2]), xp: num(back[3]), byRank, caught };
   }
   return null;
 }
@@ -524,4 +530,19 @@ export function inventory(s: Said): Map<number, number> | null {
   const items = new Map<number, number>();
   for (const m of t.matchAll(/`(\d{3})`\s*<a?:\w+:\d+>\s*([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g)) items.set(Number(m[1]), Number(unsup(m[2])));
   return items;
+}
+
+// ---------- wallpapers ----------
+
+// a page of `w shop wallpaper` or `w wallpaper`: id, name, price (or owned) and the picture
+export interface Wallpaper { id: number; name: string; price: number | null; owned: boolean; equipped: boolean; url: string }
+
+export function wallpaper(s: Said): Wallpaper | null {
+  const e = s.embeds.find((x) => /OwO Shop: Wallpapers|'s wallpapers$/i.test(x.author ?? ''));
+  const m = e?.description?.match(/`(\d{3,})`\s*\*\*`?([^`*]+?)`?\*\*(?:`-*\s*([\w.]+)`)?/);
+  if (!e || !m || !e.image) return null;
+  const p = m[3] ?? '';
+  const mult = /k$/i.test(p) ? 1e3 : /m$/i.test(p) ? 1e6 : /b$/i.test(p) ? 1e9 : 1;
+  const price = /^[\d.]+[kmb]?$/i.test(p) ? Math.round(parseFloat(p) * mult) : null;
+  return { id: Number(m[1]), name: m[2].trim(), price, owned: /OWNED/i.test(p) || /'s wallpapers$/i.test(e.author ?? ''), equipped: /Currently Equipped/i.test(e.description ?? '') || e.description!.startsWith('*'), url: e.image };
 }
