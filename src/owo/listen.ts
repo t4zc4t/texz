@@ -7,6 +7,7 @@ import { OwoState } from './state.js';
 import { rangesFrom, verdict } from './advice.js';
 import { card } from '../theme.js';
 import { startOrders } from './orders.js';
+import { captchaAlarm, rearmDays, syncPings } from './pings.js';
 
 // Texz only ever reads here. It never sends OwO commands, presses OwO's buttons or touches captchas.
 
@@ -103,6 +104,7 @@ function keep(line: string) {
 
 export function apply(state: OwoState, userId: string, s: read.Said, now = Date.now()) {
   const seen: string[] = [];
+  state.touch(userId, now);
   const t = read.team(s);
   if (t?.pets.length) { state.saveTeam(userId, t, now); seen.push('team'); }
   const pl = read.pets(s);
@@ -141,7 +143,7 @@ export function apply(state: OwoState, userId: string, s: read.Said, now = Date.
   if (h) { state.saveHuntbot(userId, h, now); seen.push('huntbot'); }
   const hn = read.huntbotNote(s);
   if (hn?.kind === 'sent' || hn?.kind === 'hunting') state.setHuntbotBack(userId, now + hn.backInMs);
-  if (hn?.kind === 'back') state.setHuntbotBack(userId, null);
+  if (hn?.kind === 'back') { state.setHuntbotBack(userId, null); state.addEssence(userId, hn.essence); }
   const b = read.battle(s);
   if (b) {
     state.logBattle(userId, b, now);
@@ -153,7 +155,8 @@ export function apply(state: OwoState, userId: string, s: read.Said, now = Date.
     if (n.kind === 'cash') state.setBit(userId, 'cash', n.n, now);
     if (n.kind === 'cookies') state.setBit(userId, 'cookies', n.n, now);
     if (n.kind === 'pray') state.setBit(userId, 'luck', n.luck, now);
-    if (n.kind === 'upgrade') state.setTrait(userId, n.trait, n.level, n.progress, n.need);
+    if (n.kind === 'upgrade') { state.setTrait(userId, n.trait, n.level, n.progress, n.need); state.addEssence(userId, -n.essence); }
+    if (n.kind === 'sacrifice') state.addEssence(userId, n.essence);
     if (n.kind === 'pet') state.setBit(userId, `pet:${n.game}`, { streak: n.streak, resetsAt: n.resetsInMs !== null ? now + n.resetsInMs : null }, now);
     if (n.kind === 'minigame') state.setBit(userId, `game:${n.game}`, { done: n.done, of: n.of, total: n.total, out: n.out }, now);
     if (n.kind === 'checklist') state.setBit(userId, `board:${n.board}`, { claimable: n.claimable, claimed: n.claimed, allDone: n.allDone, resetsAt: n.resetsAt }, now);
@@ -209,6 +212,9 @@ async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean)
   // a server that switched the OwO helper off doesn't teach Texz anything
   if (!store.rules(m.guildId ?? null, 'owo').enabled) return;
   apply(new OwoState(store.db), who.userId, s);
+  syncPings(store, who.userId, m.channelId);
+  const cap = read.captcha(s);
+  if (cap && !edited) await captchaAlarm(m.client, store, m, who.userId, cap.strike);
   await rerollHelp(store, m, who.userId, s);
 }
 
@@ -240,6 +246,7 @@ function backfill(store: Store) {
 export function listenToOwo(client: Client, store: Store) {
   setTimeout(() => { try { backfill(store); } catch (e) { report('owo backfill', e); } }, 20_000);
   startOrders(client, store);
+  setInterval(() => { try { rearmDays(store); } catch (e) { report('owo pings', e); } }, 10 * 60_000);
   client.on(Events.MessageCreate, (m) => {
     if (!m.guildId) return;
     if (m.author.id === read.OWO_BOT_ID) return void onOwo(store, m, false).catch((e) => report('owo read', e));

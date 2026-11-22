@@ -9,10 +9,13 @@ type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
 
 // reminder types that can each go to DM or a channel
-export const routable = ['custom', 'anime'] as const;
-const customName = { label: 'My own', emoji: '📝', about: 'reminders you set yourself' };
-const animeName = { label: 'Episode alerts', emoji: '📺', about: 'new episodes of shows you follow' };
-const nameOf = (k: string) => (k === 'custom' ? customName : animeName);
+export const routable = ['custom', 'anime', 'owo'] as const;
+const names: Record<string, { label: string; emoji: string; about: string }> = {
+  custom: { label: 'My own', emoji: '📝', about: 'reminders you set yourself' },
+  anime: { label: 'Episode alerts', emoji: '📺', about: 'new episodes of shows you follow' },
+  owo: { label: 'OwO pings', emoji: '🔔', about: 'HuntBot back and new OwO day' },
+};
+const nameOf = (k: string) => names[k] ?? names.custom;
 
 export const autodeleteChoices = [
   { label: 'Keep them', value: 0 },

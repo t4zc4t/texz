@@ -7,6 +7,8 @@ import { passiveOf, weaponOf } from '../owo/catalog.js';
 import { OwoState } from '../owo/state.js';
 import { dismantleList, rangesFrom, report, SHARDS } from '../owo/advice.js';
 import { baseOf, planFor, type Arm, type Candidate } from '../owo/team.js';
+import { PINGS, pingsOf, setPing, type PingKind } from '../owo/pings.js';
+import { advise, sellPlan, upgradeWord, type HbLevels, type HbTrait, type Hold } from '../owo/huntbot.js';
 
 // The Stray Dogs Den: everything Texz has learnt about your OwO account by watching your normal
 // OwO commands. It only reads and advises, it never plays for you.
@@ -184,22 +186,91 @@ const zooCmd: Command = {
   },
 };
 
+const fmt = (n: number) => Math.round(n).toLocaleString();
+const days = (d: number) => (d < 1 ? 'under a day' : d < 1.5 ? 'about a day' : `about ${Math.round(d)} days`);
+
+// the HuntBot desk: where the essence should go, what to leave alone, and what to sell or sacrifice
+export function huntbotAdvice(store: Store, userId: string) {
+  const st = stateOf(store);
+  const h = st.huntbot(userId);
+  if (!h) return null;
+  const T = h.traits;
+  if (!T.efficiency || !T.duration || !T.cost || !T.gain) return { h, plan: null, lines: ['I need the full card for advice, run `w hb` once.'] };
+  const levels: HbLevels = { efficiency: T.efficiency.level, duration: T.duration.level, cost: T.cost.level, gain: T.gain.level, experience: T.experience?.level ?? 0, radar: T.radar?.level ?? 0 };
+  const progress = Object.fromEntries(Object.entries(T).map(([k, v]) => [k, { progress: v!.progress, need: v!.need }])) as Partial<Record<HbTrait, { progress: number; need: number }>>;
+  const bits = st.bits(userId);
+  const cashBit = bits.get('cash');
+  // cowoncy goes up and down all day, a reading older than a day says little
+  const cash = cashBit && Date.now() - cashBit.at < 86_400_000 ? Number(cashBit.value) : null;
+  const plan = advise({ levels, progress, essence: h.essence ?? 0, cash, checks: st.seenTimes(userId) });
+  return { h, plan, cash, lines: [] as string[] };
+}
+
+function sellLines(store: Store, userId: string, cash: number | null, runCost: number) {
+  const st = stateOf(store);
+  const z = st.zoo(userId);
+  if (!z) return ['Run `w zoo` once and I\'ll split your animals into sell and sacrifice.'];
+  const byRank = new Map<string, Hold>();
+  for (const a of z.animals) {
+    const r = byRank.get(a.rank) ?? { rank: a.rank, count: 0, animals: [] };
+    r.count += a.count;
+    r.animals.push({ animal: a.animal, count: a.count });
+    byRank.set(a.rank, r);
+  }
+  const keep = new Set(st.teams(userId).flatMap((t) => t.animals));
+  const p = sellPlan([...byRank.values()], cash, runCost, keep);
+  const cmd = (verb: string, list: { rank: string; only?: { animal: string; count: number }[] }[]) => {
+    const whole = list.filter((x) => !x.only).map((x) => x.rank);
+    const one = list.flatMap((x) => x.only ?? []).slice(0, 6).map((a) => `\`w ${verb} ${a.animal} all\``);
+    return [whole.length ? `\`w ${verb} ${whole.join(' ')}\`` : '', ...one].filter(Boolean).join(' · ');
+  };
+  const out: string[] = [];
+  if (cash === null) out.push('-# I don\'t know your cowoncy, so nothing is set aside to sell. Run `w cash` first if money is tight.');
+  if (p.sell.length) out.push(`💰 Sell for **${fmt(p.sell.reduce((s, x) => s + x.cowoncy, 0))}** cowoncy, enough for your next full run (${fmt(runCost)}): ${cmd('sell', p.sell)}`);
+  if (p.sacrifice.length) out.push(`🔥 Sacrifice for **${fmt(p.sacrifice.reduce((s, x) => s + x.essence, 0))}** essence: ${cmd('sacrifice', p.sacrifice)}`);
+  if (p.keep.length) out.push(`-# Kept back because they're on your team: ${p.keep.slice(0, 8).join(', ')}`);
+  if (!p.sell.length && !p.sacrifice.length) out.push('Nothing worth selling or sacrificing in your last zoo.');
+  out.push(`-# From your zoo ${at(z.at)}. Only plain ranks, gems, patreon and special animals are never touched.`);
+  return out;
+}
+
 const hbCmd: Command = {
   name: 'owohb',
   as: 'huntbot',
   group: 'owo',
-  data: new SlashCommandBuilder().setName('huntbot').setDescription('Your HuntBot: trait levels, essence, the biggest run and when it is back').toJSON(),
+  data: new SlashCommandBuilder().setName('huntbot').setDescription('Your HuntBot: what to upgrade next, what to skip, what to sell or sacrifice').toJSON(),
   text: { aliases: ['ohb'], noName: true },
   run: async (ctx, store) => {
-    const h = stateOf(store).huntbot(ctx.userId);
-    if (!h) return ctx.reply('No HuntBot yet. Run `w hb` once and I\'ll have it.');
-    const fields = Object.entries(h.traits).map(([k, t]) => ({ name: cap(k), value: `Lvl **${t!.level}**${t!.value ? ` · ${t!.value}` : ''}\n-# ${pct(t!.progress, t!.need)}% to the next level`, inline: true }));
-    const run = h.maxRun ? `\nBiggest run: **${h.maxRun.animals.toLocaleString()}** animals, ${h.maxRun.essence.toLocaleString()} essence and ${h.maxRun.xp.toLocaleString()} xp for ${h.maxRun.cost.toLocaleString()} cowoncy` : '';
+    const a = huntbotAdvice(store, ctx.userId);
+    if (!a) return ctx.reply('No HuntBot yet. Run `w hb` once and I\'ll have it.');
+    const { h, plan } = a;
+    const status = `${h.backAt && h.backAt > Date.now() ? `🏃 Out hunting, back ${at(h.backAt)}` : '🏠 Home'} · essence **${fmt(h.essence ?? 0)}**`;
+    if (!plan) return ctx.reply({ embeds: [card({ kind: 'help', title: 'Your HuntBot', emoji: '🤖', gif: 'off', line: '', body: `${status}\n${a.lines.join('\n')}` })] });
+    const levels = Object.entries(h.traits).map(([k, t]) => `${cap(k)} **${t!.level}**`).join(' · ');
+    const pace = plan.measured
+      ? `Hunting about **${plan.hoursPerDay.toFixed(1)}h** a day from ~${plan.sendsPerDay.toFixed(1)} sends, worked out from when you were actually around`
+      : `Hunting about **${plan.hoursPerDay.toFixed(1)}h** a day, assuming you look in every 8 hours. Two days of you using OwO and I'll use your real times`;
+
+    const spend = plan.spend.length
+      ? plan.spend.map((s) => `\`w upgrade ${upgradeWord(s.trait)} ${s.essence}\` → ${s.levels ? `**+${s.levels}** level${s.levels > 1 ? 's' : ''}` : 'progress towards the next level'}`).join('\n')
+      : plan.ranked[0]
+        ? `Save up. **${cap(plan.ranked[0].trait)}** is next, ${fmt(plan.ranked[0].cost)} essence, ${days(plan.ranked[0].cost / Math.max(1, plan.essencePerDay))} of hunting and sacrificing.`
+        : 'Nothing pays back in under half a year right now, keep the essence.';
+    const best = plan.ranked.slice(0, 3).map((p, i) => `${i + 1}. **${cap(p.trait)}** · ${fmt(p.cost)} essence · +${fmt(p.perDay)}/day · pays back in ${days(p.payback)}\n-# ${p.why}`).join('\n') || 'Nothing worth it yet.';
+    const skip = plan.skip.map((s) => `**${cap(s.trait)}**: ${s.why}`).join('\n');
+    const xp = plan.xp ? `\n-# Exp only levels pets: next level ${fmt(plan.xp.cost)} essence for +${fmt(plan.xp.perDay)} pet xp a day. Worth it while your team is still catching up, not for essence.` : '';
+    const cashLine = plan.cashShort ? `\n⚠️ Your ${fmt(a.cash ?? 0)} cowoncy can't pay for a full run (${fmt(plan.runCost)}). Sell first, upgrades that make runs bigger won't help until then.` : '';
+
     return ctx.reply({ embeds: [card({
       kind: 'help', title: 'Your HuntBot', emoji: '🤖', gif: 'off', line: '',
-      body: `${h.backAt && h.backAt > Date.now() ? `🏃 Out hunting, back ${at(h.backAt)}` : '🏠 Home'} · essence **${(h.essence ?? 0).toLocaleString()}**${run}\n-# Seen ${at(h.at)}. Upgrade advice comes here soon.`,
-      fields,
-    })] });
+      body: `${status} · card seen ${at(h.at)}\n${levels}\n-# ${pace}.${cashLine}`,
+      fields: [
+        { name: '🔧 Spend your essence', value: spend.slice(0, 1024) },
+        { name: '📈 Best next levels', value: (best + xp).slice(0, 1024) },
+        { name: '🚫 Leave alone for now', value: skip.slice(0, 1024) || 'Nothing.' },
+        { name: '💱 Sell or sacrifice', value: sellLines(store, ctx.userId, a.cash ?? null, plan.runCost).join('\n').slice(0, 1024) },
+      ],
+    }).setFooter({ text: 'Values count only animals common enough to plan on, fabled and hidden are a bonus' })] });
   },
 };
 
@@ -306,9 +377,39 @@ const rerollHelp: Command = {
   },
 };
 
+const pingsCmd: Command = {
+  name: 'owopings',
+  as: 'pings',
+  group: 'owo',
+  data: new SlashCommandBuilder().setName('pings').setDescription('Pick your OwO nudges: HuntBot back, new OwO day, captcha alarm')
+    .addStringOption((o) => o.setName('what').setDescription('Which one').addChoices(...Object.entries(PINGS).map(([k, v]) => ({ name: v.label, value: k }))))
+    .addStringOption((o) => o.setName('state').setDescription('On or off').addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })).toJSON(),
+  text: { aliases: ['opings', 'oping'], noName: true, args: ['what', 'state'] },
+  run: async (ctx, store) => {
+    const st = stateOf(store);
+    const what = ctx.str('what')?.toLowerCase() as PingKind | undefined;
+    if (what && what in PINGS) {
+      const now = pingsOf(st, ctx.userId)[what];
+      const to = ctx.str('state') ? ctx.str('state')!.toLowerCase() !== 'off' : !now;
+      setPing(store, ctx.userId, what, to);
+    }
+    const on = pingsOf(st, ctx.userId);
+    const s = store.settings(ctx.userId);
+    const where = (s.routes.owo ?? s.delivery) === 'dm' ? 'by DM' : 'in the channel you last used OwO in';
+    const lines = (Object.keys(PINGS) as PingKind[]).map((k) => `${PINGS[k].emoji} **${PINGS[k].label}** · ${on[k] ? 'on' : 'off'}\n-# ${PINGS[k].about}`);
+    const buttons = (Object.keys(PINGS) as PingKind[]).map((k) => new ButtonBuilder()
+      .setCustomId(`nav|owopings|owner=${ctx.userId},what=${k},state=${on[k] ? 'off' : 'on'}`)
+      .setLabel(PINGS[k].label).setEmoji(PINGS[k].emoji).setStyle(on[k] ? ButtonStyle.Success : ButtonStyle.Secondary));
+    return ctx.reply({
+      embeds: [card({ kind: 'help', title: 'Your OwO pings', emoji: '🔔', gif: 'off', line: '', body: `${lines.join('\n')}\n\n-# Green is on, tap to switch. They come ${where} and wait out your quiet hours, except the captcha alarm, which can't wait.` })],
+      components: [row(...buttons)],
+    });
+  },
+};
+
 export const owo: Module = {
   name: 'owo',
   label: 'OwO helper',
   about: 'Learns your OwO account from your normal commands and helps with teams, weapons and HuntBot',
-  commands: [synced, team, weaponsCmd, weaponCmd, dismantle, rerollHelp, zooCmd, hbCmd, forget],
+  commands: [synced, team, weaponsCmd, weaponCmd, dismantle, rerollHelp, zooCmd, hbCmd, pingsCmd, forget],
 };

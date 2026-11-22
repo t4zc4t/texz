@@ -17,13 +17,17 @@ function text(store: Store, r: Reminder): EmbedBuilder | null {
   switch (r.kind) {
     case 'custom':
       return card({ kind: 'custom', title: 'A promise kept', emoji: '📝', body: `**${r.note}**` });
+    case 'owo:hb':
+      return card({ kind: 'custom', title: 'Your HuntBot is back', emoji: '🤖', gif: 'off', body: 'Collect it and send it out again with `w hb`.\n-# `tz o hb` shows where the essence should go. `tz o pings` to change this.' });
+    case 'owo:day':
+      return card({ kind: 'custom', title: 'A new OwO day', emoji: '🌅', gif: 'off', body: '`w daily` · `w cookie @someone` · `w quest` · `w checklist`\n-# `tz o pings` to change this.' });
     default:
       return r.note ? card({ kind: 'custom', title: 'Reminder', emoji: '📝', body: r.note }) : null;
   }
 }
 
 // reminder kind -> the setting that decides where it goes
-export const routeOf: Record<string, string> = { custom: 'custom' };
+export const routeOf: Record<string, string> = { custom: 'custom', 'owo:hb': 'owo', 'owo:day': 'owo' };
 
 // channel reminders are a short line with a ping, not a whole card
 function line(store: Store, r: Reminder): string | null {
@@ -33,6 +37,8 @@ function line(store: Store, r: Reminder): string | null {
   }
   switch (r.kind) {
     case 'custom': return `📝 ${say('customShort')} **${r.note}**`;
+    case 'owo:hb': return '🤖 Your HuntBot is back, `w hb` to collect and send it again.';
+    case 'owo:day': return '🌅 New OwO day: `w daily` · `w cookie` · `w quest` · `w checklist`';
     default: return r.note ? `📝 ${r.note}` : null;
   }
 }
@@ -69,8 +75,8 @@ async function deliver(client: Client, store: Store, r: Reminder, body: EmbedBui
 }
 
 export function startScheduler(client: Client, store: Store) {
-  // the OwO reminders are gone, anything of theirs still queued goes with them
-  store.db.prepare("DELETE FROM reminders WHERE kind != 'custom' AND kind NOT LIKE 'ep:%'").run();
+  // reminder kinds from the old OwO tracker are gone, anything of theirs still queued goes with them
+  store.db.prepare("DELETE FROM reminders WHERE kind != 'custom' AND kind NOT LIKE 'ep:%' AND kind NOT LIKE 'owo:%'").run();
   const tick = async () => {
     // no internet, nothing would arrive, the reminders wait for the connection to come back
     if (isOffline() || !client.isReady()) return;

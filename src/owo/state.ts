@@ -182,10 +182,29 @@ export class OwoState {
   }
 
   setTrait(userId: string, trait: string, level: number, progress: number, need: number) {
+    // OwO calls it exp in the upgrade reply and Experience on the card
+    if (trait === 'exp' || trait === 'xp') trait = 'experience';
     const h = this.huntbot(userId);
     const traits = { ...(h?.traits ?? {}), [trait]: { ...(h?.traits?.[trait as keyof Huntbot['traits']] ?? { value: '' }), level, progress, need } };
     if (h) this.db.prepare('UPDATE owo_huntbot SET traits = ? WHERE user_id = ?').run(JSON.stringify(traits), userId);
     else this.db.prepare('INSERT INTO owo_huntbot (user_id, traits, at) VALUES (?, ?, ?)').run(userId, JSON.stringify(traits), Date.now());
+  }
+
+  // essence moves with upgrades, sacrifices and runs coming home, between looks at the card
+  addEssence(userId: string, delta: number) {
+    this.db.prepare('UPDATE owo_huntbot SET essence = MAX(0, COALESCE(essence, 0) + ?) WHERE user_id = ?').run(delta, userId);
+  }
+
+  // when someone was around using OwO, kept two weeks, for working out how often the HuntBot gets sent
+  touch(userId: string, now = Date.now()) {
+    const old = (this.bits(userId).get('seen')?.value as number[] | undefined) ?? [];
+    if (old.length && now - old[old.length - 1] < 5 * 60_000) return;
+    this.setBit(userId, 'seen', [...old.filter((t) => t > now - 14 * 86_400_000), now], now);
+  }
+
+  seenTimes(userId: string) {
+    const seen = (this.bits(userId).get('seen')?.value as number[] | undefined) ?? [];
+    return [...seen, ...this.battles(userId, Date.now() - 14 * 86_400_000).map((b) => b.at)].sort((a, b) => a - b);
   }
 
   setBit(userId: string, what: string, value: unknown, now = Date.now()) {
