@@ -65,7 +65,7 @@ const work: Command = {
     store.pay(ctx.guildId, ctx.userId, got);
     stamp(store, 'work', ctx.guildId, ctx.userId);
     (ctx.counted ??= []).push('work');
-    return ctx.reply({ embeds: [card('💼 Agency shift', `You ${pick(JOBS)}.\n**+${fmt(got)}**\n-# higher ranks get paid more · wallet ${fmt(wallet(store, ctx.guildId, ctx.userId))}`, WIN)], public: true });
+    return ctx.reply({ embeds: [card('💼 Agency shift', `You ${pick(JOBS)}.\n**+${fmt(got)}**\n-# wallet ${fmt(wallet(store, ctx.guildId, ctx.userId))}`, WIN)], public: true });
   },
 };
 
@@ -240,7 +240,7 @@ const bank: Command = {
       note = `📤 Took **${fmt(n)}** out.`;
     }
     saveVault(store, g, u, v);
-    const body = `${note ? `${note}\n\n` : ''}👛 Wallet **${fmt(wallet(store, g, u))}**\n🏦 Vault **${fmt(v.yen)}** / ${fmt(cap)}\n-# Vault yen can't be robbed and grows 1% a day. Ranks make it bigger. \`tz bank deposit all\` · \`tz bank withdraw 500\``;
+    const body = `${note ? `${note}\n\n` : ''}👛 Wallet **${fmt(wallet(store, g, u))}**\n🏦 Vault **${fmt(v.yen)}** / ${fmt(cap)}\n-# Safe from robbers · +1% a day`;
     return ctx.reply({ embeds: [card('🏦 Agency vault', body, PLAY)], temp: !note });
   },
 };
@@ -273,7 +273,7 @@ const rob: Command = {
       store.pay(g, target, -took);
       store.pay(g, ctx.userId, took);
       store.setKv(`robbed:${g}:${target}`, String(Date.now()));
-      return ctx.reply({ content: `🫳 <@${ctx.userId}> picked <@${target}>'s pocket for **${fmt(took)}**.\n-# Keep yen in \`tz bank\` and nobody can touch it.`, ping: [target], public: true });
+      return ctx.reply({ content: `🫳 <@${ctx.userId}> picked <@${target}>'s pocket for **${fmt(took)}**.`, ping: [target], public: true });
     }
     const fine = Math.max(100, Math.floor(mine * 0.15));
     store.pay(g, ctx.userId, -fine);

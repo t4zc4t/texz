@@ -24,7 +24,7 @@ test('a run longer than the gap between check-ins hunts less, not more', () => {
   assert.ok(huntHours(checks, 6.1)!.perDay < huntHours(checks, 6)!.perDay);
   const p = advise({ levels: { ...lv, duration: 55 }, essence: 50_000, cash: null, checks, now });
   assert.ok(!p.ranked.some((r) => r.trait === 'duration'));
-  assert.match(p.skip.find((s) => s.trait === 'duration')!.why, /LESS/);
+  assert.match(p.skip.find((s) => s.trait === 'duration')!.why, /less/);
   assert.ok(!p.spend.some((s) => s.trait === 'duration'));
 });
 

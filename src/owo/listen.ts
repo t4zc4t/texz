@@ -209,9 +209,9 @@ const helpers = new Map<string, Message>();
 export function rerollCard(state: OwoState, r: read.Reroll) {
   const v = verdict(rangesFrom(state), r, r.shards);
   const tag = v.pick === 'confirm' ? '✅' : v.pick === 'cancel' ? '❌' : '🤔';
-  const body = [`${tag} ${v.headline}`, '', ...v.lines, '', v.stop ? `🛑 Time to stop: ${v.odds ?? 'a better roll is very unlikely.'}` : v.odds ?? ''].filter((x, i, all) => x || all[i - 1]);
+  const body = [`${tag} ${v.headline}`, '', ...v.lines, '', v.stop ? `🛑 Stop: ${v.odds ?? 'a better roll is very unlikely'}` : v.odds ?? ''].filter((x, i, all) => x || all[i - 1]);
   const e = card({ kind: 'help', title: `Reroll check · ${r.name} \`${r.id}\``, emoji: '🎲', gif: 'off', line: '', body: body.join('\n') });
-  e.setFooter({ text: `Try ${r.attempts ?? '?'} · Texz only reads OwO, the buttons are yours · tz o reroll off to stop these` });
+  e.setFooter({ text: `Try ${r.attempts ?? '?'}` });
   return e;
 }
 

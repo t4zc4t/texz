@@ -78,7 +78,7 @@ export async function captchaAlarm(client: Client, store: Store, m: Message | Pa
   const where = m.guildId ? `https://discord.com/channels/${m.guildId}/${m.channelId}/${m.id}` : '';
   const body = card({
     kind: 'custom', title: 'OwO wants a captcha', emoji: '🚨', gif: 'off', line: '',
-    body: `Solve it within about **10 minutes** or OwO can ban your account.${strike ? `\nThis is warning **${strike}/5**.` : ''}${where ? `\n[Jump to it](${where})` : ''}\n-# I never touch captchas, it has to be you. \`tz o pings\` to change this.`,
+    body: `Solve it within **10 minutes**.${strike ? ` Warning **${strike}/5**.` : ''}${where ? `\n[Jump to it](${where})` : ''}`,
   });
   await urgent(client, store, userId, m.channelId, body);
 }

@@ -33,24 +33,47 @@ export function battleStats(st: OwoState, userId: string, now = Date.now()) {
   return { windows: out, current: all[0]?.streak ?? null, best: streaks.length ? Math.max(...streaks) : null, since: all.length ? all[all.length - 1].at : null };
 }
 
-// how long each pet on your newest team needs to its next level, at your own pace
-export function levelForecast(st: OwoState, userId: string, now = Date.now()) {
+const xpFor = (lvl: number) => lvl ** 4 + 1000;
+
+export interface Pace { xpPer: number; perDay: number; hbPerDay: number }
+
+// your pace from the last week: xp a battle (what the top pet gets), battles a day, HuntBot xp a day
+export function paceOf(st: OwoState, userId: string, hbPerDay = 0, now = Date.now()): Pace | null {
   const week = st.battles(userId, now - 7 * DAY);
   if (week.length < 5) return null;
   const xpPer = week.reduce((s, b) => s + (b.xp ?? 0), 0) / week.length;
   const first = week[week.length - 1].at;
-  const perDay = week.length / Math.max((now - first) / DAY, 1 / 24);
+  return { xpPer, perDay: week.length / Math.max((now - first) / DAY, 1), hbPerDay };
+}
+
+export interface TeamPetNow { animal: string; name: string; level: number; xp: number }
+
+// plays the team forward battle by battle the way OwO pays out: the top pet gets the battle's xp,
+// lower ones get 2× plus 0.1× per level behind (up to 10×), HuntBot xp goes to everyone in full
+export function forecast(team: TeamPetNow[], pace: Pace, who: string, target: number, cap = 200_000) {
+  const pets = team.map((p) => ({ ...p }));
+  const me = pets.find((p) => p.animal === who);
+  if (!me || me.level >= target) return { battles: 0, days: 0 };
+  const hbPerBattle = pace.perDay > 0 ? pace.hbPerDay / pace.perDay : 0;
+  let n = 0;
+  while (me.level < target && n < cap) {
+    const top = Math.max(...pets.map((p) => p.level));
+    for (const p of pets) {
+      const mult = p.level < top ? Math.min(10, 2 + (top - p.level) / 10) : 1;
+      p.xp += pace.xpPer * mult + hbPerBattle;
+      while (p.xp >= xpFor(p.level)) { p.xp -= xpFor(p.level); p.level++; }
+    }
+    n++;
+  }
+  return n >= cap ? null : { battles: n, days: n / pace.perDay };
+}
+
+// the newest team with each pet's level and xp
+export function teamNow(st: OwoState, userId: string): TeamPetNow[] {
   const team = st.teams(userId).sort((a, b) => b.at - a.at)[0];
-  if (!team) return null;
+  if (!team) return [];
   const pets = new Map(st.pets(userId).map((p) => [p.animal, p]));
-  return {
-    xpPer, perDay,
-    pets: team.animals.map((a) => pets.get(a)).filter((p) => !!p).map((p) => {
-      const left = Math.max(0, p!.xp_need - p!.xp);
-      const battles = xpPer > 0 ? Math.ceil(left / xpPer) : Infinity;
-      return { name: p!.name, level: p!.level, battles, days: battles / perDay };
-    }),
-  };
+  return team.animals.map((a) => pets.get(a)).filter((p) => !!p).map((p) => ({ animal: p!.animal, name: p!.name, level: p!.level, xp: p!.xp }));
 }
 
 // ---------- catches ----------
@@ -103,12 +126,12 @@ export function collectibles(st: OwoState, userId: string, now = Date.now()): Co
     const today = b.at >= dayStart;
     if (c.kind === 'pet') {
       const v = b.value as { streak: number };
-      out.push({ key, label: c.label, cmd: c.cmd, today, done: today, line: `🔥 streak **${v.streak}**${today ? '' : ' · not done today, the streak is on the line'}` });
+      out.push({ key, label: c.label, cmd: c.cmd, today, done: today, line: `🔥 streak **${v.streak}**` });
     } else {
       const v = b.value as { done: number | null; of: number | null; total: number | null; out: boolean };
       const done = today && (v.out || (v.done !== null && v.of !== null && v.done >= v.of));
-      const prog = today && v.done !== null ? `${v.done}/${v.of ?? '?'} today` : 'nothing yet today';
-      out.push({ key, label: c.label, cmd: c.cmd, today, done, line: `${prog}${v.total !== null ? ` · **${v.total.toLocaleString()}** in total` : ''}` });
+      const prog = today && v.done !== null ? `${v.done}/${v.of ?? '?'}` : '0 today';
+      out.push({ key, label: c.label, cmd: c.cmd, today, done, line: `${prog}${v.total !== null ? ` · ${v.total.toLocaleString()} total` : ''}` });
     }
   }
   return out;

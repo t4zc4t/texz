@@ -230,7 +230,7 @@ export function commandCard(ctx: Ctx, cmd: Command, o: { prefix: string; back: s
   // just the explanation and a way back, running it is typing it
   const rows = [row(new ButtonBuilder().setCustomId(`nav|${o.back}|owner=${ctx.userId}`).setLabel('Back').setEmoji('⬅️').setStyle(ButtonStyle.Secondary))];
   return {
-    embeds: [card({ kind: 'help', title: label, emoji: e?.emoji ?? '', gif: 'off', body: `${about}.\n-# Slash replies only show to you, typed ones to the channel.`, fields })],
+    embeds: [card({ kind: 'help', title: label, emoji: e?.emoji ?? '', gif: 'off', body: `${about}.`, fields })],
     components: rows,
   };
 }

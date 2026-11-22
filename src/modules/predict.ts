@@ -53,7 +53,7 @@ async function page(store: Store, guild: string, user: string) {
   if (!lines.length) lines.push('Nothing to call right now. Come back on race week or a big matchday.');
   const e = card({
     kind: 'help', title: 'Predictions', emoji: '🔮', gif: 'off', line: '',
-    body: `${lines.join('\n\n')}\n\n-# ¥${PODIUM.exact} for each driver in the right spot, ¥${PODIUM.onPodium} on the podium but wrong spot, ¥${MATCH_PAY} for a right result · you have **${points(store, guild, user)}** points this season`,
+    body: `${lines.join('\n\n')}\n\n-# ¥${PODIUM.exact} exact · ¥${PODIUM.onPodium} podium · ¥${MATCH_PAY} result · **${points(store, guild, user)}** points this season`,
   });
   const rows = [];
   if (open && drivers.length) {
@@ -244,7 +244,7 @@ export function startDesk(client: import('discord.js').Client, store: Store) {
             content: ping && guild.roles.cache.has(ping) ? `<@&${ping}> the podium calls are open` : undefined,
             allowedMentions: { roles: ping ? [ping] : [] },
             embeds: [card({ kind: 'help', title: `${flagOf[r.circuit.country] ?? '🏁'} ${r.name} · call the podium`, emoji: '', gif: 'off', line: '',
-              body: `Pick the top three before lights out <t:${unix(start)}:R>.\n\n-# ¥${PODIUM.exact} for each driver in the right spot, ¥${PODIUM.onPodium} on the podium but the wrong spot. Picking again changes it.` })],
+              body: `Pick the top three before lights out <t:${unix(start)}:R>.\n\n-# ¥${PODIUM.exact} exact · ¥${PODIUM.onPodium} podium` })],
             components: [0, 1, 2].map((n) => row(new StringSelectMenuBuilder().setCustomId(`prd|f1|${r.round}|${n}`).setPlaceholder(['🥇 Winner', '🥈 Second', '🥉 Third'][n])
               .addOptions(drivers.map((d) => ({ label: d.driver, value: d.driver, emoji: asEmoji(teamDot(d.team)) }))))),
           }).catch(() => {});

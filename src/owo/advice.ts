@@ -73,20 +73,20 @@ export function report(ranges: Ranges, w: { name: string | null; quality: number
   const sure = rolls.length > 0 && rolls.every((r) => r.roll !== null);
   const q = w.quality ?? 0;
   const wear = WEAR_BONUS[w.wear ?? 'worn'] ?? 0;
-  if (w.empowered) return { rolls, weaponPart, passivePart, sure, advice: { kind: 'locked', why: 'Empowered weapons can\'t be rerolled. Keep it if the passives suit a pet.', chance: null, shards: null } };
+  if (w.empowered) return { rolls, weaponPart, passivePart, sure, advice: { kind: 'locked', why: 'Empowered, can\'t be rerolled.', chance: null, shards: null } };
   // stat rerolls redraw every number, so the bar is the whole weapon's current quality
   const k = rolls.length || 2;
   const nextLine = [20, 40, 60, 80, 95, 100].find((l) => l > q) ?? 105;
   const target = Math.min(nextLine, q + 5);
   const chance = chanceAbove(k, target - wear);
   const shards = chance > 0 ? Math.round(100 / chance) : null;
-  if (q >= 95) return { rolls, weaponPart, passivePart, sure, advice: { kind: 'keep', why: 'Already Legendary or better. Rerolling would almost certainly make it worse.', chance, shards } };
+  if (q >= 95) return { rolls, weaponPart, passivePart, sure, advice: { kind: 'keep', why: 'Already 95%+, keep it.', chance, shards } };
   // a strong weapon part with a weak passive: reroll the passive, it keeps the weapon's own numbers
   if (weaponPart !== null && passivePart !== null && weaponPart >= 75 && passivePart < 50) {
-    return { rolls, weaponPart, passivePart, sure, advice: { kind: 'passive', why: `The weapon's own numbers are strong (${Math.round(weaponPart)}%) and the passive is weak (${Math.round(passivePart)}%). A passive reroll keeps the good part.`, chance: null, shards: null } };
+    return { rolls, weaponPart, passivePart, sure, advice: { kind: 'passive', why: `Stats ${Math.round(weaponPart)}%, passive ${Math.round(passivePart)}%.`, chance: null, shards: null } };
   }
-  if (chance < 0.02) return { rolls, weaponPart, passivePart, sure, advice: { kind: 'keep', why: `Beating ${target.toFixed(0)}% happens about 1 in ${Math.round(1 / Math.max(chance, 1e-6))} rerolls. Not worth the shards.`, chance, shards } };
-  return { rolls, weaponPart, passivePart, sure, advice: { kind: 'stat', why: `A stat reroll reaches ${target.toFixed(0)}% about 1 in ${Math.max(1, Math.round(1 / chance))} tries.`, chance, shards } };
+  if (chance < 0.02) return { rolls, weaponPart, passivePart, sure, advice: { kind: 'keep', why: `~1 in ${Math.round(1 / Math.max(chance, 1e-6))} to beat ${target.toFixed(0)}%, not worth it.`, chance, shards } };
+  return { rolls, weaponPart, passivePart, sure, advice: { kind: 'stat', why: `~1 in ${Math.max(1, Math.round(1 / chance))} to beat ${target.toFixed(0)}%.`, chance, shards } };
 }
 
 // ---------- live reroll verdict ----------
@@ -105,11 +105,11 @@ export function verdict(ranges: Ranges, r: Reroll, shards: number | null): Verdi
     if (x && x.key === y.key) {
       if (x.value === y.value) continue;
       const better = y.key.endsWith(':cost') ? y.value < x.value : y.value > x.value;
-      lines.push(`${better ? '▲' : '▼'} ${y.label} ${x.value} → **${y.value}**${y.roll !== null ? ` (${Math.round(y.roll)}% of its range)` : ''}`);
-    } else lines.push(`✦ ${y.label} **${y.value}**${y.roll !== null ? ` (${Math.round(y.roll)}% of its range)` : ''}`);
+      lines.push(`${better ? '▲' : '▼'} ${y.label} ${x.value} → **${y.value}**${y.roll !== null ? ` (${Math.round(y.roll)}%)` : ''}`);
+    } else lines.push(`✦ ${y.label} **${y.value}**${y.roll !== null ? ` (${Math.round(y.roll)}%)` : ''}`);
   }
   const wearDown = (WEAR_BONUS[r.next.wear ?? 'worn'] ?? 0) < (WEAR_BONUS[r.current.wear ?? 'worn'] ?? 0);
-  if (wearDown) lines.push(`⚠️ Confirming drops the wear from ${r.current.wear} to ${r.next.wear}`);
+  if (wearDown) lines.push(`⚠️ Wear ${r.current.wear} → ${r.next.wear}`);
   const diff = r.next.quality - r.current.quality;
   // the main effect counts most, then other effects, then WP cost and passives; plain quality when a range is unknown
   const weight = (x: SlotRoll, i: number) => (x.passive ? 1 : x.key.endsWith(':cost') ? 1 : i === 0 ? 2 : 1.5);
@@ -122,16 +122,16 @@ export function verdict(ranges: Ranges, r: Reroll, shards: number | null): Verdi
   const keep = Math.max(r.current.quality, r.next.quality);
   const k = b.length || 2;
   const p = chanceAbove(k, keep - (WEAR_BONUS[r.next.wear ?? 'worn'] ?? 0));
-  const odds = p > 0 ? `A roll above ${keep}% comes about 1 in ${Math.max(1, Math.round(1 / p))} tries, around ${Math.round(100 / p).toLocaleString()} shards${shards !== null ? `. You have ${shards.toLocaleString()}` : ''}.` : null;
+  const odds = p > 0 ? `~1 in ${Math.max(1, Math.round(1 / p))} to beat ${keep}% (~${Math.round(100 / p).toLocaleString()} shards${shards !== null ? `, you have ${shards.toLocaleString()}` : ''})` : null;
   const stop = p < 0.03;
   if (r.kind === 'passive' && !samePassive) {
-    return { pick: 'your call', headline: `New passive: **${r.next.passives.map((x) => x.name).join(', ')}**. ${diff >= 0 ? `Quality up ${diff.toFixed(1)}` : `Quality down ${Math.abs(diff).toFixed(1)}`}, but what matters is whether this passive suits the pet holding it.`, lines, odds, stop };
+    return { pick: 'your call', headline: `New passive: **${r.next.passives.map((x) => x.name).join(', ')}** · ${r.current.quality}% → ${r.next.quality}%. Your call.`, lines, odds, stop };
   }
   // the shards are spent either way, so a better roll is free to take unless confirming wears the weapon down
   const need = wearDown ? 2 : 0;
-  if (gain > need) return { pick: 'confirm', headline: `**Confirm.** The new roll is better${Math.sign(gain) !== Math.sign(diff) || Math.abs(diff) < 0.5 ? ' where it counts' : ''}, ${r.current.quality}% → ${r.next.quality}%.`, lines, odds, stop };
-  if (diff > 0 && gain <= need) return { pick: 'cancel', headline: `**Cancel.** ${r.next.quality}% looks higher, but ${wearDown ? 'the wear drop costs more than it gains' : 'the main effect is weaker'}. Keep ${r.current.quality}%.`, lines, odds, stop };
-  return { pick: 'cancel', headline: `**Cancel.** Keep what you have, the new roll is ${diff === 0 ? 'no better' : 'worse'} (${r.next.quality}% vs ${r.current.quality}%).`, lines, odds, stop };
+  if (gain > need) return { pick: 'confirm', headline: `**Confirm.** ${r.current.quality}% → ${r.next.quality}%`, lines, odds, stop };
+  if (diff > 0 && gain <= need) return { pick: 'cancel', headline: `**Cancel.** ${wearDown ? 'Wear drops' : 'Weaker main effect'}, keep ${r.current.quality}%.`, lines, odds, stop };
+  return { pick: 'cancel', headline: `**Cancel.** ${r.next.quality}% vs ${r.current.quality}%.`, lines, odds, stop };
 }
 
 // ---------- what can go ----------

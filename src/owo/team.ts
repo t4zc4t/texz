@@ -193,7 +193,7 @@ export function planFor(team: { animal: string; arm: Arm | null }[], candidates:
         const val = (x: ReturnType<typeof statsAt>) => (stat === 'HP' ? x.hp : stat === 'STR' ? x.str : stat === 'WP' ? x.wp : x.mag);
         changes.push({
           kind: 'pet',
-          text: `**${p.c.name}** takes ${was ? `**${was.c.name}**'s place with ` : ''}${on}. At level ${L} it has ${Math.round(val(s))} ${stat}${old ? ` against ${Math.round(val(old))}` : ''}.${wins ? ` It's level ${p.c.level} now: about **${wins.toLocaleString()} wins** to catch up (~${Math.ceil(wins / Math.max(1, pace))} days at your pace), OwO's catch-up boost included.` : ''}`,
+          text: `**${p.c.name}** ${was ? `replaces **${was.c.name}** on ` : 'takes '}${on} · ${stat} ${Math.round(val(s))}${old ? ` vs ${Math.round(val(old))}` : ''} at Lvl ${L}${wins ? ` · Lvl ${p.c.level} now, ~${wins.toLocaleString()} wins (~${Math.ceil(wins / Math.max(1, pace))}d) to catch up` : ''}`,
           cmds: [`w team add ${p.c.animal} ${i + 1}`, ...(arm ? [`w w ${arm.id} ${p.c.animal}`] : [])],
         });
       } else if (curOn.get(p.c.animal)?.id !== arm?.id) {

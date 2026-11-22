@@ -130,6 +130,14 @@ export class OwoState {
     return this.db.prepare('SELECT * FROM owo_dex WHERE animal = ?').get(animal) as { animal: string; rank: string | null; hp: number; str: number; pr: number; wp: number; mag: number; mr: number } | undefined;
   }
 
+  // by animal name or any of its OwO aliases
+  dexFind(q: string) {
+    const d = this.dex(q);
+    if (d) return d;
+    const rows = this.db.prepare('SELECT * FROM owo_dex').all() as (NonNullable<ReturnType<OwoState['dex']>> & { aliases: string | null })[];
+    return rows.find((r) => (JSON.parse(r.aliases ?? '[]') as string[]).some((a) => a.toLowerCase() === q)) ?? undefined;
+  }
+
   dexCount() {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM owo_dex').get() as { n: number }).n;
   }

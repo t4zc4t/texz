@@ -1,6 +1,7 @@
 import {
   ActionRowBuilder, ApplicationCommandOptionType, ButtonBuilder, ButtonStyle, InteractionContextType, MessageFlags, PermissionFlagsBits, type MessageActionRowComponentBuilder,
   type ChatInputCommandInteraction, type Interaction, type Message, type RESTPostAPIChatInputApplicationCommandsJSONBody,
+  type CommandInteraction,
 } from 'discord.js';
 import { apply, modalFor, panel, parseRp } from '../features/panel.js';
 import type { Store } from '../db.js';
@@ -26,6 +27,7 @@ import { onSetup, useModules } from '../features/setup.js';
 import { RED, card, type Kind } from '../theme.js';
 import { countUse, report } from '../ops.js';
 import { quoteCommand } from '../modules/quote.js';
+import { owoMenuCommand } from '../owo/menudef.js';
 import { onProfileEdit } from '../modules/profile.js';
 import { onAchPick, track } from '../modules/missions.js';
 import { community, onConfess, onCountButton } from '../modules/community.js';
@@ -87,7 +89,7 @@ const groups: Record<string, Group> = {
   fun: { label: 'Bar Lupin', emoji: '🥃', about: '*Three glasses on the counter. Pull up a stool.*\nQuizzes that pay yen, games for the channel, confessions and dice.', description: 'Quizzes, guess the anime, family, ship, polls, quotes, confessions, dice', anywhere: true, old: ['games', 'game'] },
   profile: { label: 'Personnel File', emoji: '🪪', about: '*Everything the Agency knows about you. Mostly flattering.*\nYour card, favourites, rank, medals, closest people, birthday and every ping you get.', description: 'Your profile card, favourites, rank, medals, bonds, birthday and pings', anywhere: true, old: ['you', 'me', 'file'] },
   yen: { label: 'Yen Ledger', emoji: '💴', about: '*Kunikida balances it. Dazai owes it.*\nDaily yen, shifts, Port Mafia jobs, the river, your vault, robbing, crew heists, the back room tables, a colour role of your own and the role shop.', description: 'Daily, work, crime, fishing, vault, rob, heists, casino games, your colour role and the shop', old: ['eco', 'money'] },
-  owo: { label: 'Stray Dogs Den', emoji: '🐾', about: '*A dog that hunts for you deserves a handler that thinks.*\nI learn your OwO account from your normal `w` commands, then help with teams, weapons, rerolls and HuntBot. I only read, I never play for you.', description: 'OwO helper: what Texz knows about your teams, weapons, zoo and HuntBot', anywhere: true, old: ['o', 'den'] },
+  owo: { label: 'Stray Dogs Den', emoji: '🐾', about: '*A dog that hunts for you deserves a handler that thinks.*\n-# Right click any OwO message → Apps → OwO helper.', description: 'OwO helper: what Texz knows about your teams, weapons, zoo and HuntBot', anywhere: true, old: ['o', 'den'] },
   misc: { label: 'Odds & Ends', emoji: '🔧', about: '*The drawer nobody labels.*\nLook people up, server info, afk, one-off reminders, your private voice booth and the bot ping.', description: 'User and server info, avatar, afk, reminders and private voice booths', anywhere: true, old: ['info', 'utils', 'odds'], extra: ['ping'] },
 };
 
@@ -207,6 +209,7 @@ const serverOnly = { integration_types: [0], contexts: [InteractionContextType.G
 const visible = modules.flatMap((m) => m.commands.filter((c) => !c.hidden));
 export const definitions: Json[] = [
   quoteCommand as unknown as Json,
+  owoMenuCommand as unknown as Json,
   ...visible.filter((c) => !c.group).map((c) => ({ ...c.data, ...(anywhereTop.has(c.name) ? everywhere : c.data.contexts ? {} : serverOnly) })),
   // the favourite interactions get their own slash command too, so they work in DMs and group chats with Texz added to your account
   ...TOP_ACTS.map((n) => byName.get(n)?.cmd).filter((c): c is Command => !!c).map((c) => ({ ...c.data, ...everywhere })),
@@ -256,6 +259,20 @@ function coolingDown(ctx: Ctx, cmd: Command): number {
   // keep the map small
   if (used.size > 5000) for (const [k, t] of used) if (t < now) used.delete(k);
   return 0;
+}
+
+// open a command from a right click menu, privately, with the given options
+export async function runFor(store: Store, i: CommandInteraction, name: string, opts: Record<string, string>) {
+  const hit = byName.get(name);
+  if (!hit) return;
+  const base = fromSlash(i as unknown as ChatInputCommandInteraction, null);
+  const ctx: Ctx = {
+    ...base,
+    str: (n) => opts[n] ?? null,
+    int: (n) => (opts[n] !== undefined && /^-?\d+$/.test(opts[n]) ? Number(opts[n]) : null),
+    bool: () => null, user: () => null, channel: () => null, role: () => null,
+  };
+  return run(store, ctx, hit.mod, hit.cmd, false);
 }
 
 async function run(store: Store, ctx: Ctx, mod: Module, cmd: Command, cool = true) {

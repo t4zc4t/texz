@@ -24,7 +24,7 @@ async function page(c: Client) {
   }));
   const total = list.reduce((s, g) => s + g.memberCount, 0);
   const e = card({ kind: 'help', title: `Texz is in ${list.length} server${list.length === 1 ? '' : 's'}`, emoji: '🗺️', gif: 'off', line: '',
-    body: `${total.toLocaleString()} members across all of them\n\n${lines.join('\n')}${list.length > 25 ? `\n\n…and ${list.length - 25} more` : ''}\n\n-# links only show for servers with a public vanity link`.slice(0, 4000) });
+    body: `${total.toLocaleString()} members across all of them\n\n${lines.join('\n')}${list.length > 25 ? `\n\n…and ${list.length - 25} more` : ''}`.slice(0, 4000) });
   const rows = list.length ? [row(new StringSelectMenuBuilder().setCustomId('own|leave').setPlaceholder('🚪 Leave a server')
     .addOptions(list.slice(0, 25).map((g) => ({ label: g.name.slice(0, 100), value: g.id, description: `${g.memberCount} members` }))))] : [];
   return { embeds: [e], components: rows };

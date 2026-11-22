@@ -67,7 +67,7 @@ async function post(client: Client, store: Store) {
       content: `<@${owner}>`,
       embeds: [card({
         kind: 'help', title: 'Executive orders · OwO', emoji: '📋', gif: 'off', line: '',
-        body: `A few minutes of OwO today makes the advice sharper:\n\n${orders.map((o, i) => `**${i + 1}.** \`${o.cmd}\`\n-# ${o.why}`).join('\n')}`,
+        body: orders.map((o, i) => `**${i + 1}.** \`${o.cmd}\``).join('\n'),
       }).setFooter({ text: 'Just run them in your OwO channel, I read the replies myself' })],
       allowedMentions: { users: [owner] },
     }).catch(() => {});

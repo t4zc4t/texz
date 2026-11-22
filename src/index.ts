@@ -5,6 +5,7 @@ import { look } from './theme.js';
 import { warmUp } from './gifs.js';
 import { startScheduler } from './reminders.js';
 import { definitions, onComponent, onSlash, onText } from './core/registry.js';
+import { OWO_MENU, onOwoMenu } from './owo/menu.js';
 import { afkWatch } from './modules/utility.js';
 import { startModTimers } from './modules/moderation.js';
 import { startGiveaways } from './modules/giveaways.js';
@@ -141,6 +142,7 @@ client.on(Events.GuildCreate, (guild) => settleGuild(store, guild));
 client.on(Events.InteractionCreate, (i) => {
   if (i.isChatInputCommand()) void onSlash(store, i);
   else if (i.isMessageContextMenuCommand() && (i.commandName === QUOTE_MENU || i.commandName === 'Quote')) void onQuote(store, i).catch((e) => report('quote', e));
+  else if (i.isMessageContextMenuCommand() && i.commandName === OWO_MENU) void onOwoMenu(store, i).catch((e) => report('owo menu', e));
   else void onComponent(store, i);
 });
 

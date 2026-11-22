@@ -82,6 +82,8 @@ export const menu: Record<string, [string, string, string?]> = {
   owozoo: ['🦁', 'Your zoo', 'Animals by rank, zoo points and everything you have ever caught'],
   owohb: ['🤖', 'Your HuntBot', 'What to upgrade next, what to skip, and what to sell or sacrifice'],
   owobattles: ['⚔️', 'Battle log', 'Win rate, xp a day, streaks and how long until each pet levels'],
+  owoxp: ['📈', 'Level forecast', 'Battles and days until a pet reaches a level'],
+  owodex: ['📖', 'Dex', 'An animal\'s base stats, or two side by side'],
   owocatches: ['🏹', 'Catch log', 'Rare catches, totals by rank and your luck against OwO\'s odds'],
   owocollect: ['🎀', 'Collectibles', 'Alastor, Baby Yoda, run, carrots and puppies: what\'s done today'],
   owowall: ['🖼️', 'Wallpaper preview', 'Any shop wallpaper behind your profile, before you buy it'],
@@ -139,7 +141,7 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
     sections: [
       ['📡 What I know', ['owosync']],
       ['🐾 Your account', ['owoteam', 'owozoo', 'owohb', 'owopings']],
-      ['📒 Logs and dailies', ['owobattles', 'owocatches', 'owocollect', 'owowall']],
+      ['📒 Logs and dailies', ['owobattles', 'owoxp', 'owodex', 'owocatches', 'owocollect', 'owowall']],
       ['🗡️ Weapons', ['owoweapons', 'owoweapon', 'owodismantle', 'ororeroll']],
       ['🧹 Your data', ['owoforget']],
     ],

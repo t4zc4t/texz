@@ -18,9 +18,9 @@ function text(store: Store, r: Reminder): EmbedBuilder | null {
     case 'custom':
       return card({ kind: 'custom', title: 'A promise kept', emoji: '📝', body: `**${r.note}**` });
     case 'owo:hb':
-      return card({ kind: 'custom', title: 'Your HuntBot is back', emoji: '🤖', gif: 'off', body: 'Collect it and send it out again with `w hb`.\n-# `tz o hb` shows where the essence should go. `tz o pings` to change this.' });
+      return card({ kind: 'custom', title: 'Your HuntBot is back', emoji: '🤖', gif: 'off', body: '`w hb`' });
     case 'owo:day':
-      return card({ kind: 'custom', title: 'A new OwO day', emoji: '🌅', gif: 'off', body: `\`w daily\` · \`w cookie @someone\` · \`w quest\` · \`w checklist\`${r.note ? `\nCollectibles: ${r.note}` : ''}\n-# \`tz o pings\` to change this.` });
+      return card({ kind: 'custom', title: 'A new OwO day', emoji: '🌅', gif: 'off', body: `\`w daily\` · \`w cookie @someone\` · \`w quest\` · \`w checklist\`${r.note ? `\n${r.note}` : ''}` });
     default:
       return r.note ? card({ kind: 'custom', title: 'Reminder', emoji: '📝', body: r.note }) : null;
   }

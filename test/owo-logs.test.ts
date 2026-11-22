@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import * as R from '../src/owo/read.ts';
 import { OwoState } from '../src/owo/state.ts';
 import { apply } from '../src/owo/listen.ts';
-import { battleStats, catchStats, collectibles, levelForecast } from '../src/owo/stats.ts';
+import { battleStats, catchStats, collectibles, forecast, paceOf, teamNow } from '../src/owo/stats.ts';
 import { wallCard } from '../src/owo/wallcard.ts';
 import { wallPrice, wallUrl } from '../src/owo/catalog.ts';
 import { createCanvas } from '@napi-rs/canvas';
@@ -43,8 +43,10 @@ test('battle stats and the level forecast', () => {
   const b = battleStats(st, 'u');
   assert.equal(b.windows[0].n, 10);
   assert.equal(b.windows[0].won, 6);
-  const f = levelForecast(st, 'u');
-  assert.ok(f && f.xpPer > 0 && f.pets.length > 0);
+  const pace = paceOf(st, 'u');
+  assert.ok(pace && pace.xpPer > 0);
+  const tn = teamNow(st, 'u');
+  assert.ok(tn.length > 0 && forecast(tn, pace!, tn[0].animal, tn[0].level + 1));
 });
 
 test('collectibles know what is done today', () => {
@@ -110,4 +112,31 @@ test('older battles and hunts come in from the saved log once, without doubles',
     assert.equal(c.hunts, 1);
     assert.equal(st.catches('u')[0].animal, 'dragon');
   } finally { process.chdir(prev); }
+});
+
+import { pageFor } from '../src/owo/menu.ts';
+
+test('forecast pays lower pets OwO\'s catch-up multiplier', () => {
+  const pace = { xpPer: 700, perDay: 60, hbPerDay: 0 };
+  const team = [{ animal: 'a', name: 'a', level: 31, xp: 0 }, { animal: 'b', name: 'b', level: 23, xp: 0 }];
+  const behind = forecast(team, pace, 'b', 24)!;
+  const alone = forecast([{ animal: 'b', name: 'b', level: 23, xp: 0 }], pace, 'b', 24)!;
+  // 23→24 needs 280,841 xp: alone 700 a battle, behind 2.8× that
+  assert.equal(alone.battles, Math.ceil(280841 / 700));
+  assert.equal(behind.battles, Math.ceil(280841 / (700 * 2.8)));
+  const withHb = forecast(team, { ...pace, hbPerDay: 6000 }, 'b', 24)!;
+  assert.ok(withHb.battles < behind.battles);
+});
+
+test('the right click helper opens the page that fits the OwO message', () => {
+  assert.equal(pageFor(s('team')).cmd, 'owoteam');
+  assert.equal(pageFor(s('huntbot')).cmd, 'owohb');
+  assert.equal(pageFor(s('hb_back')).cmd, 'owohb');
+  assert.equal(pageFor(s('zoo')).cmd, 'owozoo');
+  assert.equal(pageFor(s('battle_won')).cmd, 'owobattles');
+  assert.equal(pageFor(s('hunt_gems')).cmd, 'owocatches');
+  assert.equal(pageFor(s('dex')).cmd, 'owodex');
+  assert.equal(pageFor(s('weapon')).cmd, 'owoweapon');
+  assert.equal(pageFor(s('alastor')).cmd, 'owocollect');
+  assert.equal(pageFor(s('cash')).cmd, 'owosync');
 });

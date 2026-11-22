@@ -124,23 +124,23 @@ export function advise(inp: HbInput): Plan {
     const perAnimal = PER_ANIMAL.essence - k * cost;
     if (l[t] >= SPEC[t].max) return { perDay: 0, why: 'maxed' };
     switch (t) {
-      case 'gain': return { perDay: 25 * h.perDay, why: `+25 essence for each of your ~${h.perDay.toFixed(1)} hunting hours a day` };
+      case 'gain': return { perDay: 25 * h.perDay, why: '+25 essence/h' };
       case 'efficiency':
-        if (cashShort) return { perDay: 0, why: 'you can\'t pay for a full run yet, so more efficiency only makes runs shorter and cuts the essence and xp from them' };
-        return { perDay: h.perDay * perAnimal, why: `+1 animal an hour, worth ~${perAnimal.toFixed(1)} essence after its ${cost} cowoncy` };
+        if (cashShort) return { perDay: 0, why: 'shortens runs while you can\'t afford a full one' };
+        return { perDay: h.perDay * perAnimal, why: '+1 animal/h' };
       case 'duration': {
-        if (cashShort) return { perDay: 0, why: 'runs already stop early for lack of cowoncy, a longer limit does nothing' };
+        if (cashShort) return { perDay: 0, why: 'runs end early for lack of cowoncy' };
         const more = hours(D + 0.1).perDay - h.perDay;
-        if (more <= 0.001) return { perDay: more < -0.001 ? -1 : 0, why: more < -0.001 ? 'longer runs would still be out when you check in, so it would sit idle more and hunt LESS' : 'your runs already outlast the gaps between your check-ins, extra time is never used' };
-        return { perDay: more * (gain + eff * perAnimal), why: `+${(more * 60).toFixed(0)} hunting minutes a day at your check-in times` };
+        if (more <= 0.001) return { perDay: more < -0.001 ? -1 : 0, why: more < -0.001 ? 'would hunt less at your check-in times' : 'runs already outlast your check-in gaps' };
+        return { perDay: more * (gain + eff * perAnimal), why: `+${(more * 60).toFixed(0)} min hunting/day` };
       }
       case 'cost': {
         if (statOf('cost', l.cost) <= 5) return { perDay: 0, why: 'maxed' };
         const animals = cashShort && inp.cash !== null ? inp.cash / cost : eff * h.perDay;
         // short on cowoncy: a cheaper animal means more animals for the same cash; otherwise it just saves cowoncy
         return cashShort
-          ? { perDay: (animals / (cost - 1) - animals / cost) * PER_ANIMAL.essence * h.sendsPerDay, why: `1 cowoncy less per animal stretches the same cash to more animals` }
-          : { perDay: eff * h.perDay * k, why: `saves ${Math.round(eff * h.perDay)} cowoncy a day` };
+          ? { perDay: (animals / (cost - 1) - animals / cost) * PER_ANIMAL.essence * h.sendsPerDay, why: 'more animals for the same cowoncy' }
+          : { perDay: eff * h.perDay * k, why: `saves ${Math.round(eff * h.perDay)} cowoncy/day` };
       }
       default: return { perDay: 0, why: '' };
     }
@@ -159,10 +159,10 @@ export function advise(inp: HbInput): Plan {
   const all = rankAt(lv);
   // a level that takes over half a year to earn itself back isn't worth chasing yet
   const ranked = all.filter((p) => p.payback < 180).sort((a, b) => a.payback - b.payback);
-  const skip: Plan['skip'] = all.filter((p) => !(p.payback < 180)).map((p) => ({ trait: p.trait, why: p.perDay > 0 ? `${p.why}, but it takes ~${Math.round(p.payback)} days to pay back` : p.why }));
+  const skip: Plan['skip'] = all.filter((p) => !(p.payback < 180)).map((p) => ({ trait: p.trait, why: p.perDay > 0 ? `~${Math.round(p.payback)} days to pay back` : p.why }));
   // each radar level adds 0.000004% per animal: at your pace that's one extra bot animal every few decades
   const radarYears = 1 / (SPEC.radar.upg * eff(lv) * hours(statOf('duration', lv.duration)).perDay * 365);
-  skip.push({ trait: 'radar', why: `a level adds about one bot animal every ${Math.round(radarYears)} years at your pace, never worth the essence` });
+  skip.push({ trait: 'radar', why: `1 bot animal per ~${Math.round(radarYears)} years a level` });
 
   // pour the essence on hand into the best trait, re-checking at every level since each level shifts the others
   const spend = new Map<HbTrait, { essence: number; levels: number }>();

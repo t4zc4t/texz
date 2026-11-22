@@ -161,7 +161,7 @@ function maybeText(name: string, guess?: { p: number; others: string[] }, wrong:
     `## 🤔 Maybe ${name}?`,
     wrong.length ? `❌ Not ${wrong.join(', not ')}` : null,
     `📋 Tap to copy: \`${catchLine(catchFor(name))}\``,
-    `-# only ${Math.round((guess?.p ?? 0) * 100)}% sure${guess?.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}. It might be one of Pokétwo's special forms, I learn those once they're caught`,
+    `-# only ${Math.round((guess?.p ?? 0) * 100)}% sure${guess?.others.length ? `, could also be ${guess.others.join(' or ')}` : ''}`,
   ].filter(Boolean).join('\n');
 }
 
@@ -591,7 +591,7 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
       p2HelperOn(store, guild.id) ? `🟢 🔎 **Claim help** · I read every spawn picture, and remember **${memorySize(store)}** confirmed spawns so variants come out right, plus I solve hints` : '⚫ 🔎 **Claim help** · switched off here, an admin can turn it back on below',
       `${shoob ? '🟢' : '⚫'} 🃏 **Shoob rare drops** · tier 5 and 6 cards only`,
       '',
-      '-# Lower tiers never ping, and `tz wish add Gojo` gets you a ping for one character at any tier.',
+      '-# `tz wish add Gojo` pings one character at any tier.',
     ].join('\n'),
     fields: [
       { name: '🔴 Pokétwo', value: spawnStatus(store, guild, 'p2'), inline: true },
@@ -784,7 +784,7 @@ async function pingsPanel(store: Store, guild: Guild, userId: string) {
   ));
   const e = card({
     kind: 'help', title: 'Pings and reminders', emoji: '🔔', gif: 'off',
-    body: `**Pings**\n${lines.join('\n')}\n\n**Reminders**\n${reminderLines.join('\n')}\n\n-# 🟢 on · ⚫ off. Press to switch. When more than three people share a pick, they get a role of their own so one ping covers everyone.`,
+    body: `**Pings**\n${lines.join('\n')}\n\n**Reminders**\n${reminderLines.join('\n')}\n\n-# 🟢 on · ⚫ off`,
   });
   return { embeds: [e], components: rows.slice(0, 4) };
 }

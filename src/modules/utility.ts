@@ -346,7 +346,7 @@ const eightball: Command = {
 // coin: the Lupin coin, Agency on heads and Port Mafia on tails. Call it first and it keeps your record, or just flip
 function coinView(art: Awaited<ReturnType<typeof prepareCoin>>, owner: string, result: 'Heads' | 'Tails' | null, call: string | null, rec: { w: number; l: number; streak: number }) {
   const e = new EmbedBuilder().setTitle('The Lupin coin').setColor(0xc8a97e).setImage(`attachment://${result ? result.toLowerCase() : 'heads'}.png`);
-  if (!result) e.setDescription('Heads for the Agency, tails for the Port Mafia. Call it, or just flip.\n-# calling keeps a record of how good your guesses are');
+  if (!result) e.setDescription('Heads for the Agency, tails for the Port Mafia. Call it, or just flip.');
   else {
     const hit = call ? call === result : null;
     e.setColor(hit === null ? 0xc8a97e : hit ? 0x3fa76a : 0xc8283c)
@@ -514,7 +514,7 @@ const afk: Command = {
     const reason = ctx.str('reason') ?? say('afkReason');
     store.setAfk(ctx.userId, reason);
     store.setKv(`afkpings:${ctx.userId}`, null);
-    return ctx.reply({ content: `💤 Away: **${reason}**\n-# ${say('afkSet')} I'll keep track of who pings you and show you when you're back.`, temp: true });
+    return ctx.reply({ content: `💤 Away: **${reason}**\n-# ${say('afkSet')}`, temp: true });
   },
 };
 
