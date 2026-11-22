@@ -626,6 +626,7 @@ const wallCmd: Command = {
     const id = want ?? last ?? equipped ?? ids[0];
     st.setBit(ctx.userId, 'wall:last', id);
     const known = seen.get(id);
+    await ctx.defer?.();
     const img = await picture(known?.url ?? wallUrl(id));
     if (!img) return ctx.reply(`No wallpaper \`${id}\`.`);
 

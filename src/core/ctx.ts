@@ -16,6 +16,8 @@ export type Reply = string | EmbedBuilder | {
 export interface Ctx {
   // a typed command's own message, so it can be cleared from a channel it doesn't belong in
   drop?: () => Promise<unknown>;
+  // for slow work like drawing a picture: tells Discord the answer is coming so it doesn't time out
+  defer?: () => Promise<unknown>;
   // quest events a command really did (a shift worked, a bet placed), counted once it has run
   counted?: string[];
   userId: string;
@@ -85,6 +87,7 @@ export function fromSlash(i: ChatInputCommandInteraction, sub?: string | null): 
     user: (n) => i.options.getUser(n)?.id ?? null,
     channel: (n) => i.options.getChannel(n)?.id ?? null,
     role: (n) => i.options.getRole(n)?.id ?? null,
+    defer: () => (i.deferred || i.replied ? Promise.resolve() : i.deferReply({ flags: i.guild ? MessageFlags.Ephemeral : undefined }).catch(() => null)),
     reply: (r) => {
       const n = normalise(r);
       // in DMs, group chats and servers without Texz the answer is for everyone there, unless it's marked private
@@ -121,6 +124,7 @@ export function fromComponent(i: ButtonInteraction | StringSelectMenuInteraction
     attachment: (n) => (opts[n]?.startsWith('https://') ? opts[n] : null),
     channel: (n) => opts[n]?.match(/(\d{15,})/)?.[1] ?? null,
     role: (n) => opts[n]?.match(/(\d{15,})/)?.[1] ?? null,
+    defer: () => (i.deferred || i.replied ? Promise.resolve() : (edit && (!i.isModalSubmit() || i.isFromMessage()) ? i.deferUpdate() : i.deferReply({ flags: MessageFlags.Ephemeral })).catch(() => null)),
     reply: (r) => {
       const n = normalise(r);
       // games and polls are for the whole channel, so they go out as a new message
