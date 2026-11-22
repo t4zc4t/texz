@@ -6,6 +6,7 @@ import { apply, modalFor, panel, parseRp } from '../features/panel.js';
 import type { Store } from '../db.js';
 import { core, allModules, dashList, setGroupOpener } from '../modules/core.js';
 import { remind, reminderSettings } from '../modules/remind.js';
+import { owo } from '../modules/owo.js';
 import { anime, onAnimeComponent, onGuess } from '../modules/anime.js';
 import { onF1Quiz } from '../modules/f1quiz.js';
 import { onPredict } from '../modules/predict.js';
@@ -49,7 +50,7 @@ import { askModal, commandCard, deskPage, entriesOf, needsInput, parseKey, readM
 // voice moderation lives in its own file but belongs with the rest of moderation
 if (!moderation.commands.includes(vc)) moderation.commands.push(vc);
 utility.commands.push(remind, reminderSettings);
-export const modules: Module[] = [core, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule, community, actions, family];
+export const modules: Module[] = [core, owo, anime, utility, moderation, welcomeModule, levelsModule, giveaways, birthdays, server, economy, bulletins, spawnsModule, community, actions, family];
 allModules.push(...modules);
 useModules(modules);
 
@@ -86,6 +87,7 @@ const groups: Record<string, Group> = {
   fun: { label: 'Bar Lupin', emoji: '🥃', about: '*Three glasses on the counter. Pull up a stool.*\nQuizzes that pay yen, games for the channel, confessions and dice.', description: 'Quizzes, guess the anime, family, ship, polls, quotes, confessions, dice', anywhere: true, old: ['games', 'game'] },
   profile: { label: 'Personnel File', emoji: '🪪', about: '*Everything the Agency knows about you. Mostly flattering.*\nYour card, favourites, rank, medals, closest people, birthday and every ping you get.', description: 'Your profile card, favourites, rank, medals, bonds, birthday and pings', anywhere: true, old: ['you', 'me', 'file'] },
   yen: { label: 'Yen Ledger', emoji: '💴', about: '*Kunikida balances it. Dazai owes it.*\nDaily yen, shifts, Port Mafia jobs, the river, your vault, robbing, crew heists, the back room tables, a colour role of your own and the role shop.', description: 'Daily, work, crime, fishing, vault, rob, heists, casino games, your colour role and the shop', old: ['eco', 'money'] },
+  owo: { label: 'Stray Dogs Den', emoji: '🐾', about: '*A dog that hunts for you deserves a handler that thinks.*\nI learn your OwO account from your normal `w` commands, then help with teams, weapons, rerolls and HuntBot. I only read, I never play for you.', description: 'OwO helper: what Texz knows about your teams, weapons, zoo and HuntBot', anywhere: true, old: ['o', 'den'] },
   misc: { label: 'Odds & Ends', emoji: '🔧', about: '*The drawer nobody labels.*\nLook people up, server info, afk, one-off reminders, your private voice booth and the bot ping.', description: 'User and server info, avatar, afk, reminders and private voice booths', anywhere: true, old: ['info', 'utils', 'odds'], extra: ['ping'] },
 };
 

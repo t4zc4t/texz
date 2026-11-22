@@ -1,3 +1,4 @@
+import { listenToOwo } from './owo/listen.js';
 import { ActivityType, Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { Store } from './db.js';
 import { look } from './theme.js';
@@ -153,4 +154,5 @@ client.on(Events.MessageCreate, (m) => {
 });
 
 wireEvents(client, store);
+listenToOwo(client, store);
 client.login(token);

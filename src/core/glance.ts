@@ -1,3 +1,4 @@
+import { owoGlance } from '../modules/owo.js';
 import type { Store } from '../db.js';
 import type { Ctx } from './ctx.js';
 import { levelOf, perksFor, rankFor } from '../modules/levels.js';
@@ -75,6 +76,12 @@ export const menu: Record<string, [string, string, string?]> = {
   money: ['💴', 'Yen tools'], backup: ['💾', 'Setup backup'], birthday: ['🎂', 'Birthdays'], watchlist: ['📋', 'Your anime list'], mycolour: ['🎨', 'Your own role'],
   roleshop: ['🛍️', 'Role shop'], football: ['⚽', 'Football'], wish: ['💝', 'Shoob wishlist'], profile: ['🪪', 'Profile'], f1: ['🏎️', 'Formula 1'],
   recommend: ['🎲', 'Something random'],
+  owosync: ['📡', 'What I know', 'Everything Texz has learnt about your OwO account and when it last saw it'],
+  owoteam: ['🐾', 'Your teams', 'Pets with level, xp to the next one, stats and the weapon each holds'],
+  owoweapons: ['🗡️', 'Your weapons', 'Every weapon Texz knows, best first, with passives, wear and who holds it'],
+  owozoo: ['🦁', 'Your zoo', 'Animals by rank, zoo points and everything you have ever caught'],
+  owohb: ['🤖', 'Your HuntBot', 'Trait levels, essence, the biggest run and when it is back'],
+  owoforget: ['🧹', 'Forget me', 'Wipe everything Texz learnt about your OwO account'],
 };
 
 // sections and the quick buttons of each generic dashboard
@@ -120,6 +127,14 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
     sections: [['🔍 Look up', ['user', 'avatar', 'server']], ['⏰ You', ['remind', 'reminders', 'afk', 'booth']], ['📡 The bot', ['ping']]],
     quick: ['user', 'server', 'remind', 'afk'],
   },
+  owo: {
+    sections: [
+      ['📡 What I know', ['owosync']],
+      ['🐾 Your account', ['owoteam', 'owoweapons', 'owozoo', 'owohb']],
+      ['🧹 Your data', ['owoforget']],
+    ],
+    quick: [],
+  },
   anime: {
     sections: [
       ['🔍 Look it up', ['anime', 'manga', 'character', 'today']],
@@ -159,6 +174,7 @@ export function glance(group: string, ctx: Ctx, store: Store): string | null {
       const p = perksFor(l.level);
       return `${r.emoji} **${r.name}** · level **${l.level}** · ${l.into.toLocaleString()}/${l.need.toLocaleString()} xp to the next${p.xp > 1 ? ` · ✨ ${p.xp}x xp` : ''}`;
     }
+    if (group === 'owo') return owoGlance(store, ctx.userId);
     if (group === 'admin' && g) {
       const { total } = store.findCases(g, {}, 1);
       const gw = store.activeGiveaways(g).length;
