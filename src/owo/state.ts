@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { Battle, Dex, Huntbot, ListedWeapon, PetRow, Team, WeaponCard, Zoo } from './read.js';
+import type { Battle, Dex, Reroll, RollSide, Huntbot, ListedWeapon, PetRow, Team, WeaponCard, Zoo } from './read.js';
 
 // What Texz knows about someone's OwO account, learnt from OwO's own replies. OwO accounts are the
 // same in every server, so this is per person, not per server. Nothing is ever wiped because it wasn't
@@ -31,6 +31,9 @@ function ready(db: DatabaseSync) {
     CREATE TABLE IF NOT EXISTS owo_dex (
       animal TEXT PRIMARY KEY, rank TEXT, hp INTEGER, str INTEGER, pr INTEGER, wp INTEGER, mag INTEGER, mr INTEGER,
       points INTEGER, sell INTEGER, essence INTEGER, aliases TEXT, at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS owo_samples (
+      key TEXT PRIMARY KEY, weapon TEXT NOT NULL, rarity TEXT, quality REAL, wear TEXT, wp_cost INTEGER, rolls TEXT, passives TEXT, source TEXT, at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS owo_battles_user ON owo_battles (user_id, at);
   `);
@@ -81,6 +84,33 @@ export class OwoState {
       ON CONFLICT (animal) DO UPDATE SET rank = excluded.rank, hp = excluded.hp, str = excluded.str, pr = excluded.pr, wp = excluded.wp, mag = excluded.mag,
       mr = excluded.mr, points = excluded.points, sell = excluded.sell, essence = COALESCE(excluded.essence, owo_dex.essence), aliases = excluded.aliases, at = excluded.at`)
       .run(d.animal, d.rank, d.hp, d.str, d.pr, d.wp, d.mag, d.mr, d.points, d.sell, d.essence, JSON.stringify(d.aliases), now);
+  }
+
+  // every full set of weapon numbers ever seen, from anyone: shop pages, weapon cards and each reroll try.
+  // The weapons helper learns each weapon's ranges from these
+  saveSample(weapon: string, x: { rarity: string | null; quality: number | null; wear: string | null; wpCost: number | null; rolls: number[]; passives: { name: string; rolls: number[] }[] }, source: string, now = Date.now()) {
+    if (x.quality === null) return;
+    const key = `${weapon}|${x.quality}|${x.wpCost}|${x.rolls.join(',')}|${x.passives.map((p) => `${p.name}:${p.rolls.join(',')}`).join(';')}`;
+    this.db.prepare('INSERT OR IGNORE INTO owo_samples (key, weapon, rarity, quality, wear, wp_cost, rolls, passives, source, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(key, weapon, x.rarity, x.quality, x.wear, x.wpCost, JSON.stringify(x.rolls), JSON.stringify(x.passives.map((p) => ({ name: p.name, rolls: p.rolls }))), source, now);
+  }
+
+  samples(weapon?: string) {
+    return (this.db.prepare(`SELECT * FROM owo_samples${weapon ? ' WHERE weapon = ?' : ''}`).all(...(weapon ? [weapon] : [])) as Record<string, unknown>[]).map((r) => ({
+      weapon: r.weapon as string, rarity: r.rarity as string | null, quality: r.quality as number, wear: r.wear as string | null, wpCost: r.wp_cost as number | null,
+      rolls: JSON.parse(r.rolls as string) as number[], passives: JSON.parse(r.passives as string) as { name: string; rolls: number[] }[], source: r.source as string,
+    }));
+  }
+
+  // a reroll screen: the CURRENT side is the weapon as it is now, confirmed or not
+  saveReroll(userId: string, r: Reroll, now = Date.now()) {
+    const c: RollSide = r.current;
+    this.db.prepare(`INSERT INTO owo_weapons (user_id, id, name, rarity, quality, wear, wp_cost, rolls, passives, reroll_changes, reroll_attempts, detailed, seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      ON CONFLICT (user_id, id) DO UPDATE SET name = excluded.name, rarity = excluded.rarity, quality = excluded.quality, wear = excluded.wear, wp_cost = excluded.wp_cost,
+      rolls = excluded.rolls, passives = excluded.passives, reroll_changes = excluded.reroll_changes, reroll_attempts = excluded.reroll_attempts, detailed = 1, seen_at = excluded.seen_at`)
+      .run(userId, r.id, r.name, c.rarity, c.quality, c.wear, c.wpCost, JSON.stringify(c.rolls), JSON.stringify(c.passives), r.changes, r.attempts, now);
+    if (r.shards !== null) this.setBit(userId, 'shards', r.shards, now);
   }
 
   dex(animal: string) {

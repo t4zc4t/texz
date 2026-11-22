@@ -138,3 +138,19 @@ test('pets list and dex cards, base stats line up with the level formula', () =>
   assert.equal(b.hp, d.hp);
   assert.equal(b.mag, d.mag);
 });
+
+test('reroll screens: both sides, stat or passive, counters and shards', () => {
+  const st = R.reroll(s('reroll_stat'))!;
+  assert.equal(st.kind, 'stat');
+  assert.equal(st.attempts, 2);
+  assert.ok(st.shards! > 0);
+  assert.ok(st.current.quality > 0 && st.next.quality > 0);
+  assert.equal(st.current.passives[0].name, st.next.passives[0].name);
+  const p = R.reroll(s('reroll_passive'))!;
+  assert.equal(p.kind, 'passive');
+  const adapt = p.next.passives.find((x) => x.name === 'Adaptation')!;
+  // adaptation keeps its numbers in the stoneskin and spellskin lines under it
+  assert.equal(adapt.rolls.length, 2);
+  // a reroll screen is not a normal weapon card
+  assert.equal(R.weapon(s('reroll_stat')), null);
+});

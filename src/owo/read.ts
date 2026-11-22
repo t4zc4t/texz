@@ -229,14 +229,10 @@ export function weapon(s: Said): WeaponCard | null {
   if (!name || !quality) return null;
   const desc = t.split(/### __Description__/)[1] ?? '';
   // the description ends where the first passive line starts
-  const passiveRe = /^<a?:(\w+):\d+>\s*\*\*__(.+?)__\*\*\s*-\s*([^\n]*)/gm;
   const firstPassive = desc.search(/\n<a?:\w+:\d+>\s*\*\*__/);
   const body = firstPassive >= 0 ? desc.slice(0, firstPassive) : desc;
   const rollsOf = (x: string) => [...x.replace(/<a?:\w+:\d+>/g, '').matchAll(/\*\*[+-]?([\d.]+)%?\*\*/g)].map((m) => Number(m[1]));
-  const passives: WeaponCard['passives'] = [];
-  for (const m of (firstPassive >= 0 ? desc.slice(firstPassive) : '').matchAll(passiveRe)) {
-    passives.push({ emoji: m[1], name: m[2], rolls: rollsOf(m[3]) });
-  }
+  const passives = passivesIn(firstPassive >= 0 ? desc.slice(firstPassive) : '');
   const pick = (re: RegExp) => t.match(re)?.[1] ?? null;
   const title = t.match(/##\s*(.+?)'s\s+(.+?)(?:\s*\[\d+\])?\n/);
   return {
@@ -255,6 +251,63 @@ export function weapon(s: Said): WeaponCard | null {
     passives,
     rerollChanges: pick(/Reroll Changes:\s*(\d+)/) ? Number(pick(/Reroll Changes:\s*(\d+)/)) : null,
     rerollAttempts: pick(/Reroll Attempts:\s*(\d+)/) ? Number(pick(/Reroll Attempts:\s*(\d+)/)) : null,
+  };
+}
+
+// ---------- a reroll in progress: what you have and what you'd get ----------
+
+export interface RollSide { rarity: string | null; icon: string | null; quality: number; wear: string | null; wpCost: number | null; rolls: number[]; passives: { emoji: string; name: string; rolls: number[] }[] }
+export interface Reroll { id: string; name: string; current: RollSide; next: RollSide; kind: 'stat' | 'passive'; changes: number | null; attempts: number | null; shards: number | null }
+
+// each passive line plus the quoted lines under it, Adaptation keeps its numbers in Stoneskin and Spellskin
+function passivesIn(text: string) {
+  const out: { emoji: string; name: string; rolls: number[] }[] = [];
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^<a?:(\w+):\d+>\s*\*\*__(.+?)__\*\*\s*-\s*(.*)$/);
+    if (!m) continue;
+    let body = m[3];
+    for (let j = i + 1; j < lines.length && lines[j].startsWith('>'); j++) if (!/Stack Limit|Defense Buff/i.test(lines[j])) body += `\n${lines[j]}`;
+    out.push({ emoji: m[1], name: m[2], rolls: rollsIn(body) });
+  }
+  return out;
+}
+
+const rollsIn = (x: string) => [...x.replace(/<a?:\w+:\d+>/g, '').matchAll(/\*\*[+-]?([\d.]+)%?\*\*/g)].map((m) => Number(m[1]));
+
+function side(block: string): RollSide | null {
+  const quality = block.match(/\*\*Quality:\*\*\s*(?:<a?:(\w+):\d+>\s*)?([\d.]+)%/);
+  if (!quality) return null;
+  const desc = block.split(/\*\*__Description__\*\*/)[1] ?? '';
+  const cut = desc.search(/\n<a?:\w+:\d+>\s*\*\*__/);
+  const passives = passivesIn(cut >= 0 ? desc.slice(cut) : '');
+  const cost = block.match(/\*\*Weapon Cost:\*\*\s*([\d,]+)/);
+  return {
+    rarity: quality[1] ?? null, icon: block.match(/^\s*<a?:(\w+):\d+>/)?.[1] ?? null, quality: Number(quality[2]),
+    wear: block.match(/\*\*Wear:\*\*\s*`(\w+)`/)?.[1].toLowerCase() ?? null, wpCost: cost ? num(cost[1]) : null,
+    rolls: rollsIn(cut >= 0 ? desc.slice(0, cut) : desc), passives,
+  };
+}
+
+export function reroll(s: Said): Reroll | null {
+  const t = allText(s);
+  const parts = t.split(/###\s*(?=<a?:\w+:\d+>\s*\*\*`\[(?:CURRENT|NEW)\]`\*\*)/);
+  const cur = parts.find((p) => p.includes('[CURRENT]'));
+  const nxt = parts.find((p) => p.includes('[NEW]'));
+  if (!cur || !nxt) return null;
+  const a = side(cur);
+  const b = side(nxt);
+  const id = t.match(/\*\*ID:\*\*\s*`([A-Z0-9]{6})`/)?.[1];
+  if (!a || !b || !id) return null;
+  const names = (x: RollSide) => x.passives.map((p) => p.name).join('|');
+  const count = s.buttons.find((x) => x.id === 'rr_count')?.label;
+  return {
+    id, name: cur.match(/\[CURRENT\]`\*\*\s*([^\n]+)/)?.[1].trim() ?? '', current: a, next: b,
+    // a stat reroll keeps the passive and changes the numbers, a passive one keeps the weapon's own numbers
+    kind: names(a) === names(b) && a.rolls.join() !== b.rolls.join() ? 'stat' : 'passive',
+    changes: t.match(/Reroll Changes:\s*(\d+)/) ? Number(t.match(/Reroll Changes:\s*(\d+)/)![1]) : null,
+    attempts: t.match(/Reroll Attempts:\s*(\d+)/) ? Number(t.match(/Reroll Attempts:\s*(\d+)/)![1]) : null,
+    shards: count ? num(count) : null,
   };
 }
 

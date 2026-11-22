@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, renameSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { Events, type Client, type Message, type PartialMessage } from 'discord.js';
 import type { Store } from '../db.js';
 import { report } from '../ops.js';
@@ -110,6 +110,14 @@ export function apply(state: OwoState, userId: string, s: read.Said, now = Date.
   if (z?.animals.length) { state.saveZoo(userId, z, now); seen.push('zoo'); }
   const w = read.weapon(s);
   if (w?.id) { state.saveWeaponCard(userId, w, now); seen.push('weapon'); }
+  if (w) state.saveSample(w.name, w, w.shopId ? 'shop' : 'card', now);
+  const rr = read.reroll(s);
+  if (rr) {
+    state.saveReroll(userId, rr, now);
+    state.saveSample(rr.name, rr.current, 'reroll', now);
+    state.saveSample(rr.name, rr.next, 'reroll', now);
+    seen.push('reroll');
+  }
   const list = read.weaponList(s);
   if (list?.weapons.length) {
     state.saveWeaponRows(userId, list.weapons, now);
@@ -172,7 +180,33 @@ async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean)
   apply(new OwoState(store.db), who.userId, s);
 }
 
+// once: everything already in the saved OwO log becomes weapon samples and dex entries,
+// so the weapons helper starts with weeks of data instead of none
+function backfill(store: Store) {
+  if (store.getKv('owo:backfill') || !debugFile) return;
+  const st = new OwoState(store.db);
+  let n = 0;
+  for (const file of ['owo-debug.old.log', debugFile]) {
+    if (!existsSync(file)) continue;
+    for (const line of readFileSync(file, 'utf8').split('\n')) {
+      if (!line) continue;
+      try {
+        const s = read.said(JSON.parse(line));
+        const w = read.weapon(s);
+        if (w) { st.saveSample(w.name, w, w.shopId ? 'shop' : 'card'); n++; }
+        const rr = read.reroll(s);
+        if (rr) { st.saveSample(rr.name, rr.current, 'reroll'); st.saveSample(rr.name, rr.next, 'reroll'); n++; }
+        const dx = read.dex(s);
+        if (dx) st.saveDex(dx);
+      } catch { /* a broken line is skipped */ }
+    }
+  }
+  store.setKv('owo:backfill', String(Date.now()));
+  console.log(`owo backfill: ${n} weapon readings, ${st.samples().length} unique samples`);
+}
+
 export function listenToOwo(client: Client, store: Store) {
+  setTimeout(() => { try { backfill(store); } catch (e) { report('owo backfill', e); } }, 20_000);
   client.on(Events.MessageCreate, (m) => {
     if (!m.guildId) return;
     if (m.author.id === read.OWO_BOT_ID) return void onOwo(store, m, false).catch((e) => report('owo read', e));
