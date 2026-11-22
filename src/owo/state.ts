@@ -102,6 +102,13 @@ export class OwoState {
     }));
   }
 
+  // how many samples each weapon type has, and when the shop was last read
+  sampleStats() {
+    const per = this.db.prepare('SELECT weapon, COUNT(*) AS n FROM owo_samples GROUP BY weapon').all() as { weapon: string; n: number }[];
+    const shop = this.db.prepare("SELECT MAX(at) AS at FROM owo_samples WHERE source = 'shop'").get() as { at: number | null };
+    return { per: new Map(per.map((r) => [r.weapon, r.n])), shopAt: shop.at ?? 0 };
+  }
+
   // a reroll screen: the CURRENT side is the weapon as it is now, confirmed or not
   saveReroll(userId: string, r: Reroll, now = Date.now()) {
     const c: RollSide = r.current;

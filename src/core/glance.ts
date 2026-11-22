@@ -81,6 +81,9 @@ export const menu: Record<string, [string, string, string?]> = {
   owoweapons: ['🗡️', 'Your weapons', 'Every weapon Texz knows, best first, with passives, wear and who holds it'],
   owozoo: ['🦁', 'Your zoo', 'Animals by rank, zoo points and everything you have ever caught'],
   owohb: ['🤖', 'Your HuntBot', 'Trait levels, essence, the biggest run and when it is back'],
+  owoweapon: ['🔎', 'One weapon in full', 'Each number against its range, how well it rolled and whether it is worth shards'],
+  owodismantle: ['♻️', 'What can go', 'Weapons safe to dismantle for shards, with your keepers protected'],
+  ororeroll: ['🎲', 'Reroll check', 'While you reroll, Texz says confirm or cancel and when to stop. On or off'],
   owoforget: ['🧹', 'Forget me', 'Wipe everything Texz learnt about your OwO account'],
 };
 
@@ -130,7 +133,8 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
   owo: {
     sections: [
       ['📡 What I know', ['owosync']],
-      ['🐾 Your account', ['owoteam', 'owoweapons', 'owozoo', 'owohb']],
+      ['🐾 Your account', ['owoteam', 'owozoo', 'owohb']],
+      ['🗡️ Weapons', ['owoweapons', 'owoweapon', 'owodismantle', 'ororeroll']],
       ['🧹 Your data', ['owoforget']],
     ],
     quick: [],

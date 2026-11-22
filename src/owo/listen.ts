@@ -4,6 +4,9 @@ import type { Store } from '../db.js';
 import { report } from '../ops.js';
 import * as read from './read.js';
 import { OwoState } from './state.js';
+import { rangesFrom, verdict } from './advice.js';
+import { card } from '../theme.js';
+import { startOrders } from './orders.js';
 
 // Texz only ever reads here. It never sends OwO commands, presses OwO's buttons or touches captchas.
 
@@ -162,6 +165,34 @@ export function apply(state: OwoState, userId: string, s: read.Said, now = Date.
   return seen;
 }
 
+// one Texz reply per reroll session, edited on every try so the channel doesn't fill up
+const helpers = new Map<string, Message>();
+
+export function rerollCard(state: OwoState, r: read.Reroll) {
+  const v = verdict(rangesFrom(state), r, r.shards);
+  const tag = v.pick === 'confirm' ? '✅' : v.pick === 'cancel' ? '❌' : '🤔';
+  const body = [`${tag} ${v.headline}`, '', ...v.lines, '', v.stop ? `🛑 Time to stop: ${v.odds ?? 'a better roll is very unlikely.'}` : v.odds ?? ''].filter((x, i, all) => x || all[i - 1]);
+  const e = card({ kind: 'help', title: `Reroll check · ${r.name} \`${r.id}\``, emoji: '🎲', gif: 'off', line: '', body: body.join('\n') });
+  e.setFooter({ text: `Try ${r.attempts ?? '?'} · Texz only reads OwO, the buttons are yours · tz o reroll off to stop these` });
+  return e;
+}
+
+async function rerollHelp(store: Store, m: Message | PartialMessage, userId: string, s: read.Said) {
+  const r = read.reroll(s);
+  if (!r) return;
+  const state = new OwoState(store.db);
+  if (state.bits(userId).get('rrhelp')?.value === 'off') return;
+  const embeds = [rerollCard(state, r)];
+  const old = helpers.get(m.id);
+  if (old) return void (await old.edit({ embeds }).catch(() => {}));
+  if (!m.channel?.isSendable()) return;
+  const sent = await m.channel.send({ embeds, reply: { messageReference: m.id, failIfNotExists: false }, allowedMentions: { parse: [] } }).catch(() => null);
+  if (sent) {
+    helpers.set(m.id, sent);
+    if (helpers.size > 200) helpers.delete(helpers.keys().next().value!);
+  }
+}
+
 async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean) {
   if (m.partial) m = await m.fetch().catch(() => m);
   const s = read.said({ content: m.content, embeds: m.embeds.map((e) => e.toJSON()), components: m.components.map((c) => c.toJSON()) });
@@ -178,6 +209,7 @@ async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean)
   // a server that switched the OwO helper off doesn't teach Texz anything
   if (!store.rules(m.guildId ?? null, 'owo').enabled) return;
   apply(new OwoState(store.db), who.userId, s);
+  await rerollHelp(store, m, who.userId, s);
 }
 
 // once: everything already in the saved OwO log becomes weapon samples and dex entries,
@@ -207,6 +239,7 @@ function backfill(store: Store) {
 
 export function listenToOwo(client: Client, store: Store) {
   setTimeout(() => { try { backfill(store); } catch (e) { report('owo backfill', e); } }, 20_000);
+  startOrders(client, store);
   client.on(Events.MessageCreate, (m) => {
     if (!m.guildId) return;
     if (m.author.id === read.OWO_BOT_ID) return void onOwo(store, m, false).catch((e) => report('owo read', e));

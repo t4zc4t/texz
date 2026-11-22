@@ -5,6 +5,7 @@ import type { Store } from '../db.js';
 import { card } from '../theme.js';
 import { passiveOf, weaponOf } from '../owo/catalog.js';
 import { OwoState } from '../owo/state.js';
+import { dismantleList, rangesFrom, report, SHARDS } from '../owo/advice.js';
 
 // The Stray Dogs Den: everything Texz has learnt about your OwO account by watching your normal
 // OwO commands. It only reads and advises, it never plays for you.
@@ -115,7 +116,7 @@ const weaponsCmd: Command = {
       new ButtonBuilder().setCustomId(`nav|owoweapons|owner=${ctx.userId},page=${n + 1}`).setEmoji('▶️').setStyle(ButtonStyle.Secondary).setDisabled(n >= pages - 1),
     )] : [];
     const e = card({ kind: 'help', title: 'Your OwO weapons', emoji: '🗡️', gif: 'off', line: '', body: lines.join('\n') });
-    e.setFooter({ text: `${pages > 1 ? `Page ${n + 1} of ${pages} · ` : ''}${all.length} weapons · run w {id} on one to give me its full numbers` });
+    e.setFooter({ text: `${pages > 1 ? `Page ${n + 1} of ${pages} · ` : ''}${all.length} weapons · tz o weapon {id} for one in full` });
     return ctx.reply({ embeds: [e], components: rows });
   },
 };
@@ -180,9 +181,92 @@ const forget: Command = {
   },
 };
 
+const pick: Record<string, string> = { keep: '✅ Keep it as it is', stat: '🔁 Worth a stat reroll', passive: '🔁 Worth a passive reroll', locked: '🔒 Can\'t be rerolled', unknown: '❔ Not sure yet' };
+
+// one weapon in full: every number against its range, and whether it's worth shards
+function weaponCard(store: Store, userId: string, id: string) {
+  const st = stateOf(store);
+  const w = st.weapons(userId).find((x) => x.id === id.toUpperCase());
+  if (!w) return `I don't know \`${id}\` yet. Run \`w w ${id}\` once and ask again.`;
+  const name = w.name ?? (w.type ? weaponOf(w.type).name : '?');
+  if (!w.detailed) return `I only know \`${w.id}\` from your weapon list. Run \`w w ${w.id}\` once so I see its numbers.`;
+  const ranges = rangesFrom(st);
+  const r = report(ranges, { ...w, name });
+  const tidy = (n: number) => (Math.abs(n) >= 10 ? Math.round(n * 10) / 10 : Math.round(n * 1000) / 1000);
+  const lines = r.rolls.map((x) => {
+    const cost = x.key.endsWith(':cost');
+    const range = x.min !== null && x.max !== null ? ` · range ${tidy(Math.min(x.min, x.max))}–${tidy(Math.max(x.min, x.max))}${cost ? ', lower is better' : ''}` : '';
+    return `**${x.label}** ${x.value}${range} · ${x.roll !== null ? `rolled **${Math.round(x.roll)}%**` : 'range not learnt yet'}`;
+  });
+  const fit = ranges.fit.get(name);
+  const sure = r.sure && (fit?.samples ?? 0) >= 4 ? `Ranges checked against ${fit!.samples} ${name}s` : `Rough: I've only seen ${fit?.samples ?? 0} ${name}${(fit?.samples ?? 0) === 1 ? '' : 's'} with full numbers so far`;
+  const odds = r.advice.chance !== null && r.advice.kind === 'stat' && r.advice.shards ? `\n-# About ${r.advice.shards.toLocaleString()} shards on average for that.` : '';
+  return {
+    embeds: [card({
+      kind: 'help', title: `${name} · ${w.quality}%`, emoji: '🗡️', gif: 'off', line: '',
+      body: `\`${w.id}\` · ${cap(w.rarity ?? '?')}${w.wear && w.wear !== 'worn' ? ` · ${cap(w.wear)}` : ''}${w.empowered ? ' · Empowered' : ''}${w.on ? ` · held by ${w.on}` : ''}\n\n**${pick[r.advice.kind]}**\n${r.advice.why}${odds}`,
+      fields: [{ name: 'Its numbers', value: lines.join('\n') || '?', inline: false }],
+    }).setFooter({ text: `${sure} · quality is only compared within the same weapon` })],
+  };
+}
+
+const weaponCmd: Command = {
+  name: 'owoweapon',
+  as: 'weapon',
+  group: 'owo',
+  data: new SlashCommandBuilder().setName('weapon').setDescription('One OwO weapon in full: each number against its range and whether it is worth shards')
+    .addStringOption((o) => o.setName('id').setDescription('The weapon ID, like G3JG6F').setRequired(true).setMinLength(6).setMaxLength(6)).toJSON(),
+  text: { aliases: ['owep1', 'oweapon'], noName: true, args: ['id'] },
+  run: async (ctx, store) => {
+    const id = ctx.str('id');
+    if (!id) return ctx.reply('Which one? `tz o weapon G3JG6F`');
+    return ctx.reply(weaponCard(store, ctx.userId, id));
+  },
+};
+
+const dismantle: Command = {
+  name: 'owodismantle',
+  as: 'dismantle',
+  group: 'owo',
+  data: new SlashCommandBuilder().setName('dismantle').setDescription('OwO weapons that are safe to dismantle for shards, and which to keep').toJSON(),
+  text: { aliases: ['oscrap', 'odm'], noName: true },
+  run: async (ctx, store) => {
+    const all = stateOf(store).weapons(ctx.userId);
+    if (!all.length) return ctx.reply('No weapons yet. Run `w weapon` and flip through every page once.');
+    const { safe, think, whole } = dismantleList(all);
+    const shards = safe.reduce((n, x) => n + x.shards, 0);
+    const ids = safe.slice(0, 15).map((x) => x.id);
+    const fields = [];
+    if (whole.length) fields.push({ name: 'One command per rarity', value: whole.map((r) => `\`w dismantle ${r[0]}w\` · every ${r} you have can go`).join('\n') + '\n-# OwO skips weapons on a pet and favourites by itself.', inline: false });
+    if (ids.length) fields.push({ name: `Safe to dismantle · ${safe.length}`, value: safe.slice(0, 15).map((x) => `\`${x.id}\` ${x.name} ${x.quality}% · ${cap(x.rarity)} · ${x.shards} shards`).join('\n') + (safe.length > 15 ? `\n-# and ${safe.length - 15} more` : ''), inline: false });
+    if (think.length) fields.push({ name: `Mythic spares · think first · ${think.length}`, value: think.slice(0, 6).map((x) => `\`${x.id}\` ${x.name} ${x.quality}% · ${x.why}`).join('\n') + `\n-# ${SHARDS.mythic} shards each, but a spare mythic can be the right weapon for a new pet.`, inline: false });
+    return ctx.reply({ embeds: [card({
+      kind: 'help', title: 'What can go', emoji: '♻️', gif: 'off', line: '',
+      body: safe.length ? `About **${shards.toLocaleString()}** shards from ${safe.length} weapon${safe.length === 1 ? '' : 's'} you won't miss.\n-# Kept no matter what: weapons on a pet, favourites, empowered ones, Pristine and Fine wear, Legendary and up, and your best two of every weapon type.` : 'Nothing worth scrapping right now. Everything left is either in use, protected or one of your best two of its kind.',
+      fields,
+    }).setFooter({ text: `From what I've seen of your weapons · run w weapon and flip every page to refresh` })] });
+  },
+};
+
+const rerollHelp: Command = {
+  name: 'ororeroll',
+  as: 'reroll',
+  group: 'owo',
+  data: new SlashCommandBuilder().setName('reroll').setDescription('Switch the live reroll check on or off for you')
+    .addStringOption((o) => o.setName('state').setDescription('On or off').addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })).toJSON(),
+  text: { aliases: ['orr'], noName: true, args: ['state'] },
+  run: async (ctx, store) => {
+    const st = stateOf(store);
+    const now = st.bits(ctx.userId).get('rrhelp')?.value === 'off' ? 'off' : 'on';
+    const want = (ctx.str('state') ?? (now === 'on' ? 'off' : 'on')).toLowerCase() === 'off' ? 'off' : 'on';
+    st.setBit(ctx.userId, 'rrhelp', want);
+    return ctx.reply(want === 'on' ? '🎲 Reroll check is **on**. When you reroll a weapon I\'ll say confirm or cancel and when to stop.' : '🎲 Reroll check is **off**. `tz o reroll on` brings it back.');
+  },
+};
+
 export const owo: Module = {
   name: 'owo',
   label: 'OwO helper',
   about: 'Learns your OwO account from your normal commands and helps with teams, weapons and HuntBot',
-  commands: [synced, team, weaponsCmd, zooCmd, hbCmd, forget],
+  commands: [synced, team, weaponsCmd, weaponCmd, dismantle, rerollHelp, zooCmd, hbCmd, forget],
 };
