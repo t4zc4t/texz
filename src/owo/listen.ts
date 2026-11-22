@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, existsSync, renameSync, statSync } from 'node:fs';
 import { Events, type Client, type Message, type PartialMessage } from 'discord.js';
 import type { Store } from '../db.js';
 import { report } from '../ops.js';
@@ -87,7 +87,16 @@ async function ownerOf(m: Message | PartialMessage, s: read.Said): Promise<{ use
   return { userId: w.userId, cmd: w.cmd };
 }
 
-const debugFile = process.env.OWO_DEBUG ? 'owo-debug.log' : null;
+// OwO's raw replies stay on this PC (never in the repo) so new layouts can be learnt from real messages.
+// Capped at about 20 MB, the old file is kept once as owo-debug.old.log
+const debugFile = process.env.OWO_DEBUG === 'off' ? null : 'owo-debug.log';
+function keep(line: string) {
+  if (!debugFile) return;
+  try {
+    if (existsSync(debugFile) && statSync(debugFile).size > 20_000_000) renameSync(debugFile, 'owo-debug.old.log');
+    appendFileSync(debugFile, line + '\n');
+  } catch { /* the log is a nice to have */ }
+}
 
 export function apply(state: OwoState, userId: string, s: read.Said, now = Date.now()) {
   const seen: string[] = [];
@@ -144,8 +153,9 @@ export function apply(state: OwoState, userId: string, s: read.Said, now = Date.
 async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean) {
   if (m.partial) m = await m.fetch().catch(() => m);
   const s = read.said({ content: m.content, embeds: m.embeds.map((e) => e.toJSON()), components: m.components.map((c) => c.toJSON()) });
-  const who = await ownerOf(m, s);
-  if (debugFile && !edited) appendFileSync(debugFile, JSON.stringify({ at: new Date().toISOString(), cmd: who?.cmd ?? '?', content: s.content, embeds: m.embeds.map((e) => e.toJSON()), components: m.components.map((c) => c.toJSON()) }) + '\n');
+  const who = edited && owners.has(m.id) ? { userId: owners.get(m.id)!, cmd: null } : await ownerOf(m, s);
+  // edits matter too: rerolls and page flips change the message in place
+  keep(JSON.stringify({ at: new Date().toISOString(), cmd: who?.cmd ?? '?', edited, content: s.content, embeds: m.embeds.map((e) => e.toJSON()), components: m.components.map((c) => c.toJSON()) }));
   if (!who) return;
   remember(m.id, who.userId);
   // a server that switched the OwO helper off doesn't teach Texz anything
