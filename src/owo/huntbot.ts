@@ -64,7 +64,8 @@ export function huntHours(checks: number[], D: number) {
   return { perDay: hunted / HOUR / days, sendsPerDay: sends / days };
 }
 
-// check-ins from your OwO activity, merged into 10 minute visits; without two days of them, three a day is assumed
+// check-ins from your OwO activity, merged into 10 minute visits; without two days of them a plain day is assumed:
+// three looks six hours apart, then a night's sleep
 export function checkIns(times: number[], now = Date.now()) {
   const recent = [...new Set(times.filter((t) => t > now - 14 * DAY && t <= now))].sort((a, b) => a - b);
   const visits: number[] = [];
@@ -72,7 +73,7 @@ export function checkIns(times: number[], now = Date.now()) {
   const span = visits.length ? visits[visits.length - 1] - visits[0] : 0;
   if (visits.length >= 6 && span >= 2 * DAY) return { visits, measured: true };
   const fake: number[] = [];
-  for (let i = 0; i <= 21; i++) fake.push(now - (21 - i) * 8 * HOUR);
+  for (let d = 7; d >= 0; d--) for (const h of [0, 6, 12]) fake.push(now - d * DAY - (12 - h) * HOUR);
   return { visits: fake, measured: false };
 }
 
@@ -206,8 +207,9 @@ export interface SellPlan { sell: { rank: string; count: number; cowoncy: number
 export function sellPlan(hold: Hold[], cash: number | null, runCost: number, keepAnimals: Set<string>): SellPlan {
   const need = Math.max(0, runCost - (cash ?? runCost));
   const keep: string[] = [];
+  // only the plain ranks: gem, patreon, special and the rest are never sold or sacrificed here
   const usable = hold.filter((h) => RANK_VALUE[h.rank]).map((h) => {
-    const kept = h.animals.filter((a) => keepAnimals.has(a.animal));
+    const kept = h.animals.filter((a) => keepAnimals.has(a.animal) && a.count > 0);
     for (const a of kept) keep.push(a.animal);
     // a rank holding a pet you want can't go by rank command, those animals are listed one by one instead
     const only = kept.length ? h.animals.filter((a) => !keepAnimals.has(a.animal) && a.count > 0) : undefined;

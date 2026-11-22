@@ -230,7 +230,7 @@ function sellLines(store: Store, userId: string, cash: number | null, runCost: n
   if (p.sacrifice.length) out.push(`🔥 Sacrifice for **${fmt(p.sacrifice.reduce((s, x) => s + x.essence, 0))}** essence: ${cmd('sacrifice', p.sacrifice)}`);
   if (p.keep.length) out.push(`-# Kept back because they're on your team: ${p.keep.slice(0, 8).join(', ')}`);
   if (!p.sell.length && !p.sacrifice.length) out.push('Nothing worth selling or sacrificing in your last zoo.');
-  out.push(`-# From your zoo ${at(z.at)}. Only plain ranks, gems, patreon and special animals are never touched.`);
+  out.push(`-# From your zoo ${at(z.at)}. Only plain ranks count here, gem, patreon and special animals are never touched.`);
   return out;
 }
 
@@ -249,7 +249,7 @@ const hbCmd: Command = {
     const levels = Object.entries(h.traits).map(([k, t]) => `${cap(k)} **${t!.level}**`).join(' · ');
     const pace = plan.measured
       ? `Hunting about **${plan.hoursPerDay.toFixed(1)}h** a day from ~${plan.sendsPerDay.toFixed(1)} sends, worked out from when you were actually around`
-      : `Hunting about **${plan.hoursPerDay.toFixed(1)}h** a day, assuming you look in every 8 hours. Two days of you using OwO and I'll use your real times`;
+      : `Hunting about **${plan.hoursPerDay.toFixed(1)}h** a day, assuming three looks a day, six hours apart. After two days of you using OwO I'll go by your real times`;
 
     const spend = plan.spend.length
       ? plan.spend.map((s) => `\`w upgrade ${upgradeWord(s.trait)} ${s.essence}\` → ${s.levels ? `**+${s.levels}** level${s.levels > 1 ? 's' : ''}` : 'progress towards the next level'}`).join('\n')
