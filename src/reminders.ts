@@ -14,6 +14,7 @@ function text(store: Store, r: Reminder): EmbedBuilder | null {
     const e = episode(r);
     return card({ kind: 'episode', title: `${e.title} · episode ${e.ep}`, emoji: '📺', gif: 'off', body: `[Open on AniList](${e.url})` });
   }
+  if (r.kind.startsWith('owo:shop')) return card({ kind: 'custom', title: 'Better weapon in the shop', emoji: '🛒', gif: 'off', body: r.note });
   switch (r.kind) {
     case 'custom':
       return card({ kind: 'custom', title: 'A promise kept', emoji: '📝', body: `**${r.note}**` });
@@ -35,6 +36,7 @@ function line(store: Store, r: Reminder): string | null {
     const e = episode(r);
     return `📺 ${say('episode')} **${e.title}** episode ${e.ep}`;
   }
+  if (r.kind.startsWith('owo:shop')) return `🛒 ${r.note}`;
   switch (r.kind) {
     case 'custom': return `📝 ${say('customShort')} **${r.note}**`;
     case 'owo:hb': return '🤖 Your HuntBot is back, `w hb` to collect and send it again.';
@@ -45,7 +47,7 @@ function line(store: Store, r: Reminder): string | null {
 
 async function deliver(client: Client, store: Store, r: Reminder, body: EmbedBuilder) {
   const s = store.settings(r.user_id);
-  const key = r.kind.startsWith('ep:') ? 'anime' : routeOf[r.kind] ?? '';
+  const key = r.kind.startsWith('ep:') ? 'anime' : r.kind.startsWith('owo:') ? 'owo' : routeOf[r.kind] ?? '';
   // episode alerts go by DM unless someone asks for a channel, so they never land in a random chat
   const where = key === 'anime' ? s.routes.anime ?? 'dm' : s.routes[key] ?? s.delivery;
   if (where === 'dm' || r.kind === 'urgent') {

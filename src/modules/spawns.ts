@@ -1,4 +1,5 @@
 import { fileSighting } from './quote.js';
+import { P2State, REGIONS, shinyChance, shinyWithin } from '../p2/track.js';
 import { track } from './missions.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, StringSelectMenuBuilder,
@@ -211,11 +212,15 @@ async function showNow(store: Store, m: Message, w: Waiting, name: string, guess
     w.pinged = true;
   }
   w.shown = name;
+  // anyone shiny hunting this one hears about it, it's their chain
+  const hunting = w.unsure ? [] : new P2State(store.db).hunters(base).map((h) => h.user_id);
+  const hunters = (await Promise.all(hunting.map((id) => m.guild!.members.fetch(id).then(() => id).catch(() => null)))).filter((x): x is string => !!x);
+  const text = w.unsure ? maybeText(name, guess) : claimText(name, roles, guess, store.catchCount(m.guild.id) >= 100 && !store.caughtNames(m.guild.id).has(base.toLowerCase()));
   w.sent = await ch.send({
-    content: w.unsure ? maybeText(name, guess) : claimText(name, roles, guess, store.catchCount(m.guild.id) >= 100 && !store.caughtNames(m.guild.id).has(base.toLowerCase())),
+    content: hunters.length ? `${text}\n✨ Shiny hunt: ${hunters.map((id) => `<@${id}>`).join(' ')}` : text,
     embeds: [pcCopy(name)],
     reply: { messageReference: w.id, failIfNotExists: false },
-    allowedMentions: { roles },
+    allowedMentions: { roles, users: hunters },
   }).catch(() => null);
   // legends, mythicals and ultra beasts get pinned so nobody scrolls past them, and unpinned once it's over
   if (w.sent && !w.unsure && rarityOf(base)) {
@@ -824,9 +829,93 @@ export async function onPingsButton(store: Store, i: Interaction) {
   return true;
 }
 
+const pct = (x: number) => (x >= 0.995 ? '>99%' : x < 0.001 ? '<0.1%' : `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`);
+const shinyCmd: Command = {
+  name: 'shiny',
+  group: 'poketwo',
+  data: new SlashCommandBuilder().setName('shiny').setDescription('Your Pokétwo shiny hunt: chain, odds and past shinies')
+    .addStringOption((o) => o.setName('ping').setDescription('Ping you when your hunted pokémon spawns').addChoices({ name: 'on', value: 'on' }, { name: 'off', value: 'off' })).toJSON(),
+  text: { aliases: ['shy', 'shinyhunt'], args: ['ping'] },
+  run: (ctx, store) => {
+    const st = new P2State(store.db);
+    const ping = ctx.str('ping')?.toLowerCase();
+    const h = st.hunt(ctx.userId);
+    if (ping === 'on' || ping === 'off') {
+      if (!h) return ctx.reply('Run `p!sh` first.');
+      st.setPing(ctx.userId, ping === 'on');
+      return ctx.reply(`✨ Spawn ping **${ping}**.`);
+    }
+    const past = st.shinies(ctx.userId);
+    if (!h?.species) return ctx.reply(past.length ? `Not hunting right now · ${past.length} shin${past.length === 1 ? 'y' : 'ies'} logged.` : 'Run `p!sh` once so I can see your hunt.');
+    const charm = !!h.charm_until && h.charm_until > Date.now();
+    const p = shinyChance(h.chain, charm);
+    const id = idOf(h.species);
+    const fields = [
+      { name: 'Chain', value: `**${h.chain.toLocaleString()}**`, inline: true },
+      { name: 'Odds now', value: `1 in **${Math.round(1 / p).toLocaleString()}**`, inline: true },
+      { name: 'Next 100 catches', value: pct(shinyWithin(h.chain, 100, charm)), inline: true },
+      { name: 'Next 500', value: pct(shinyWithin(h.chain, 500, charm)), inline: true },
+    ];
+    if (past.length) fields.push({ name: 'Shinies', value: past.slice(0, 6).map((x) => `✨ ${x.species}${x.chain !== null ? ` · chain ${x.chain}` : ''} · <t:${Math.floor(x.at / 1000)}:d>`).join('\n'), inline: false });
+    const e = card({
+      kind: 'help', title: `Shiny hunt · ${h.species}`, emoji: '✨', gif: 'off', line: '',
+      body: `${charm ? `🍀 Shiny charm until <t:${Math.floor(h.charm_until! / 1000)}:R>` : ''}${h.ping ? '' : `${charm ? '\n' : ''}-# Spawn ping off`}`,
+      fields,
+    });
+    if (id) e.setThumbnail(artwork(id));
+    return ctx.reply({ embeds: [e] });
+  },
+};
+
+const mydex: Command = {
+  name: 'mydex',
+  group: 'poketwo',
+  data: new SlashCommandBuilder().setName('mydex').setDescription('Your own Pokétwo Pokédex: progress by region and what you\'re missing')
+    .addStringOption((o) => o.setName('region').setDescription('A region to list what you\'re missing').addChoices(...REGIONS.map(([r]) => ({ name: r, value: r.toLowerCase() })))).toJSON(),
+  text: { aliases: ['md', 'mypokedex'], args: ['region'] },
+  run: (ctx, store) => {
+    const st = new P2State(store.db);
+    const rows = st.dex(ctx.userId);
+    const total = st.dexTotal(ctx.userId);
+    if (!rows.length) return ctx.reply('Run `p!dex` and flip through the pages once.');
+    const have = new Map(rows.map((r) => [r.dex, r.caught]));
+    const species = allSpecies();
+    const seenIds = new Set(rows.map((r) => r.dex));
+    const want = ctx.str('region')?.toLowerCase();
+    // caught recently in this server: the ones worth watching for
+    const around = ctx.guildId ? new Set(store.db.prepare('SELECT DISTINCT lower(name) AS n FROM catches WHERE guild_id = ? AND at > ?').all(ctx.guildId, Date.now() - 14 * 86_400_000).map((r) => (r as { n: string }).n)) : new Set<string>();
+    if (want) {
+      const reg = REGIONS.find(([r]) => r.toLowerCase() === want)!;
+      const list = species.filter((x) => x.id >= reg[1] && x.id <= reg[2]);
+      const miss = list.filter((x) => seenIds.has(x.id) && !(have.get(x.id)! > 0));
+      const unread = list.filter((x) => !seenIds.has(x.id)).length;
+      const hot = miss.filter((x) => around.has(x.name.toLowerCase()));
+      return ctx.reply({ embeds: [card({
+        kind: 'help', title: `${reg[0]} · missing ${miss.length}`, emoji: '📕', gif: 'off', line: '',
+        body: [
+          hot.length ? `👀 Spawned here lately: ${hot.map((x) => `**${x.name}**`).join(', ')}` : null,
+          miss.length ? miss.map((x) => `#${x.id} ${x.name}${x.rare ? ' 🌟' : ''}`).join(' · ').slice(0, 3500) : 'Nothing missing.',
+          unread ? `-# ${unread} not read yet, flip those \`p!dex\` pages` : null,
+        ].filter(Boolean).join('\n'),
+      })] });
+    }
+    const lines = REGIONS.map(([r, a, b]) => {
+      const all = species.filter((x) => x.id >= a && x.id <= b);
+      const got = all.filter((x) => (have.get(x.id) ?? 0) > 0).length;
+      return `\`${r.padEnd(6)}\` ${bar(got, all.length)} ${got}/${all.length}`;
+    });
+    const hot = species.filter((x) => seenIds.has(x.id) && !(have.get(x.id)! > 0) && around.has(x.name.toLowerCase())).slice(0, 10);
+    return ctx.reply({ embeds: [card({
+      kind: 'help', title: 'Your Pokédex', emoji: '📕', gif: 'off', line: '',
+      body: `${total ? `**${total.caught.toLocaleString()}** / ${total.total.toLocaleString()}` : ''}\n${lines.join('\n')}${seenIds.size < species.length ? `\n-# ${species.length - seenIds.size} not read yet` : ''}`,
+      fields: hot.length ? [{ name: '👀 Missing, spawned here lately', value: hot.map((x) => x.name).join(', '), inline: false }] : [],
+    })] });
+  },
+};
+
 export const spawnsModule: Module = {
   name: 'spawns',
   label: 'Pings and spawns',
   about: 'One panel for every ping, Pokétwo spawns with hint solving, and Shoob pings for tier 5 and 6.',
-  commands: [pings, spawns, pokemon, dex, race, wish, dexit],
+  commands: [pings, spawns, pokemon, dex, race, shinyCmd, mydex, wish, dexit],
 };

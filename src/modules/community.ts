@@ -224,6 +224,8 @@ async function postConfession(store: Store, guild: Guild, userId: string, text: 
   const chId = confessCh(store, guild.id);
   const ch = chId ? await guild.channels.fetch(chId).catch(() => null) : null;
   if (!ch?.isSendable()) return 'There\'s no confessional here yet. An admin can make one in /setup → Community.';
+  // the confessional is a thread now, a quiet week archives it
+  if (ch.isThread() && ch.archived) await ch.setArchived(false).catch(() => {});
   const wait = Number(store.getKv(`confesswait:${guild.id}:${userId}`) ?? 0) - Date.now();
   if (wait > 0) return `One confession every five minutes, try again <t:${Math.floor((Date.now() + wait) / 1000)}:R>.`;
   const n = Number(store.getKv(`confessn:${guild.id}`) ?? 0) + 1;

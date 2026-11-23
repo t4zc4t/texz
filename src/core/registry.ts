@@ -15,6 +15,7 @@ import { onOwnerButton, onOwnerConfirm } from '../modules/servers.js';
 import { economy, onPay } from '../modules/economy.js';
 import { bulletins, onBulletinButton } from '../modules/bulletins.js';
 import { onWatchlist } from '../modules/watchlist.js';
+import { onAnimeLink } from '../modules/animelink.js';
 import { onAvatarButton, onGames, onPollButton, utility } from '../modules/utility.js';
 import { moderation, onCaseComponent } from '../modules/moderation.js';
 import { vc } from '../modules/voicemod.js';
@@ -415,6 +416,7 @@ export async function onComponent(store: Store, i: Interaction) {
     if (await onSetup(store, i)) return;
     if (await onAnimeComponent(store, i)) return;
     if (await onWatchlist(store, i)) return;
+    if (await onAnimeLink(store, i)) return;
     if (await onPollButton(store, i)) return;
     if (await onGames(store, i)) return;
     if (await onAvatarButton(i)) return;

@@ -16,6 +16,7 @@ export const menu: Record<string, [string, string, string?]> = {
   pings: ['🔔', 'Pings and reminders', 'Every ping and reminder Texz can send you, in one place'], remind: ['⏰', 'Remind me', 'Plain words: in 2h stretch, at 9pm call mum, tomorrow 8am gym'], reminders: ['🎛️', 'Reminder settings', 'Where reminders ping you, quiet hours and your time zone'],
   quote: ['🖼️', 'Make it a quote', 'Frame a message as a picture, reply with tz quote or paste a link'],
   'wish.list': ['💝', 'My Shoob wishlist'], 'wish.add': ['➕', 'Wish for a character'], 'wish.remove': ['➖', 'Drop a wish'],
+  shiny: ['✨', 'Shiny hunt', 'Your chain, your odds and past shinies'], mydex: ['📔', 'Your Pokédex', 'Your progress by region and what\'s missing'],
   dex: ['📕', 'Server Pokédex', 'What\'s been caught here and what\'s missing'], race: ['🏃', 'Catch race', 'Who catches the most this week'],
   crestquiz: ['🛡️', 'Crest quiz', 'Guess the club from its crest, pays yen'],
   daily: ['💴', 'Daily yen'], work: ['💼', 'Agency shift'], crime: ['🖤', 'Port Mafia job'], fish: ['🎣', 'Go fishing'], beg: ['🥺', 'Beg'], bank: ['🏦', 'Your vault'], rob: ['🫳', 'Rob someone'], heist: ['🕶️', 'Crew heist'], roulette: ['🎡', 'Roulette'], scratch: ['🎟️', 'Scratch card'], rps: ['✊', 'Rock paper scissors'], wallet: ['👛', 'Wallet'], give: ['💸', 'Give yen'], rich: ['🏆', 'Richest'],
@@ -82,6 +83,12 @@ export const menu: Record<string, [string, string, string?]> = {
   owozoo: ['🦁', 'Your zoo', 'Animals by rank, zoo points and everything you have ever caught'],
   owohb: ['🤖', 'Your HuntBot', 'What to upgrade next, what to skip, and what to sell or sacrifice'],
   owobattles: ['⚔️', 'Battle log', 'Win rate, xp a day, streaks and how long until each pet levels'],
+  animelink: ['🔗', 'Link your list', 'AniList or MAL, your list and alerts follow it'],
+  animelogin: ['🔑', 'AniList login', 'Changes you make here go to your AniList'],
+  animewho: ['👥', 'Who\'s watching', 'Who in the server has a show on their list'],
+  animecompare: ['🤝', 'Compare lists', 'Your list next to someone else\'s'],
+  owogems: ['💎', 'Gems', 'What\'s running, how long it lasts, what to use next'],
+  owoboard: ['🏆', 'Server board', 'This week\'s top hunters, rare catches and streaks'],
   owoxp: ['📈', 'Level forecast', 'Battles and days until a pet reaches a level'],
   owodex: ['📖', 'Dex', 'An animal\'s base stats, or two side by side'],
   owocatches: ['🏹', 'Catch log', 'Rare catches, totals by rank and your luck against OwO\'s odds'],
@@ -109,7 +116,7 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
     quick: ['setup', 'giveaway.start', 'rolepicker', 'case.list', 'serverstats'],
   },
   poketwo: {
-    sections: [['🔎 Claim help', ['spawns', 'pokemon']], ['📕 The server', ['dex', 'race']], ['🔔 Pings', ['pings']]],
+    sections: [['🔎 Claim help', ['spawns', 'pokemon']], ['✨ You', ['shiny', 'mydex']], ['📕 The server', ['dex', 'race']], ['🔔 Pings', ['pings']]],
     quick: ['spawns', 'pokemon', 'dex', 'race', 'pings'],
   },
   shoob: {
@@ -140,8 +147,8 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
   owo: {
     sections: [
       ['📡 What I know', ['owosync']],
-      ['🐾 Your account', ['owoteam', 'owozoo', 'owohb', 'owopings']],
-      ['📒 Logs and dailies', ['owobattles', 'owoxp', 'owodex', 'owocatches', 'owocollect', 'owowall']],
+      ['🐾 Your account', ['owoteam', 'owozoo', 'owohb', 'owogems', 'owopings']],
+      ['📒 Logs and dailies', ['owobattles', 'owoxp', 'owodex', 'owocatches', 'owocollect', 'owowall', 'owoboard']],
       ['🗡️ Weapons', ['owoweapons', 'owoweapon', 'owodismantle', 'ororeroll']],
       ['🧹 Your data', ['owoforget']],
     ],
@@ -151,6 +158,7 @@ export const layout: Record<string, { sections: [string, string[]][]; quick: str
     sections: [
       ['🔍 Look it up', ['anime', 'manga', 'character', 'today']],
       ['📋 Your shows', ['watchlist.view', 'watchlist.add', 'alerts', 'animehome']],
+      ['🔗 AniList and MAL', ['animelink', 'animelogin', 'animewho', 'animecompare']],
       ['🍿 Watch together', ['watchparty', 'movie']],
       ['🎲 Something new', ['recommend~type=ANIME', 'recommend~type=MANGA']],
     ],

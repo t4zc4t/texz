@@ -7,6 +7,8 @@ import { passiveOf, weaponOf } from '../owo/catalog.js';
 import { OwoState } from '../owo/state.js';
 import { dismantleList, rangesFrom, report, SHARDS } from '../owo/advice.js';
 import { baseOf, planFor, type Arm, type Candidate } from '../owo/team.js';
+import { gemPlan, tierOf, type Active } from '../owo/gems.js';
+import { boardFor } from '../owo/board.js';
 import { WALL_IDS, wallPrice, wallUrl } from '../owo/catalog.js';
 import { battleStats, catchStats, collectibles, forecast, paceOf, teamNow } from '../owo/stats.js';
 import { statsAt } from '../owo/team.js';
@@ -412,6 +414,7 @@ const pingsCmd: Command = {
   },
 };
 
+const gemMark: Record<string, string> = { Hunting: '🏹', Empowering: '⚡', Lucky: '🍀', Special: '🌟', Patreon: '💖' };
 const when = (ms: number) => `<t:${Math.floor(ms / 1000)}:d>`;
 const pctOf = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '–');
 const rankWord: Record<string, string> = { unknown: 'other' };
@@ -542,6 +545,53 @@ const dexCmd: Command = {
   },
 };
 
+const gemsCmd: Command = {
+  name: 'owogems',
+  as: 'gems',
+  group: 'owo',
+  data: new SlashCommandBuilder().setName('gems').setDescription('Your gems: what\'s running, how long they last, what to use next').toJSON(),
+  text: { aliases: ['ogems', 'og'], noName: true },
+  run: async (ctx, store) => {
+    const st = stateOf(store);
+    const bits = st.bits(ctx.userId);
+    const inv = bits.get('inventory');
+    const act = bits.get('gems:active');
+    if (!inv && !act) return ctx.reply('Run `w inv` and hunt once.');
+    const p = gemPlan((act?.value ?? []) as Active[], (inv?.value ?? {}) as Record<string, number>);
+    if (!p.lines.length) return ctx.reply('No gems.');
+    const fields = p.lines.map((l) => ({
+      name: `${gemMark[l.type]} ${l.type}`,
+      value: [
+        l.active ? `Running: **${tierOf(l.active.gem)}** · ~${l.huntsLeft} hunts left` : '⚠️ Not running',
+        l.stock.length ? `Stock: ${l.stock.map((x) => `${tierOf(x.gem)} ×${x.count}`).join(', ')} · ~${l.stockHunts.toLocaleString()} hunts` : 'No stock',
+        l.next && (!l.active || l.huntsLeft <= 3) ? `Next: \`w use ${l.next.id}\`` : null,
+      ].filter(Boolean).join('\n'),
+      inline: true,
+    }));
+    return ctx.reply({ embeds: [card({
+      kind: 'help', title: 'Your gems', emoji: '💎', gif: 'off', line: '',
+      body: [
+        p.luckyAlone ? '⚠️ Lucky burns twice as fast without Hunting and Empowering both on.' : null,
+        `-# Inventory ${inv ? at(inv.at) : 'not seen'} · last hunt ${act ? at(act.at) : 'not seen'}`,
+      ].filter(Boolean).join('\n'),
+      fields,
+    })] });
+  },
+};
+
+const boardCmd: Command = {
+  name: 'owoboard',
+  as: 'board',
+  group: 'owo',
+  data: new SlashCommandBuilder().setName('board').setDescription('This week\'s top hunters, rarest catches and best streaks in the server').toJSON(),
+  text: { aliases: ['oboard', 'ob'], noName: true },
+  run: async (ctx, store) => {
+    if (!ctx.guild) return ctx.reply('Only in a server.');
+    await ctx.defer?.();
+    return ctx.reply({ embeds: [await boardFor(store, ctx.guild)] });
+  },
+};
+
 const collectCmd: Command = {
   name: 'owocollect',
   as: 'collectibles',
@@ -669,5 +719,5 @@ export const owo: Module = {
   name: 'owo',
   label: 'OwO helper',
   about: 'Learns your OwO account from your normal commands and helps with teams, weapons and HuntBot',
-  commands: [synced, team, weaponsCmd, weaponCmd, dismantle, rerollHelp, zooCmd, hbCmd, battlesCmd, xpCmd, dexCmd, catchesCmd, collectCmd, wallCmd, pingsCmd, forget],
+  commands: [synced, team, weaponsCmd, weaponCmd, dismantle, rerollHelp, zooCmd, hbCmd, gemsCmd, boardCmd, battlesCmd, xpCmd, dexCmd, catchesCmd, collectCmd, wallCmd, pingsCmd, forget],
 };

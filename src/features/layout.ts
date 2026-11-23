@@ -12,6 +12,7 @@ import { liftColours } from '../modules/mycolour.js';
 import { applyPerks, perkLine, ranks } from '../modules/levels.js';
 import { DESK } from '../modules/predict.js';
 import { HUB } from '../modules/booth.js';
+import { confessThread } from './tidy.js';
 
 // the whole Texz corner of a server in one go: a front door, the bulletin board, the bar and the archives, each with the right locks
 
@@ -33,7 +34,7 @@ export const extraRooms = {
   evidence: { name: '📸┃evidence-board', topic: 'Pictures, clips, memes and screenshots, open to everyone. Talk in the thread under a post. The picture of the day and the meme drops have threads of their own.' },
   pokedex: { name: '🔴┃pokedex-bureau', topic: 'Pokétwo spawns and catching. Texz posts the name and the catch line under every spawn.' },
   cards: { name: '🃏┃card-vault', topic: 'Shoob card drops. Rare tiers ping the Shoob Rare Drops role.' },
-  owo: { name: '🐾┃stray-dogs-den', topic: 'OwO hunting, battling and gambling.' },
+  owo: { name: '🐾┃stray-dogs-den', topic: 'OwO, Shoob, yen and Texz games. Every bot game in one den.' },
   ranks: { name: '📈┃ranks-and-perks', topic: 'Every Agency rank, the level it takes and what it gets you, plus the special roles and how to earn them.' },
   patrons: { name: '💎┃agency-patrons', topic: 'Everyone who boosts the server gets thanked here. Their names go on the good page of Kunikida\'s notebook.' },
   yen: { name: '💴┃the-yen-counter', topic: 'Daily yen, wallets, giving, the rich list and the role shop. Yen commands only work here, so the rest of the server stays quiet.' },
@@ -258,7 +259,7 @@ export async function botAccess(store: Store, guild: Guild) {
 }
 
 // every rank with its level and perks, then the roles you get some other way
-function ranksView(store: Store, guild: Guild, rolesRoom: string, patronRoom: string, yenRoom: string) {
+export function ranksView(store: Store, guild: Guild, rolesRoom: string, patronRoom: string, yenRoom: string) {
   const rewards = store.guild(guild.id).levels.rewards ?? {};
   const roleOf = (at: number) => (rewards[String(at)] && guild.roles.cache.has(rewards[String(at)]) ? ` · <@&${rewards[String(at)]}>` : '');
   const member = store.getKv(`verifyrole:${guild.id}`);
@@ -338,7 +339,8 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
   const door = await room(guild, store, front, g.welcome.channel, extraRooms.arrivals, 'read', me, ['welcome', 'arrivals', 'new-recruits']);
   const ru = await room(guild, store, front, store.getKv(`rulesch:${guild.id}`), extraRooms.rules, 'read', me, ['rules', 'server-rules'], 'all');
   const ro = await room(guild, store, front, store.getKv(`rolesch:${guild.id}`), extraRooms.roles, 'read', me, ['roles', 'self-roles', 'reaction-roles', 'get-roles']);
-  const rk = await room(guild, store, front, store.getKv(`ranksch:${guild.id}`), extraRooms.ranks, 'read', me, ['ranks', 'levels-info', 'perks']);
+  // ranks and perks live in the rules room now, one room to read instead of two
+  const rk = ru;
   const p = await room(guild, store, front, store.getKv(`boostch:${guild.id}`), extraRooms.patrons, 'read', me, ['boosts', 'boosters']);
   const pr = await room(guild, store, board, g.levels.channel, extraRooms.promotions, 'read', me, ['level-ups', 'levels', 'rank-ups']);
   const dk = await room(guild, store, board, store.getKv(`deskch:${guild.id}`), DESK, 'read', me, ['predictions', 'predict']);
@@ -348,17 +350,17 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
   const ev = await room(guild, store, bar, store.getKv(`mediach:${guild.id}`), extraRooms.evidence, 'media', me, ['media', 'memes', 'pics']);
   const countSaved = (JSON.parse(store.getKv(`count:${guild.id}`) ?? '{}') as { channel?: string }).channel;
   const k = await room(guild, store, bar, countSaved, rooms.count, 'chat', me, ['counting', 'count']);
-  const y = await room(guild, store, bar, store.rules(guild.id, 'economy').channels[0], extraRooms.yen, 'bot', me, ['economy', 'yen', 'bank']);
-  const f = await room(guild, store, bar, store.getKv(`confessch:${guild.id}`), rooms.confess, 'read', me, ['confessions', 'confess']);
   const pk = await room(guild, store, bar, store.getKv(`dench:${guild.id}:p2`), extraRooms.pokedex, 'bot', me, ['poketwo', 'pokemon', 'pokemon-spawns', 'spawns']);
-  const sh = await room(guild, store, bar, store.getKv(`dench:${guild.id}:shoob`), extraRooms.cards, 'bot', me, ['shoob', 'shoob-spawns', 'cards']);
+  // OwO, Shoob, yen and the games share one den, Pokétwo keeps its own for the spawns
   const ow = await room(guild, store, bar, store.getKv(`dench:${guild.id}:owo`), extraRooms.owo, 'bot', me, ['owo', 'owo-bot', 'hunting']);
+  const y = ow;
+  const sh = ow;
+  const f = await confessThread(store, guild, gen.ch as TextChannel);
   const o = await room(guild, store, logs, g.mod.logChannel, extraRooms.orders, 'private', me, ['mod-log', 'modlog', 'mod-logs']);
   const w = await room(guild, store, logs, store.getKv(`serverlog:${guild.id}`), extraRooms.watch, 'private', me, ['server-log', 'logs']);
   const l = await room(guild, store, logs, store.getKv(`botlog:${guild.id}`), extraRooms.ledger, 'private', me, ['bot-log', 'texz-log']);
   const voices = [
     await voice(guild, store, lounge, 'bar', '🥃 Bar Lupin', ['General', 'general', 'Lounge']),
-    await voice(guild, store, lounge, 'night', '🌙 Late Night Shift'),
     await voice(guild, store, lounge, 'mission', '🎮 Mission Room', ['Gaming', 'gaming']),
     await voice(guild, store, lounge, 'watch', '🎬 Watch Party', ['Movies', 'movie-night']),
     // join it and Texz builds you a private room of your own
@@ -382,11 +384,10 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
   if (member) { const w = store.guild(guild.id); w.welcome.autorole = null; store.saveGuild(guild.id, w); }
   const kvs: [string, string][] = [
     [`entrancech:${guild.id}`, ex.ch.id],
-    [`ranksch:${guild.id}`, rk.ch.id],
     [`deskch:${guild.id}`, dk.ch.id],
     [`boostch:${guild.id}`, p.ch.id], [`rulesch:${guild.id}`, ru.ch.id], [`rolesch:${guild.id}`, ro.ch.id], [`generalch:${guild.id}`, gen.ch.id], [`mediach:${guild.id}`, ev.ch.id],
     [`dench:${guild.id}:p2`, pk.ch.id], [`dench:${guild.id}:shoob`, sh.ch.id], [`dench:${guild.id}:owo`, ow.ch.id],
-    [`confessch:${guild.id}`, f.ch.id], [`serverlog:${guild.id}`, w.ch.id], [`botlog:${guild.id}`, l.ch.id],
+    [`confessch:${guild.id}`, f.id], [`serverlog:${guild.id}`, w.ch.id], [`botlog:${guild.id}`, l.ch.id],
   ];
   for (const [key, v] of kvs) store.setKv(key, v);
   const c = { channel: null, n: 0, last: null, best: 0, ...JSON.parse(store.getKv(`count:${guild.id}`) ?? '{}') };
@@ -395,7 +396,7 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
 
   // inside each floor in reading order
   const feeds = [g.bulletins.f1.channel, g.bulletins.football.channel, g.bulletins.anime.channel].filter((x): x is string => !!x);
-  const inside = [ex.ch.id, ru.ch.id, door.ch.id, ro.ch.id, rk.ch.id, p.ch.id, ...feeds, dk.ch.id, pr.ch.id, q.ch.id, a.ch.id, gen.ch.id, ev.ch.id, pk.ch.id, sh.ch.id, ow.ch.id, k.ch.id, y.ch.id, f.ch.id, o.ch.id, w.ch.id, l.ch.id];
+  const inside = [...new Set([ex.ch.id, ru.ch.id, door.ch.id, ro.ch.id, p.ch.id, ...feeds, dk.ch.id, pr.ch.id, q.ch.id, a.ch.id, gen.ch.id, ev.ch.id, pk.ch.id, ow.ch.id, k.ch.id, o.ch.id, w.ch.id, l.ch.id])];
   await guild.channels.setPositions([...inside, ...voices.map((v) => v.id)].map((id, n) => ({ channel: id, position: n }))).catch(() => {});
 
   // the front door at the very top, the bulletin board second, the archives at the very bottom
@@ -464,15 +465,13 @@ export async function buildAgency(store: Store, guild: Guild): Promise<string> {
   if (dk.fresh) await dk.ch.send({ embeds: [card({ kind: 'bulletin', title: '🔮 Ranpo\'s deductions', emoji: '', gif: 'off', line: '', body: 'Every morning the day\'s big matches land here with buttons, and on race week the podium does too. Call it before kick-off or lights out.\nRight calls pay yen. `tz predict top` has the season\'s best.' })] }).catch(() => {});
   if (pr.fresh) await pr.ch.send({ embeds: [card({ kind: 'bulletin', title: '🎖️ Promotions', emoji: '', gif: 'off', body: 'Every rank up gets announced here. Chat, catch, quiz, and climb.\n`tz rank` shows where you stand.' })] }).catch(() => {});
   if (k.fresh) await k.ch.send(countIntro()).then((m) => m.pin().catch(() => {})).catch(() => {});
-  if (f.fresh) await f.ch.send(confessIntro()).then((m) => m.pin().catch(() => {})).catch(() => {});
   if (pk.fresh) await pk.ch.send({ embeds: [card({ kind: 'bulletin', title: '🔴 Pokédex Bureau', emoji: '', gif: 'off', body: 'Pokétwo spawns land here. Texz names every one and hands you the catch line.\n-# Admins: run `@Pokétwo redirect` with this channel so every spawn comes here.' })] }).catch(() => {});
-  if (sh.fresh) await sh.ch.send({ embeds: [card({ kind: 'bulletin', title: '🃏 Card Vault', emoji: '', gif: 'off', body: 'Shoob drops land here. Tier 5 and 6 ping the rare drop role, pick it up in the roles room.' })] }).catch(() => {});
   if (l.fresh) await l.ch.send({ embeds: [card({ kind: 'bulletin', title: '📓 Texz ledger', emoji: '', gif: 'off', body: 'Every settings change and every building job gets a line here, so staff can see who changed what.' })] }).catch(() => {});
 
   const lines = [
-    `**${FLOORS.front}** · <#${ex.ch.id}> <#${ru.ch.id}> <#${door.ch.id}> <#${ro.ch.id}> <#${rk.ch.id}> <#${p.ch.id}>`,
+    `**${FLOORS.front}** · <#${ex.ch.id}> <#${ru.ch.id}> <#${door.ch.id}> <#${ro.ch.id}> <#${p.ch.id}>`,
     `**${FLOORS.board}** · ${feeds.map((x) => `<#${x}>`).join(' ')} <#${dk.ch.id}> <#${pr.ch.id}> <#${q.ch.id}> <#${a.ch.id}>`,
-    `**${FLOORS.bar}** · <#${gen.ch.id}> <#${ev.ch.id}> <#${pk.ch.id}> <#${sh.ch.id}> <#${ow.ch.id}> <#${k.ch.id}> <#${y.ch.id}> <#${f.ch.id}>`,
+    `**${FLOORS.bar}** · <#${gen.ch.id}> <#${f.id}> <#${ev.ch.id}> <#${pk.ch.id}> <#${ow.ch.id}> <#${k.ch.id}>`,
     `**${FLOORS.lounge}** · ${voices.map((v) => `<#${v.id}>`).join(' ')}`,
     `**${FLOORS.logs}** · <#${o.ch.id}> <#${w.ch.id}> <#${l.ch.id}>, staff only`,
   ];

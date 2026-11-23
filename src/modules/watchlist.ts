@@ -6,6 +6,7 @@ import type { Store, WatchEntry } from '../db.js';
 import type { Command } from '../core/module.js';
 import { mediaById, searchMedia, titleOf, type Media } from '../anime/anilist.js';
 import { card } from '../theme.js';
+import { pushToAniList } from './animelink.js';
 
 type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 const row = (...c: MessageActionRowComponentBuilder[]) => new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(...c);
@@ -133,6 +134,7 @@ export async function onWatchlist(store: Store, i: Interaction): Promise<boolean
   if (tag === 'wlcs' && i.isStringSelectMenu() && isStatus(i.values[0])) {
     const status = i.values[0];
     store.watch({ ...e, status, progress: status === 'completed' && e.total ? e.total : e.progress });
+    pushToAniList(store, me, e.media_id);
   }
   if (tag === 'wlc' && i.isButton()) {
     if (b === 'set') {
@@ -153,12 +155,14 @@ export async function onWatchlist(store: Store, i: Interaction): Promise<boolean
       // the last episode closes the case on its own
       const status = e.total && progress >= e.total ? 'completed' : e.status === 'planning' ? 'watching' : e.status;
       store.watch({ ...e, progress, status });
+      pushToAniList(store, me, e.media_id);
     }
   }
   if (tag === 'wlm' && i.isModalSubmit()) {
     const n = Number.parseInt(i.fields.getTextInputValue('n'), 10);
     if (!(n >= 0) || (e.total && n > e.total)) { await i.reply({ content: `Pick a number from 0 to ${e.total ?? 'whatever you\'re on'}.`, flags: MessageFlags.Ephemeral }); return true; }
     store.watch({ ...e, progress: n, status: e.total && n >= e.total ? 'completed' : n > 0 && e.status === 'planning' ? 'watching' : e.status });
+    pushToAniList(store, me, e.media_id);
     const fresh = store.watchEntry(me, e.media_id)!;
     if (i.isFromMessage()) await i.update(entryPanel(fresh));
     else await i.reply({ ...entryPanel(fresh), flags: MessageFlags.Ephemeral });

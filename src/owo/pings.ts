@@ -7,10 +7,12 @@ import { OwoState } from './state.js';
 // The OwO nudges: HuntBot is home, a new OwO day has started, and the captcha alarm.
 // Each person picks what they want. Texz only ever tells you, it never runs anything for you.
 
-export type PingKind = 'hb' | 'day' | 'captcha';
+export type PingKind = 'hb' | 'day' | 'shop' | 'gems' | 'captcha';
 export const PINGS: Record<PingKind, { label: string; emoji: string; about: string; on: boolean }> = {
   hb: { label: 'HuntBot is back', emoji: '🤖', about: 'the moment your HuntBot run finishes', on: false },
   day: { label: 'New OwO day', emoji: '🌅', about: 'when daily, cookie and quests reset', on: false },
+  shop: { label: 'Shop upgrade', emoji: '🛒', about: 'the weapon shop has a better copy of a weapon you use', on: false },
+  gems: { label: 'Gem running out', emoji: '💎', about: 'a gem has 3 hunts or less left', on: false },
   // on unless switched off: a missed captcha can get an OwO account banned
   captcha: { label: 'Captcha alarm', emoji: '🚨', about: 'right away when OwO asks you for a captcha', on: true },
 };
@@ -64,6 +66,38 @@ export function rearmDays(store: Store) {
   for (const r of rows) {
     const p = JSON.parse(r.value) as Partial<Record<PingKind, boolean>>;
     if (p.day && !store.reminderOf(r.user_id, 'owo:day')) store.setReminder(r.user_id, 'owo:day', new Date(nextOwoDay()), dailies(new OwoState(store.db), r.user_id), store.lastChannel(r.user_id));
+  }
+}
+
+// the weapon shop is the same for everyone each day: whoever flips a page, everyone with that weapon type
+// on a pet and a worse copy hears about it once
+export function shopAlert(store: Store, w: { shopId: number | null; name: string; quality: number | null; wear: string | null; price: number | null }, channelId: string) {
+  if (!w.shopId || w.quality === null) return;
+  const st = new OwoState(store.db);
+  const day = new Date(nextOwoDay() - 86_400_000).toISOString().slice(0, 10);
+  const users = store.db.prepare("SELECT DISTINCT user_id FROM owo_weapons WHERE name = ? AND on_animal IS NOT NULL").all(w.name) as { user_id: string }[];
+  for (const { user_id: u } of users) {
+    if (!pingsOf(st, u).shop) continue;
+    const best = Math.max(...st.weapons(u).filter((x) => x.name === w.name).map((x) => x.quality ?? 0));
+    if (w.quality < best + 3) continue;
+    const key = `shopalert:${u}:${day}:${w.shopId}`;
+    if (store.getKv(key)) continue;
+    store.setKv(key, '1');
+    store.setReminder(u, `owo:shop:${w.shopId}`, new Date(), `**${w.name}** ${w.quality}%${w.wear && w.wear !== 'worn' ? ` ${w.wear}` : ''} in today's shop · yours ${best}% · shop ID \`${w.shopId}\`${w.price ? ` · ${w.price.toLocaleString()} shards` : ''}`, channelId);
+  }
+}
+
+// a reply under the hunt when a gem is nearly gone, once per gem
+export async function gemWarning(store: Store, m: Message | PartialMessage, userId: string, gems: { gem: string; left: number; of: number }[], perHuntOf: (gem: string) => number) {
+  const st = new OwoState(store.db);
+  if (!pingsOf(st, userId).gems || !m.channel?.isSendable()) return;
+  const low = gems.filter((g) => g.left > 0 && g.left / Math.max(1, perHuntOf(g.gem)) <= 3);
+  const gone = gems.filter((g) => g.left === 0);
+  for (const g of [...low, ...gone]) {
+    const key = `gemwarn:${userId}:${g.gem}:${new Date().toISOString().slice(0, 10)}:${g.left === 0 ? 'out' : 'low'}`;
+    if (store.getKv(key)) continue;
+    store.setKv(key, String(Date.now()));
+    await m.channel.send({ content: `💎 <@${userId}> **${g.gem}** ${g.left === 0 ? 'ran out' : `is almost out (${g.left}/${g.of})`} · \`tz o gems\``, allowedMentions: { users: [userId] } }).catch(() => {});
   }
 }
 

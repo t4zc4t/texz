@@ -35,8 +35,22 @@ let offlineMs = 0;
 const uses = new Map<string, number>();
 export const countUse = (name: string) => uses.set(name, (uses.get(name) ?? 0) + 1);
 
+// the same problem over and over is worth a DM, not just a line in the error channel
+const recent = new Map<string, number[]>();
+const nagged = new Map<string, number>();
+function repeated(where: string) {
+  const now = Date.now();
+  const list = (recent.get(where) ?? []).filter((t) => now - t < 3600_000);
+  list.push(now);
+  recent.set(where, list);
+  if (list.length >= 5 && now - (nagged.get(where) ?? 0) > 6 * 3600_000) {
+    nagged.set(where, now);
+    void dmOwner(`🚨 **${where}** failed ${list.length} times in the last hour.`);
+  }
+}
+
 export function report(where: string, e: unknown) {
-  if (!isNetwork(e)) errors++;
+  if (!isNetwork(e)) { errors++; repeated(where); }
   if (isNetwork(e)) {
     lastNetError = Date.now();
     if (!offlineSince) { offlineSince = Date.now(); console.log(`offline (${where}), retrying`); }
@@ -64,8 +78,43 @@ async function flush() {
   if (chunk) await ch.send({ content: `🩹 ${chunk}`, allowedMentions: { parse: [] } }).catch(() => {});
 }
 
-// one copy of the database a day, the last week kept
-export function backup(s: Store, dir = 'backups', keep = 7) {
+async function ownerOf(c: Client) {
+  const app = await c.application?.fetch().catch(() => null);
+  const ownerId = app?.owner && 'members' in app.owner ? app.owner.ownerId : app?.owner?.id;
+  return ownerId ? c.users.fetch(ownerId).catch(() => null) : null;
+}
+export async function dmOwner(text: string) {
+  if (!client) return;
+  const owner = await ownerOf(client);
+  await owner?.send({ content: text, allowedMentions: { parse: [] } }).catch(() => {});
+}
+
+// each feed notes when it last ran clean; one stuck for hours while Texz itself is online gets a DM
+const feedsOk = new Map<string, number>();
+export const feedOk = (name: string) => feedsOk.set(name, Date.now());
+function checkFeeds() {
+  if (!client?.isReady() || offlineSince) return;
+  const now = Date.now();
+  for (const [name, at] of feedsOk) {
+    if (now - at < 3 * 3600_000 || !store) continue;
+    const key = `feedwarn:${name}`;
+    if (now - Number(store.getKv(key) ?? 0) < 12 * 3600_000) continue;
+    store.setKv(key, String(now));
+    void dmOwner(`📡 The **${name}** feed hasn't worked since <t:${Math.floor(at / 1000)}:R>.`);
+  }
+}
+
+// the last lines of the log before a crash, for the DM after it
+function logTail(lines = 12) {
+  try {
+    const all = readFileSync('texz.log', 'utf8').trimEnd().split('\n');
+    const cut = all.findLastIndex((l) => /^\[\d{4}-\d{2}-\d{2} [\d:]+\] texz (was not running|started)/.test(l));
+    return all.slice(Math.max(0, cut - lines), cut > 0 ? cut : undefined).join('\n').slice(-1500);
+  } catch { return ''; }
+}
+
+// one copy of the database a day, the last week kept, in BACKUP_DIR when set
+export function backup(s: Store, dir = process.env.BACKUP_DIR || 'backups', keep = 7) {
   mkdirSync(dir, { recursive: true });
   const name = `texz-${new Date().toISOString().slice(0, 10)}.db`;
   const path = join(dir, name);
@@ -81,6 +130,18 @@ export function startOps(c: Client, s: Store) {
   store = s;
   process.on('unhandledRejection', (e) => report('unhandled', e));
   c.on('error', (e) => report('discord', e));
+  // a run that ended without a clean restart was a crash: say so, with the last log lines
+  const prev = s.getKv('run:state');
+  if (prev === 'running') {
+    const tail = logTail();
+    void dmOwner(`💥 **Texz stopped unexpectedly** and is back up.${tail ? `\n\`\`\`\n${tail.replace(/```/g, "'''")}\n\`\`\`` : ''}`);
+  }
+  s.setKv('run:state', 'running');
+  // a normal stop (closing the tray, shutting the PC down) isn't a crash
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGBREAK', 'SIGHUP'] as const) {
+    process.once(sig, () => { try { s.setKv('run:state', 'clean'); } catch { /* closing */ } process.exit(0); });
+  }
+  setInterval(checkFeeds, 30 * 60_000).unref?.();
   const daily = () => {
     if (s.getKv('lastBackup') === new Date().toISOString().slice(0, 10)) return;
     try {
@@ -96,7 +157,7 @@ export function startOps(c: Client, s: Store) {
     backOnlineCheck(c.isReady() && c.ws.ping > 0);
     try { writeFileSync('.alive', offlineSince ? `offline:${Date.now()}` : String(c.isReady() ? Date.now() : 0)); } catch { /* read-only folder, no tray then */ }
     // dropping a .restart file asks for a clean exit, the tray or runner starts the new build
-    if (existsSync('.restart')) { rmSync('.restart', { force: true }); console.log('restart asked for, exiting'); process.exit(0); }
+    if (existsSync('.restart')) { rmSync('.restart', { force: true }); s.setKv('run:state', 'clean'); console.log('restart asked for, exiting'); process.exit(0); }
   };
   beat();
   setInterval(beat, 30_000);
@@ -117,9 +178,7 @@ async function healthReport(c: Client, s: Store) {
   const key = `health:${d.toISOString().slice(0, 10)}`;
   if (d.getUTCDay() !== 0 || d.getUTCHours() < 15 || s.getKv(key)) return;
   s.setKv(key, '1');
-  const app = await c.application?.fetch().catch(() => null);
-  const ownerId = app?.owner && 'members' in app.owner ? app.owner.ownerId : app?.owner?.id;
-  const owner = ownerId ? await c.users.fetch(ownerId).catch(() => null) : null;
+  const owner = await ownerOf(c);
   if (!owner) return;
   const up = Date.now() - started;
   const hours = (ms: number) => `${Math.floor(ms / 3600_000)}h ${Math.floor((ms % 3600_000) / 60_000)}m`;
@@ -141,6 +200,7 @@ async function healthReport(c: Client, s: Store) {
     spawns,
     top ? `⌨️ Most used: ${top}` : '',
     dbSize ? `🗄️ Database ${dbSize}, ${c.guilds.cache.size} server${c.guilds.cache.size === 1 ? '' : 's'}` : '',
+    `💾 Last backup ${s.getKv('lastBackup') ?? 'none yet'}`,
   ].filter(Boolean).join('\n');
   await owner.send(text).catch(() => {});
 }

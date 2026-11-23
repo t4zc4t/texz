@@ -6,11 +6,15 @@ import { warmUp } from './gifs.js';
 import { startScheduler } from './reminders.js';
 import { definitions, onComponent, onSlash, onText } from './core/registry.js';
 import { OWO_MENU, onOwoMenu } from './owo/menu.js';
+import { startBoard } from './owo/board.js';
+import { watchPoketwo } from './p2/track.js';
+import { closeCases } from './features/tidy.js';
 import { afkWatch } from './modules/utility.js';
 import { startModTimers } from './modules/moderation.js';
 import { startGiveaways } from './modules/giveaways.js';
 import { startBirthdays } from './modules/birthdays.js';
 import { watchEpisodes } from './anime/alerts.js';
+import { startLinkSync } from './anime/linked.js';
 import { wireEvents } from './events.js';
 import { report, startHealth, startOps, syncCommands } from './ops.js';
 import { startServerTimers } from './modules/server.js';
@@ -91,6 +95,7 @@ client.once(Events.ClientReady, (c) => {
   void warmUp(custom).then((n) => console.log(`gifs ready: ${n}`));
   startScheduler(client, store);
   watchEpisodes(store);
+  startLinkSync(store);
   startModTimers(client, store);
   startGiveaways(client, store);
   startBirthdays(client, store);
@@ -110,6 +115,13 @@ client.once(Events.ClientReady, (c) => {
     if (ch?.isSendable()) await ch.send(payload as never);
   });
   startBulletins(client, store);
+  startBoard(client, store);
+  // once: the quiet rooms close and merge into busier ones
+  setTimeout(() => {
+    for (const guild of client.guilds.cache.values()) {
+      void closeCases(store, guild).then((r) => r && console.log(`rooms tidied in ${guild.name}: ${r.closed.join(', ') || 'nothing to close'}`)).catch((e) => report('tidy rooms', e));
+    }
+  }, 45_000);
   startDesk(client, store);
   startMovieDay(client, store);
   startEvidenceDrops(client, store);
@@ -157,4 +169,5 @@ client.on(Events.MessageCreate, (m) => {
 
 wireEvents(client, store);
 listenToOwo(client, store);
+watchPoketwo(client, store);
 client.login(token);

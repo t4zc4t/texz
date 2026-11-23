@@ -10,7 +10,7 @@ import { predict, predictTop, scoreMatch, scoreRace } from './predict.js';
 import { animeThisDay, footballThisDay } from '../feeds/thisday.js';
 import { picksOf } from './profile.js';
 import { f1Card, fixturesCard, matchCard, standingsCard, weekCard } from '../features/matchcard.js';
-import { report } from '../ops.js';
+import { feedOk, report } from '../ops.js';
 import { extrasLines, poleTime, raceExtras, SITE, bigSession, facts, flagOf, home, nextRound, onThisDay, questions, schedule, siteLink, teamDot, type Round } from '../feeds/f1.js';
 import { quizButton, quizRound } from './f1quiz.js';
 import { clubDot, interesting, leagues, matches, scoreLine, type Match } from '../feeds/football.js';
@@ -431,27 +431,9 @@ async function animeTick(client: Client, store: Store, guilds: [string, Bulletin
   const now = Date.now();
   const from = unix(now - 20 * 60_000);
   const aired = await airingOn(from, unix(now)).catch(() => []);
-  const today = new Date().toISOString().slice(0, 10);
-  // the day's schedule, once, around 9 in India
-  let schedule: { episode: number; airingAt: number; media: Media }[] | null = null;
   for (const [gid, b] of live) {
     const wanted = (m: Media) => b.anime.shows.some((s) => s.id === m.id) || (b.anime.popular && (m.popularity ?? 0) >= 60_000) || store.watchersOf(m.id).length > 0;
-    if (new Date().getUTCHours() >= 3 && store.firstTime(gid, `an:day:${today}`)) {
-      schedule ??= await airingOn(unix(now), unix(now) + 24 * 3600).catch(() => []);
-      const list = schedule.filter((a) => wanted(a.media));
-      if (list.length) {
-        // the day's biggest show sets the picture, a server's own pick of gif still wins if it set one
-        const lead = [...list].sort((x, y) => (y.media.popularity ?? 0) - (x.media.popularity ?? 0))[0];
-        const own = store.guild(gid).gifs.screening;
-        const e = card({ kind: 'anDay', title: 'Today\'s screenings', emoji: '🍿', color: names.anime.color, gif: own && own !== 'off' ? own : 'off', line: '',
-          body: list.slice(0, 20).map((a) => `<t:${a.airingAt}:t> · **[${titleOf(a.media)}](${a.media.siteUrl})** ep ${a.episode}${a.media.episodes && a.episode === a.media.episodes ? ' · finale' : a.episode === 1 ? ' · premiere' : ''}${b.anime.shows.some((x) => x.id === a.media.id) ? ' ⭐' : ''}`).join('\n') + `\n\n-# ${list.length} episode${list.length === 1 ? '' : 's'} today · ⭐ the server follows it · your own list reaches you in DMs` });
-        if (!own || own === 'off') {
-          if (lead?.media.bannerImage) e.setImage(lead.media.bannerImage);
-          if (lead?.media.coverImage.large) e.setThumbnail(lead.media.coverImage.large);
-        }
-        await post(client, b.anime, { embed: e });
-      }
-    }
+    // one post per episode, when it airs, no schedule ahead of it
     for (const a of aired) {
       if (!wanted(a.media) || !store.firstTime(gid, `an:ep:${a.media.id}:${a.episode}`)) continue;
       const last = !!a.media.episodes && a.episode === a.media.episodes;
@@ -557,12 +539,14 @@ async function historyTick(client: Client, store: Store, guilds: [string, Bullet
 }
 
 export function startBulletins(client: Client, store: Store) {
+  // counted from now, so a feed that never works at all still gets noticed
+  for (const f of ['F1', 'football', 'anime']) feedOk(f);
   const tick = async () => {
     const guilds = [...client.guilds.cache.keys()].filter((id) => store.rules(id, 'bulletins').enabled).map((id) => [id, store.guild(id).bulletins] as [string, Bulletins]);
-    if (!guilds.length) return;
-    await f1Tick(client, store, guilds).catch((e) => report('f1 feed', e));
-    await footballTick(client, store, guilds).catch((e) => report('football feed', e));
-    await animeTick(client, store, guilds).catch((e) => report('anime feed', e));
+    if (!guilds.length) { for (const f of ['F1', 'football', 'anime']) feedOk(f); return; }
+    await f1Tick(client, store, guilds).then(() => feedOk('F1')).catch((e) => report('f1 feed', e));
+    await footballTick(client, store, guilds).then(() => feedOk('football')).catch((e) => report('football feed', e));
+    await animeTick(client, store, guilds).then(() => feedOk('anime')).catch((e) => report('anime feed', e));
     await historyTick(client, store, guilds).catch((e) => report('history feed', e));
     store.forgetOldSent(Date.now() - 30 * 24 * HOUR);
   };

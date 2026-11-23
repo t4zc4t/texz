@@ -7,7 +7,8 @@ import { OwoState } from './state.js';
 import { rangesFrom, verdict } from './advice.js';
 import { card } from '../theme.js';
 import { startOrders } from './orders.js';
-import { captchaAlarm, rearmDays, syncPings } from './pings.js';
+import { captchaAlarm, gemWarning, rearmDays, shopAlert, syncPings } from './pings.js';
+import { useOf } from './gems.js';
 import { RARE_RANKS, rankOfAnimal } from './catalog.js';
 
 // Texz only ever reads here. It never sends OwO commands, presses OwO's buttons or touches captchas.
@@ -116,6 +117,9 @@ function tallyHunt(state: OwoState, userId: string, hu: read.Hunt, now: number) 
   }
   byRank.hunts = 1;
   state.logCatches(userId, 'hunt', byRank, rare, now);
+  // epic and up counts as lucky for the board
+  const lucky = hu.found.filter((a) => { const r = rankOfAnimal(a, learnt); return !!r && r !== 'common' && r !== 'uncommon' && r !== 'rare' && r !== 'gem'; }).length;
+  state.countWeek(userId, hu.found.length, lucky, now);
 }
 
 
@@ -171,6 +175,7 @@ export function apply(state: OwoState, userId: string, s: read.Said, now = Date.
   const hu = !edited ? read.hunt(s) : null;
   if (hu?.found.length) {
     tallyHunt(state, userId, hu, now);
+    state.setBit(userId, 'gems:active', hu.gems, now);
     const nm = read.addressee(s).name;
     if (nm) state.setBit(userId, 'owoName', nm, now);
     seen.push('catches');
@@ -242,6 +247,8 @@ async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean)
     const dx = read.dex(s);
     if (dx && store.rules(m.guildId ?? null, 'owo').enabled) new OwoState(store.db).saveDex(dx);
     if (store.rules(m.guildId ?? null, 'owo').enabled) new OwoState(store.db).learnEmojis(read.allText(s));
+    const sw = read.weapon(s);
+    if (sw?.shopId && store.rules(m.guildId ?? null, 'owo').enabled) shopAlert(store, sw, m.channelId);
     // the wallpaper shop is the same for everyone too
     const wp = read.wallpaper(s);
     if (wp && store.rules(m.guildId ?? null, 'owo').enabled) new OwoState(store.db).saveWallpaper(null, wp);
@@ -253,6 +260,13 @@ async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean)
   apply(new OwoState(store.db), who.userId, s, Date.now(), edited);
   new OwoState(store.db).learnEmojis(read.allText(s));
   syncPings(store, who.userId, m.channelId);
+  // shop pages are flipped by editing, so those count too; the alert itself only goes once
+  const sw = read.weapon(s);
+  if (sw?.shopId) shopAlert(store, sw, m.channelId);
+  if (!edited) {
+    const hu = read.hunt(s);
+    if (hu?.gems.length) await gemWarning(store, m, who.userId, hu.gems, (g) => useOf(hu.gems, g));
+  }
   const cap = read.captcha(s);
   if (cap && !edited) await captchaAlarm(m.client, store, m, who.userId, cap.strike);
   await rerollHelp(store, m, who.userId, s);

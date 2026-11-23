@@ -39,12 +39,21 @@ function ready(db: DatabaseSync) {
     CREATE TABLE IF NOT EXISTS owo_catches (user_id TEXT NOT NULL, at INTEGER NOT NULL, animal TEXT NOT NULL, rank TEXT, source TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS owo_catches_user ON owo_catches (user_id, at);
     CREATE TABLE IF NOT EXISTS owo_tally (user_id TEXT NOT NULL, source TEXT NOT NULL, rank TEXT NOT NULL, n INTEGER NOT NULL, since INTEGER NOT NULL, PRIMARY KEY (user_id, source, rank));
+    CREATE TABLE IF NOT EXISTS owo_week (user_id TEXT NOT NULL, week TEXT NOT NULL, hunts INTEGER NOT NULL DEFAULT 0, animals INTEGER NOT NULL DEFAULT 0, rare INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, week));
     CREATE TABLE IF NOT EXISTS owo_emoji (name TEXT PRIMARY KEY, id TEXT NOT NULL, animated INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS owo_walls (id INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER, url TEXT NOT NULL, at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS owo_wall_owned (user_id TEXT NOT NULL, id INTEGER NOT NULL, equipped INTEGER DEFAULT 0, PRIMARY KEY (user_id, id));
   `);
   tables.add(db);
   return db;
+}
+
+// the Monday a week starts on, in UTC
+export function weekOf(at = Date.now()) {
+  const d = new Date(at);
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
 }
 
 export class OwoState {
@@ -243,6 +252,24 @@ export class OwoState {
     for (const [rank, n] of Object.entries(byRank)) if (n > 0) up.run(userId, source, rank, n, now);
     const add = this.db.prepare('INSERT INTO owo_catches (user_id, at, animal, rank, source) VALUES (?, ?, ?, ?, ?)');
     for (const r of rare) add.run(userId, now, r.animal, r.rank, source);
+  }
+
+  // this week's hunting, for the server board
+  countWeek(userId: string, animals: number, rare: number, at = Date.now()) {
+    this.db.prepare(`INSERT INTO owo_week (user_id, week, hunts, animals, rare) VALUES (?, ?, 1, ?, ?)
+      ON CONFLICT (user_id, week) DO UPDATE SET hunts = hunts + 1, animals = animals + excluded.animals, rare = rare + excluded.rare`).run(userId, weekOf(at), animals, rare);
+  }
+
+  week(week: string) {
+    return this.db.prepare('SELECT * FROM owo_week WHERE week = ?').all(week) as { user_id: string; week: string; hunts: number; animals: number; rare: number }[];
+  }
+
+  catchesSince(at: number) {
+    return this.db.prepare('SELECT * FROM owo_catches WHERE at >= ?').all(at) as { user_id: string; at: number; animal: string; rank: string | null; source: string }[];
+  }
+
+  bestStreaks(since: number) {
+    return this.db.prepare('SELECT user_id, MAX(streak) AS streak FROM owo_battles WHERE at >= ? AND streak IS NOT NULL GROUP BY user_id').all(since) as { user_id: string; streak: number }[];
   }
 
   catches(userId: string | null, limit = 15) {

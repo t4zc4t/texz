@@ -13,6 +13,7 @@ import {
 } from '../anime/anilist.js';
 import { RED, card, say } from '../theme.js';
 import { listMenu, watchlist } from './watchlist.js';
+import { compare, link, login, who } from './animelink.js';
 import { GUESS_PAY } from './economy.js';
 import { addWin } from './f1quiz.js';
 import { watchparty } from './watchparty.js';
@@ -411,7 +412,7 @@ export const anime: Module = {
   name: 'anime',
   label: 'Anime and manga',
   about: 'Search anime, manga and characters, seasons, trending picks, new-episode alerts and your own watch list',
-  commands: [home, lookup('ANIME'), lookup('MANGA'), character, airing, daily, season, watchparty, trend, random, alerts, watchlist, movie],
+  commands: [home, lookup('ANIME'), lookup('MANGA'), character, airing, daily, season, watchparty, trend, random, alerts, watchlist, link, login, who, compare, movie],
 };
 
 // ---------- buttons and menus ----------
