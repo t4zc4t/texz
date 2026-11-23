@@ -83,7 +83,9 @@ export function solve(pattern: string): { id: number; name: string }[] {
 
 export const artwork = (id: number) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
 // how people here actually catch, pasted as is it mentions Pokétwo
-export const catchLine = (name: string) => `@Pokétwo#8236 c ${name}`;
+// Pokétwo dropped its p! prefix, every command is a mention now
+export const p2Cmd = (cmd: string) => `@Pokétwo#8236 ${cmd}`;
+export const catchLine = (name: string) => p2Cmd(`c ${name}`);
 
 // every species once, without the regional forms
 export const allSpecies = () => { const seen = new Set<number>(); return all().filter(([id]) => (seen.has(id) ? false : (seen.add(id), true))).map(([id, name, , rare]) => ({ id, name, rare: rare ?? null })); };

@@ -61,14 +61,14 @@ export class P2State {
     for (const r of rows) up.run(userId, r.dex, r.caught, at);
     if (total) this.db.prepare('INSERT INTO p2_dextotal (user_id, caught, total, at) VALUES (?, ?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET caught = excluded.caught, total = excluded.total, at = excluded.at').run(userId, total.caught, total.total, at);
   }
-  // a catch adds to the dex as it happens, so it stays right between looks at p!dex
+  // a catch adds to the dex as it happens, so it stays right between looks at the dex
   caughtOne(userId: string, dex: number, at = Date.now()) {
     this.db.prepare('INSERT INTO p2_dex (user_id, dex, caught, at) VALUES (?, ?, 1, ?) ON CONFLICT (user_id, dex) DO UPDATE SET caught = caught + 1').run(userId, dex, at);
   }
   dex(userId: string) {
     return this.db.prepare('SELECT dex, caught, at FROM p2_dex WHERE user_id = ?').all(userId) as { dex: number; caught: number; at: number }[];
   }
-  // quests read off p!quests or the event page; a fresh read replaces that page's list
+  // quests read off the quests page or the event page; a fresh read replaces that page's list
   saveQuests(userId: string, src: string, list: Quest[], at = Date.now()) {
     this.db.prepare('DELETE FROM p2_quests WHERE user_id = ? AND src = ?').run(userId, src);
     const add = this.db.prepare('INSERT INTO p2_quests (user_id, src, n, kind, key, progress, goal, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
@@ -115,7 +115,7 @@ export function chainLine(s: Said) {
   return m ? { reset: /reset/i.test(m[1]), chain: Number(m[2]) } : null;
 }
 
-// p!shinyhunt with nothing after it
+// the shinyhunt page, asked with nothing after it
 export function huntCard(s: Said) {
   const e = s.embeds.find((x) => /^Shiny Hunt/i.test(x.title ?? ''));
   if (!e) return null;
@@ -134,7 +134,7 @@ export function spanOf(text: string) {
   return ms;
 }
 
-// a page of p!pokedex: "Bulbasaur #1" → "✅ 3 caught!" or "Not caught yet!"
+// a page of the pokedex: "Bulbasaur #1" → "✅ 3 caught!" or "Not caught yet!"
 export function dexPage(s: Said) {
   const e = s.embeds.find((x) => /^Your pok[ée]dex/i.test(x.title ?? ''));
   if (!e) return null;
@@ -149,7 +149,7 @@ export function dexPage(s: Said) {
   return { rows, total: t ? { caught: Number(t[1].replace(/,/g, '')), total: Number(t[2].replace(/,/g, '')) } : null };
 }
 
-// p!quests and the event task list: "Catch 50 pokémon originally found in the Kanto region" with `12/50`,
+// the quests page and the event task list: "Catch 50 pokémon originally found in the Kanto region" with `12/50`,
 // or "Catch 5 <:Fire:…> Fire-type pokémon `2/5`". Only type and region quests, the rest no spawn ping can help with.
 const REGION_NAMES = REGIONS.map(([r]) => r);
 export function questsOf(s: Said): { src: string; list: Quest[] } | null {
@@ -175,7 +175,8 @@ export function questsOf(s: Said): { src: string; list: Quest[] } | null {
 
 const asked = new Map<string, { userId: string; at: number }>();
 const owners = new Map<string, string>();
-const P2_CMD = new RegExp(`^(?:p!|<@!?${P2_ID}>\\s*)(sh|shinyhunt|d|dex|pokedex|q|quests?|ev|event)\\b`, 'i');
+// Pokétwo only answers a mention now, with any of its aliases
+const P2_CMD = new RegExp(`^<@!?${P2_ID}>\\s*(sh|shinyhunt|d|dex|pokedex|q|quests|ev|event)\\b`, 'i');
 
 async function apply(store: Store, m: Message | PartialMessage) {
   const st = new P2State(store.db);

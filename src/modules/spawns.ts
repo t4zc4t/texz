@@ -10,7 +10,7 @@ import type { Command, Module } from '../core/module.js';
 import { bar, card } from '../theme.js';
 import { fixText } from '../core/fixes.js';
 import { picksOf, savePicks } from './profile.js';
-import { TYPES, addExtra, canonical, allSpecies, artwork, catchLine, formsOf, hintOf, idOf, nameIn, rarityOf, regionOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
+import { TYPES, addExtra, canonical, allSpecies, artwork, catchLine, p2Cmd, formsOf, hintOf, idOf, nameIn, rarityOf, regionOf, solve, typeEmoji, typeIcon, typesOf } from '../features/pokedex.js';
 import { type Guess, decide, download, dropJunk, memoryNames, fingerprint, foldMemory, junkName, knownCount, learn, logSpawn, memorySize, recognise, remember, trimMemory, type Sparse } from '../features/pokeid.js';
 import { artColours, classify, colourFit, keepSpawn, sceneColours, seedMemory } from '../features/pokemodel.js';
 import { teamDot } from '../feeds/f1.js';
@@ -589,12 +589,12 @@ export function spawnStatus(store: Store, guild: Guild, which: 'p2' | 'shoob') {
   ].filter(Boolean).join('\n');
 }
 
-// the open quests Texz read off p!quests, shortest way to done first
+// the open quests Texz read off Pokétwo's quests page, shortest way to done first
 function questLine(store: Store, userId: string) {
   const qs = new P2State(store.db).quests(userId);
   const on = store.getKv(`p2:qping:${userId}`) !== '0';
   const list = qs.slice(0, 6).map((q) => `${q.kind === 'type' ? typeIcon(q.key) : '🗺️'} ${q.key} ${q.progress}/${q.goal}`).join(' · ');
-  return { on: on && qs.length > 0, text: qs.length ? `${list}${qs.length > 6 ? ` · +${qs.length - 6}` : ''}` : 'none read yet, run `p!quests` and I\'ll ping you for spawns that count', pingOn: on };
+  return { on: on && qs.length > 0, text: qs.length ? `${list}${qs.length > 6 ? ` · +${qs.length - 6}` : ''}` : `none read yet, run \`${p2Cmd('quests')}\` and I'll ping you for spawns that count`, pingOn: on };
 }
 
 async function spawnsPage(store: Store, guild: Guild, userId: string) {
@@ -914,12 +914,12 @@ const shinyCmd: Command = {
     const ping = ctx.str('ping')?.toLowerCase();
     const h = st.hunt(ctx.userId);
     if (ping === 'on' || ping === 'off') {
-      if (!h) return ctx.reply('Run `p!sh` first.');
+      if (!h) return ctx.reply(`Run \`${p2Cmd('sh')}\` first.`);
       st.setPing(ctx.userId, ping === 'on');
       return ctx.reply(`✨ Spawn ping **${ping}**.`);
     }
     const past = st.shinies(ctx.userId);
-    if (!h?.species) return ctx.reply(past.length ? `Not hunting right now · ${past.length} shin${past.length === 1 ? 'y' : 'ies'} logged.` : 'Run `p!sh` once so I can see your hunt.');
+    if (!h?.species) return ctx.reply(past.length ? `Not hunting right now · ${past.length} shin${past.length === 1 ? 'y' : 'ies'} logged.` : `Run \`${p2Cmd('sh')}\` once so I can see your hunt.`);
     const charm = !!h.charm_until && h.charm_until > Date.now();
     const p = shinyChance(h.chain, charm);
     const id = idOf(h.species);
@@ -950,7 +950,7 @@ const mydex: Command = {
     const st = new P2State(store.db);
     const rows = st.dex(ctx.userId);
     const total = st.dexTotal(ctx.userId);
-    if (!rows.length) return ctx.reply('Run `p!dex` and flip through the pages once.');
+    if (!rows.length) return ctx.reply(`Run \`${p2Cmd('dex')}\` and flip through the pages once.`);
     const have = new Map(rows.map((r) => [r.dex, r.caught]));
     const species = allSpecies();
     const seenIds = new Set(rows.map((r) => r.dex));
@@ -968,7 +968,7 @@ const mydex: Command = {
         body: [
           hot.length ? `👀 Spawned here lately: ${hot.map((x) => `**${x.name}**`).join(', ')}` : null,
           miss.length ? miss.map((x) => `#${x.id} ${x.name}${x.rare ? ' 🌟' : ''}`).join(' · ').slice(0, 3500) : 'Nothing missing.',
-          unread ? `-# ${unread} not read yet, flip those \`p!dex\` pages` : null,
+          unread ? `-# ${unread} not read yet, flip those \`${p2Cmd('dex')}\` pages` : null,
         ].filter(Boolean).join('\n'),
       })] });
     }

@@ -43,7 +43,7 @@ test('weeks start on Monday', () => {
   assert.equal(weekOf(Date.parse('2026-11-22T23:59:00Z')), '2026-11-16');
 });
 
-test('Pokétwo quests: type and region quests from p!quests and the event page', async () => {
+test('Pokétwo quests: type and region quests from the quests page and the event page', async () => {
   const { questsOf } = await import('../src/p2/track.ts');
   const q = questsOf({ content: '', embeds: [{ title: 'Quests', description: 'Complete these quests to earn special rewards!', footer: null, fields: [
     { name: 'Catch 50 pokémon originally found in the Kanto region.', value: '<:a:1><:b:2> `12/50`\n**Reward:** 2,500 Pokécoins' },
