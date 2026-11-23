@@ -17,6 +17,7 @@ import { watchEpisodes } from './anime/alerts.js';
 import { startLinkSync } from './anime/linked.js';
 import { wireEvents } from './events.js';
 import { report, startHealth, startOps, syncCommands } from './ops.js';
+import { startChecks } from './checks.js';
 import { startServerTimers } from './modules/server.js';
 import { startDailyCharacter } from './modules/anime.js';
 import { sweepQuiz } from './modules/f1quiz.js';
@@ -109,6 +110,7 @@ client.once(Events.ClientReady, (c) => {
   void loadTypeIcons(client).catch((e) => report('type icons', e)).then(() => loadLogos(client)).catch((e) => report('team logos', e));
   startQuoteOfWeek(client, store);
   startHealth(client, store);
+  startChecks(client, store);
   startRecap(client, store);
   sweepQuiz(async (id, payload) => {
     const ch = await client.channels.fetch(id).catch(() => null);

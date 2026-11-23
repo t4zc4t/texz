@@ -1,6 +1,6 @@
 import { Events, type Client, type Message, type PartialMessage } from 'discord.js';
 import type { Store } from '../db.js';
-import { idOf, nameIn } from '../features/pokedex.js';
+import { TYPES, idOf, nameIn, regionOf, typesOf } from '../features/pokedex.js';
 import { report } from '../ops.js';
 
 // Pokétwo's shiny hunt and personal Pokédex, read from Pokétwo's own replies. Texz never plays for anyone.
@@ -31,6 +31,9 @@ export class P2State {
       CREATE TABLE IF NOT EXISTS p2_shinies (user_id TEXT NOT NULL, species TEXT NOT NULL, chain INTEGER, at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS p2_dex (user_id TEXT NOT NULL, dex INTEGER NOT NULL, caught INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, dex));
       CREATE TABLE IF NOT EXISTS p2_dextotal (user_id TEXT PRIMARY KEY, caught INTEGER NOT NULL, total INTEGER NOT NULL, at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS p2_spawns (id TEXT PRIMARY KEY, guild_id TEXT NOT NULL, at INTEGER NOT NULL, name TEXT, caught_by TEXT);
+      CREATE INDEX IF NOT EXISTS p2_spawns_guild ON p2_spawns (guild_id, at);
+      CREATE TABLE IF NOT EXISTS p2_quests (user_id TEXT NOT NULL, src TEXT NOT NULL, n INTEGER NOT NULL, kind TEXT NOT NULL, key TEXT NOT NULL, progress INTEGER NOT NULL, goal INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, src, n));
     `);
   }
   hunt(userId: string) {
@@ -65,10 +68,38 @@ export class P2State {
   dex(userId: string) {
     return this.db.prepare('SELECT dex, caught, at FROM p2_dex WHERE user_id = ?').all(userId) as { dex: number; caught: number; at: number }[];
   }
+  // quests read off p!quests or the event page; a fresh read replaces that page's list
+  saveQuests(userId: string, src: string, list: Quest[], at = Date.now()) {
+    this.db.prepare('DELETE FROM p2_quests WHERE user_id = ? AND src = ?').run(userId, src);
+    const add = this.db.prepare('INSERT INTO p2_quests (user_id, src, n, kind, key, progress, goal, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    list.forEach((q, n) => add.run(userId, src, n, q.kind, q.key, q.progress, q.goal, at));
+  }
+  // event quests go stale once the event is over, so they count for two weeks after the last look
+  quests(userId: string, now = Date.now()) {
+    return this.db.prepare(`SELECT src, kind, key, progress, goal FROM p2_quests WHERE user_id = ? AND progress < goal AND (src = 'q' OR at > ?) ORDER BY progress * 1.0 / goal DESC`).all(userId, now - 14 * 864e5) as unknown as (Quest & { src: string })[];
+  }
+  questCatch(userId: string, types: string[], region: string | null) {
+    const ph = types.map(() => '?').join(',') || "''";
+    this.db.prepare(`UPDATE p2_quests SET progress = progress + 1 WHERE user_id = ? AND progress < goal AND ((kind = 'type' AND key IN (${ph})) OR (kind = 'region' AND key = ?))`).run(userId, ...types, region ?? '');
+  }
+  // who has an open quest this spawn helps, pings switched on
+  questers(types: string[], region: string | null, now = Date.now()) {
+    const ph = types.map(() => '?').join(',') || "''";
+    return (this.db.prepare(`SELECT DISTINCT user_id FROM p2_quests WHERE progress < goal AND (src = 'q' OR at > ?) AND ((kind = 'type' AND key IN (${ph})) OR (kind = 'region' AND key = ?))`).all(now - 14 * 864e5, ...types, region ?? '') as { user_id: string }[]).map((r) => r.user_id);
+  }
+  // every spawn here, named once it's known and marked when someone catches it
+  spawned(id: string, guild: string, at = Date.now()) { this.db.prepare('INSERT OR IGNORE INTO p2_spawns (id, guild_id, at) VALUES (?, ?, ?)').run(id, guild, at); }
+  spawnName(id: string, name: string) { this.db.prepare('UPDATE p2_spawns SET name = ? WHERE id = ?').run(name, id); }
+  spawnCaught(id: string, name: string, user: string) { this.db.prepare('UPDATE p2_spawns SET name = ?, caught_by = ? WHERE id = ?').run(name, user, id); }
+  spawnsSince(guild: string, since: number) {
+    return this.db.prepare('SELECT at, name, caught_by FROM p2_spawns WHERE guild_id = ? AND at >= ? ORDER BY at').all(guild, since) as { at: number; name: string | null; caught_by: string | null }[];
+  }
   dexTotal(userId: string) {
     return this.db.prepare('SELECT * FROM p2_dextotal WHERE user_id = ?').get(userId) as { caught: number; total: number; at: number } | undefined;
   }
 }
+
+export type Quest = { kind: 'type' | 'region'; key: string; progress: number; goal: number };
 
 // ---------- reading Pokétwo ----------
 
@@ -118,11 +149,33 @@ export function dexPage(s: Said) {
   return { rows, total: t ? { caught: Number(t[1].replace(/,/g, '')), total: Number(t[2].replace(/,/g, '')) } : null };
 }
 
+// p!quests and the event task list: "Catch 50 pokémon originally found in the Kanto region" with `12/50`,
+// or "Catch 5 <:Fire:…> Fire-type pokémon `2/5`". Only type and region quests, the rest no spawn ping can help with.
+const REGION_NAMES = REGIONS.map(([r]) => r);
+export function questsOf(s: Said): { src: string; list: Quest[] } | null {
+  const e = s.embeds.find((x) => /quests?|tasks?/i.test(`${x.title ?? ''} ${x.description ?? ''}`) && /catch\s+[\d,]+/i.test([x.description, ...x.fields.flatMap((f) => [f.name, f.value])].join('\n')));
+  if (!e) return null;
+  const bits = [...(e.description ?? '').split('\n'), ...e.fields.map((f) => `${f.name} ${f.value}`)];
+  const list: Quest[] = [];
+  for (const raw of bits) {
+    const t = raw.replace(/<a?:\w+:\d+>/g, ' ').replace(/[*_]/g, '');
+    const m = /catch\s+([\d,]+)\s+(.+?)`\s*([\d,]+)\s*\/\s*([\d,]+)\s*`/i.exec(t);
+    if (!m) continue;
+    const goal = Number(m[4].replace(/,/g, ''));
+    const progress = Math.min(goal, Number(m[3].replace(/,/g, '')));
+    const type = TYPES.find((x) => new RegExp(`\\b${x}-type`, 'i').test(m[2]));
+    const region = REGION_NAMES.find((x) => new RegExp(`\\b${x}\\s+region`, 'i').test(m[2]));
+    if (type) list.push({ kind: 'type', key: type, progress, goal });
+    else if (region) list.push({ kind: 'region', key: region, progress, goal });
+  }
+  return { src: /^quests$/i.test((e.title ?? '').trim()) ? 'q' : 'ev', list };
+}
+
 // ---------- who a reply is for ----------
 
 const asked = new Map<string, { userId: string; at: number }>();
 const owners = new Map<string, string>();
-const P2_CMD = new RegExp(`^(?:p!|<@!?${P2_ID}>\\s*)(sh|shinyhunt|d|dex|pokedex)\\b`, 'i');
+const P2_CMD = new RegExp(`^(?:p!|<@!?${P2_ID}>\\s*)(sh|shinyhunt|d|dex|pokedex|q|quests?|ev|event)\\b`, 'i');
 
 async function apply(store: Store, m: Message | PartialMessage) {
   const st = new P2State(store.db);
@@ -134,6 +187,7 @@ async function apply(store: Store, m: Message | PartialMessage) {
     const base = name ? baseOf(name.replace(/^✨\s*/, '')) : null;
     const dexId = base ? idOf(base) : null;
     if (dexId) st.caughtOne(catcher, dexId);
+    if (base) st.questCatch(catcher, typesOf(base), regionOf(name!.replace(/^✨\s*/, '')));
     const c = chainLine(s);
     if (c && base) {
       if (c.reset) { st.addShiny(catcher, base, c.chain); st.setHunt(catcher, base, 0, Date.now(), true); }
@@ -157,7 +211,10 @@ async function apply(store: Store, m: Message | PartialMessage) {
     return;
   }
   const d = dexPage(s);
-  if (d) st.saveDex(userId, d.rows, d.total);
+  if (d) { st.saveDex(userId, d.rows, d.total); return; }
+  const q = questsOf(s);
+  // an event page with no catch tasks on it (inventory, shop) says nothing about the quests
+  if (q && (q.list.length || q.src === 'q')) st.saveQuests(userId, q.src, q.list);
 }
 
 export function watchPoketwo(client: Client, store: Store) {

@@ -215,12 +215,17 @@ async function showNow(store: Store, m: Message, w: Waiting, name: string, guess
   // anyone shiny hunting this one hears about it, it's their chain
   const hunting = w.unsure ? [] : new P2State(store.db).hunters(base).map((h) => h.user_id);
   const hunters = (await Promise.all(hunting.map((id) => m.guild!.members.fetch(id).then(() => id).catch(() => null)))).filter((x): x is string => !!x);
+  // and anyone with an open quest this one counts for
+  const region = dexInfo.get(name.toLowerCase())?.region ?? regionOf(name);
+  const questing = w.unsure ? [] : new P2State(store.db).questers(typesOf(base), region).filter((id) => !hunters.includes(id) && store.getKv(`p2:qping:${id}`) !== '0');
+  const questers = (await Promise.all(questing.map((id) => m.guild!.members.fetch(id).then(() => id).catch(() => null)))).filter((x): x is string => !!x);
+  if (!w.unsure) new P2State(store.db).spawnName(w.id, base);
   const text = w.unsure ? maybeText(name, guess) : claimText(name, roles, guess, store.catchCount(m.guild.id) >= 100 && !store.caughtNames(m.guild.id).has(base.toLowerCase()));
   w.sent = await ch.send({
-    content: hunters.length ? `${text}\n✨ Shiny hunt: ${hunters.map((id) => `<@${id}>`).join(' ')}` : text,
+    content: [text, hunters.length ? `✨ Shiny hunt: ${hunters.map((id) => `<@${id}>`).join(' ')}` : null, questers.length ? `📜 Quest: ${questers.map((id) => `<@${id}>`).join(' ')}` : null].filter(Boolean).join('\n'),
     embeds: [pcCopy(name)],
     reply: { messageReference: w.id, failIfNotExists: false },
-    allowedMentions: { roles, users: hunters },
+    allowedMentions: { roles, users: [...hunters, ...questers] },
   }).catch(() => null);
   // legends, mythicals and ultra beasts get pinned so nobody scrolls past them, and unpinned once it's over
   if (w.sent && !w.unsure && rarityOf(base)) {
@@ -422,6 +427,7 @@ async function onSpawn(store: Store, m: Message) {
         ];
         if (extra.length && m.channel.isSendable()) await m.channel.send({ content: extra.join('\n'), allowedMentions: { users: [catcher] } }).catch(() => {});
       }
+      if (w && name && catcher) new P2State(store.db).spawnCaught(w.id, baseOf(name), catcher);
       if (w && name && Date.now() - w.at < 30 * 60_000) await confirm(store, m, w, name, 'catch');
       waiting.delete(m.channelId);
       if (/these colors seem unusual|shiny/i.test(m.content) && name && m.channel.isSendable() && store.rules(m.guild.id, 'spawns').enabled && p2HelperOn(store, m.guild.id)) {
@@ -441,6 +447,7 @@ async function onSpawn(store: Store, m: Message) {
   store.setKv(count, String(Number(store.getKv(count) ?? 0) + 1));
   store.setKv(`spawnseen:${m.guild.id}:${which}`, String(Date.now()));
   if (s.kind === 'p2') {
+    new P2State(store.db).spawned(m.id, m.guild.id);
     if (!p2HelperOn(store, m.guild.id)) { waiting.delete(m.channelId); return; }
     // an unclaimed spawn that never got a name still goes in the log, so misses show up
     if (w && !w.confirmed) logSpawn({ at: w.at, guess: w.guess, confirmed: null, how: 'fled' });
@@ -582,17 +589,27 @@ export function spawnStatus(store: Store, guild: Guild, which: 'p2' | 'shoob') {
   ].filter(Boolean).join('\n');
 }
 
+// the open quests Texz read off p!quests, shortest way to done first
+function questLine(store: Store, userId: string) {
+  const qs = new P2State(store.db).quests(userId);
+  const on = store.getKv(`p2:qping:${userId}`) !== '0';
+  const list = qs.slice(0, 6).map((q) => `${q.kind === 'type' ? typeIcon(q.key) : '🗺️'} ${q.key} ${q.progress}/${q.goal}`).join(' · ');
+  return { on: on && qs.length > 0, text: qs.length ? `${list}${qs.length > 6 ? ` · +${qs.length - 6}` : ''}` : 'none read yet, run `p!quests` and I\'ll ping you for spawns that count', pingOn: on };
+}
+
 async function spawnsPage(store: Store, guild: Guild, userId: string) {
   const member = await guild.members.fetch(userId).catch(() => null);
   const has = (id?: string | null) => !!id && !!member?.roles.cache.has(id);
   const p2 = has(store.getKv(`spawnrole:${guild.id}:p2rare`));
   const shoob = has(store.getKv(`spawnrole:${guild.id}:shoobrare`));
   const myTypes = TYPES.filter((t) => has(store.getKv(`spawnrole:${guild.id}:p2type:${t}`)));
+  const quest = questLine(store, userId);
   const e = card({
     kind: 'help', title: 'Spawn pings', emoji: '🎯', gif: 'off',
     body: [
       `${p2 ? '🟢' : '⚫'} 🌟 **Pokétwo rare spawns** · legendary, mythical and ultra beasts only`,
-      `${myTypes.length ? '🟢' : '⚫'} 🧬 **Pokétwo types** · ${myTypes.length ? myTypes.map((t) => `${typeIcon(t)} ${t}`).join(' ') : 'none picked, handy when a quest wants a type'}`,
+      `${myTypes.length ? '🟢' : '⚫'} 🧬 **Pokétwo types** · ${myTypes.length ? myTypes.map((t) => `${typeIcon(t)} ${t}`).join(' ') : 'none picked'}`,
+      `${quest.on ? '🟢' : '⚫'} 📜 **Quests** · ${quest.text}`,
       p2HelperOn(store, guild.id) ? `🟢 🔎 **Claim help** · I read every spawn picture, and remember **${memorySize(store)}** confirmed spawns so variants come out right, plus I solve hints` : '⚫ 🔎 **Claim help** · switched off here, an admin can turn it back on below',
       `${shoob ? '🟢' : '⚫'} 🃏 **Shoob rare drops** · tier 5 and 6 cards only`,
       '',
@@ -609,6 +626,7 @@ async function spawnsPage(store: Store, guild: Guild, userId: string) {
       row(
         new ButtonBuilder().setCustomId('spw|p2').setLabel(p2 ? 'Stop rare spawn pings' : 'Ping me for rare spawns').setEmoji('🌟').setStyle(p2 ? ButtonStyle.Success : ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('spw|shoob').setLabel(shoob ? 'Stop Shoob pings' : 'Ping me for Shoob T5/T6').setEmoji('🃏').setStyle(shoob ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('spw|quest').setLabel(`Quest pings: ${quest.pingOn ? 'on' : 'off'}`).setEmoji('📜').setStyle(quest.pingOn ? ButtonStyle.Success : ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('spw|helper').setLabel(`Pokétwo helper: ${p2HelperOn(store, guild.id) ? 'on' : 'off'}`).setEmoji('🔎').setStyle(p2HelperOn(store, guild.id) ? ButtonStyle.Success : ButtonStyle.Secondary),
       ),
       row(new StringSelectMenuBuilder().setCustomId('spw|types').setPlaceholder('🧬 Which Pokétwo types ping you').setMinValues(0).setMaxValues(TYPES.length)
@@ -648,17 +666,58 @@ const dex: Command = {
 // who catches the most this week, the winner gets yen every Monday
 const weekStart = (d = new Date()) => { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return x.getTime(); };
 const RACE_PRIZE = 300;
+function raceBoard(store: Store, guild: string) {
+  const board = store.catchBoard(guild, weekStart());
+  const medal = ['🥇', '🥈', '🥉'];
+  const body = board.length ? board.map((r, n) => `${medal[n] ?? `\`${n + 1}.\``} <@${r.user_id}> · **${r.n}**`).join('\n') : 'Nobody has caught anything this week yet.';
+  return card({ kind: 'help', title: 'Catch race · this week', emoji: '🏁', gif: 'off', line: '', body: `${body}\n\n-# ends <t:${Math.floor((weekStart() + 7 * 86_400_000) / 1000)}:R>, first place wins ¥${RACE_PRIZE}` });
+}
+
+// the last seven days of spawns: how many, when, the rare ones and who catches the most
+export function spawnStats(rows: { at: number; name: string | null; caught_by: string | null }[], now = Date.now()) {
+  const byHour = new Array(24).fill(0) as number[];
+  for (const r of rows) byHour[new Date(r.at).getUTCHours()]++;
+  const busiest = byHour.map((n, h) => ({ h, n })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n).slice(0, 3);
+  const rare = rows.filter((r) => r.name && rarityOf(r.name)).reverse();
+  const catchers = new Map<string, number>();
+  for (const r of rows) if (r.caught_by) catchers.set(r.caught_by, (catchers.get(r.caught_by) ?? 0) + 1);
+  const top = [...catchers].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  // the next time each busy hour comes round, so Discord shows it in the reader's own clock
+  const nextAt = (h: number) => { const d = new Date(now); d.setUTCMinutes(0, 0, 0); d.setUTCHours(h); if (d.getTime() < now) d.setUTCDate(d.getUTCDate() + 1); return Math.floor(d.getTime() / 1000); };
+  return { total: rows.length, caught: rows.filter((r) => r.caught_by).length, busiest: busiest.map((x) => ({ at: nextAt(x.h), n: x.n })), rare, top };
+}
+
+function statsCard(store: Store, guild: string) {
+  const s = spawnStats(new P2State(store.db).spawnsSince(guild, Date.now() - 7 * 86_400_000));
+  if (!s.total) return card({ kind: 'help', title: 'Spawn stats · 7 days', emoji: '📊', gif: 'off', line: '', body: 'No spawns logged yet.' });
+  const medal = ['🥇', '🥈', '🥉'];
+  return card({
+    kind: 'help', title: 'Spawn stats · 7 days', emoji: '📊', gif: 'off', line: '',
+    body: `**${s.total}** spawns · **${s.caught}** caught (${Math.round((s.caught / s.total) * 100)}%)`,
+    fields: [
+      { name: '⏰ Busiest hours', value: s.busiest.map((b) => `<t:${b.at}:t> · ${b.n}`).join('\n') || '-', inline: true },
+      { name: '🎯 Top catchers', value: s.top.map(([u, n], i) => `${medal[i] ?? `\`${i + 1}.\``} <@${u}> · ${n}`).join('\n') || '-', inline: true },
+      { name: `🌟 Rare spawns · ${s.rare.length}`, value: s.rare.slice(0, 8).map((r) => `${r.name} · ${r.caught_by ? `<@${r.caught_by}>` : 'fled'} · <t:${Math.floor(r.at / 1000)}:R>`).join('\n') || 'None this week.', inline: false },
+    ],
+  });
+}
+
+const racePage = (store: Store, guild: string, tab: 'race' | 'stats') => ({
+  embeds: [tab === 'race' ? raceBoard(store, guild) : statsCard(store, guild)],
+  components: [row(
+    new ButtonBuilder().setCustomId('spw|race').setLabel('This week').setEmoji('🏁').setStyle(tab === 'race' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('spw|stats').setLabel('Spawn stats').setEmoji('📊').setStyle(tab === 'stats' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+  )],
+});
+
 const race: Command = {
   name: 'race',
   group: 'poketwo',
-  data: new SlashCommandBuilder().setName('race').setDescription('This week\'s Pokétwo catch race').toJSON(),
+  data: new SlashCommandBuilder().setName('race').setDescription('This week\'s Pokétwo catch race and spawn stats').toJSON(),
   text: { aliases: ['catchrace', 'catches'] },
   run: (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('The race runs in servers.');
-    const board = store.catchBoard(ctx.guildId, weekStart());
-    const medal = ['🥇', '🥈', '🥉'];
-    const body = board.length ? board.map((r, n) => `${medal[n] ?? `\`${n + 1}.\``} <@${r.user_id}> · **${r.n}**`).join('\n') : 'Nobody has caught anything this week yet. The field is open.';
-    return ctx.reply({ embeds: [card({ kind: 'help', title: 'Catch race · this week', emoji: '🏁', gif: 'off', line: '', body: `${body}\n\n-# ends Monday <t:${Math.floor((weekStart() + 7 * 86_400_000) / 1000)}:R>, first place wins ¥${RACE_PRIZE}` })] });
+    return ctx.reply(racePage(store, ctx.guildId, 'race'));
   },
 };
 
@@ -700,10 +759,20 @@ const pokemon: Command = {
 
 export async function onSpawnButton(store: Store, i: Interaction) {
   if (!(i.isButton() || i.isStringSelectMenu()) || !i.customId.startsWith('spw|') || !i.guild) return false;
+  // the race page flips between the board and the stats in place, anyone can look
+  if (i.customId === 'spw|race' || i.customId === 'spw|stats') {
+    const page = racePage(store, i.guild.id, i.customId === 'spw|race' ? 'race' : 'stats');
+    const theirs = i.message.interactionMetadata?.user.id === i.user.id || i.message.mentions.repliedUser?.id === i.user.id || i.message.flags.has(MessageFlags.Ephemeral);
+    if (theirs) await i.update(page);
+    else await i.reply({ ...page, flags: MessageFlags.Ephemeral });
+    return true;
+  }
   const member = await i.guild.members.fetch(i.user.id).catch(() => null);
   if (!member) return true;
   let ok = true;
-  if (i.customId === 'spw|helper') {
+  if (i.customId === 'spw|quest') {
+    store.setKv(`p2:qping:${i.user.id}`, store.getKv(`p2:qping:${i.user.id}`) === '0' ? '1' : '0');
+  } else if (i.customId === 'spw|helper') {
     // a server switch, so only people who manage the server can flip it
     if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) { await i.reply({ content: 'Only people with Manage Server can switch the Pokétwo helper.', flags: MessageFlags.Ephemeral }); return true; }
     setP2Helper(store, i.guild.id, !p2HelperOn(store, i.guild.id));
@@ -757,6 +826,9 @@ async function pingsPanel(store: Store, guild: Guild, userId: string) {
     lines.push(`${mark(on)} 🌟 **Rare Pokétwo spawns** · legendary, mythical, ultra beasts`);
     const types = TYPES.filter((t) => has(store.getKv(`spawnrole:${guild.id}:p2type:${t}`)));
     lines.push(`${mark(types.length > 0)} 🧬 **Pokétwo types** · ${types.length ? types.map((t) => typeIcon(t)).join(' ') : 'none, pick them on the spawn page'}`);
+    const quest = questLine(store, userId);
+    lines.push(`${mark(quest.on)} 📜 **Pokétwo quests** · ${quest.text}`);
+    buttons.push(new ButtonBuilder().setCustomId('pg|quest').setLabel('Quests').setEmoji('📜').setStyle(quest.pingOn ? ButtonStyle.Success : ButtonStyle.Secondary));
     buttons.push(new ButtonBuilder().setCustomId('pg|p2').setLabel('Rare pokémon').setEmoji('🌟').setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary));
     const shoob = has(store.getKv(`spawnrole:${guild.id}:shoobrare`));
     lines.push(`${mark(shoob)} 🃏 **Shoob rare drops** · tier 5 and 6 cards`);
@@ -810,7 +882,8 @@ export async function onPingsButton(store: Store, i: Interaction) {
   const what = i.customId.split('|')[1];
   const member = await i.guild.members.fetch(i.user.id).catch(() => null);
   let problem = '';
-  if (what === 'personal') { const p = picksOf(store, i.guild.id, i.user.id); p.ping = p.ping === false; savePicks(store, i.guild.id, i.user.id, p); }
+  if (what === 'quest') store.setKv(`p2:qping:${i.user.id}`, store.getKv(`p2:qping:${i.user.id}`) === '0' ? '1' : '0');
+  else if (what === 'personal') { const p = picksOf(store, i.guild.id, i.user.id); p.ping = p.ping === false; savePicks(store, i.guild.id, i.user.id, p); }
   else if (member) {
     const role = what === 'p2' ? await rareRole(i.guild, store, true) : what === 'shoob' ? await shoobRole(i.guild, store, true) : i.guild.roles.cache.get(store.guild(i.guild.id).bulletins[what as keyof typeof boards]?.role ?? '');
     if (!role) problem = 'That role isn\'t there, an admin can fix it in /setup.';

@@ -25,6 +25,21 @@ const fbKey = (match: string, guild: string, user: string) => `pred:fb:${match}:
 const points = (store: Store, guild: string, user: string) => Number(store.getKv(`predpts:${guild}:${user}`) ?? 0);
 const addPoints = (store: Store, guild: string, user: string, n: number) => store.setKv(`predpts:${guild}:${user}`, String(points(store, guild, user) + n));
 
+// the football season runs August to May, "2026-27"
+export const fbSeason = (d = new Date()) => { const y = d.getUTCFullYear() - (d.getUTCMonth() < 7 ? 1 : 0); return `${y}-${String((y + 1) % 100).padStart(2, '0')}`; };
+const fbTally = (store: Store, guild: string, user: string, right: boolean, season = fbSeason()) => {
+  const key = `predfb:${season}:${guild}:${user}`;
+  const t = JSON.parse(store.getKv(key) ?? '{"calls":0,"right":0}') as { calls: number; right: number };
+  t.calls++;
+  if (right) t.right++;
+  store.setKv(key, JSON.stringify(t));
+};
+// most right calls, then the better hit rate
+export function fbTable(store: Store, guild: string, season = fbSeason()) {
+  return store.kvByPrefix(`predfb:${season}:${guild}:`).map(({ key, value }) => ({ user: key.split(':').at(-1)!, ...(JSON.parse(value) as { calls: number; right: number }) }))
+    .sort((a, b) => b.right - a.right || b.right / b.calls - a.right / a.calls || a.calls - b.calls);
+}
+
 async function todaysBig(store: Store, guild: string): Promise<Match[]> {
   const g = store.guild(guild).bulletins.football;
   const out: Match[] = [];
@@ -83,24 +98,47 @@ export const predict: Command = {
   },
 };
 
+function topPage(store: Store, guild: string, tab: 'all' | 'fb') {
+  const medal = ['🥇', '🥈', '🥉'];
+  const place = (n: number) => medal[n] ?? `\`${n + 1}.\``;
+  let e;
+  if (tab === 'all') {
+    const rows = store.kvByPrefix(`predpts:${guild}:`).map(({ key, value }) => ({ user: key.split(':')[2], n: Number(value) })).sort((a, b) => b.n - a.n).slice(0, 10);
+    e = card({ kind: 'help', title: 'Best predictors', emoji: '🔮', gif: 'off', line: '',
+      body: rows.length ? rows.map((r, n) => `${place(n)} <@${r.user}> · **${r.n}** points`).join('\n') : 'Nobody has called anything yet. `tz predict` to start.' });
+  } else {
+    const rows = fbTable(store, guild).slice(0, 10);
+    e = card({ kind: 'help', title: `Football table · ${fbSeason()}`, emoji: '⚽', gif: 'off', line: '',
+      body: rows.length ? rows.map((r, n) => `${place(n)} <@${r.user}> · **${r.right}**/${r.calls} right · ${Math.round((r.right / r.calls) * 100)}%`).join('\n') : 'No football calls settled this season yet.' });
+  }
+  return { embeds: [e], components: [row(
+    new ButtonBuilder().setCustomId('prd|top|all').setLabel('All time').setEmoji('🔮').setStyle(tab === 'all' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('prd|top|fb').setLabel('Football season').setEmoji('⚽').setStyle(tab === 'fb' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+  )] };
+}
+
 export const predictTop: Command = {
   name: 'predtop',
   group: 'sports',
-  data: new SlashCommandBuilder().setName('predtop').setDescription('The season\'s best predictors').toJSON(),
+  data: new SlashCommandBuilder().setName('predtop').setDescription('The best predictors, all time and this football season').toJSON(),
   call: 'predict top',
   text: { aliases: ['predict top', 'predboard', 'oracles'] },
   run: (ctx, store) => {
     if (!ctx.guildId) return ctx.reply('Predictions live in servers.');
-    const rows = store.kvByPrefix(`predpts:${ctx.guildId}:`).map(({ key, value }) => ({ user: key.split(':')[2], n: Number(value) })).sort((a, b) => b.n - a.n).slice(0, 10);
-    const medal = ['🥇', '🥈', '🥉'];
-    return ctx.reply({ embeds: [card({ kind: 'help', title: 'Best predictors', emoji: '🔮', gif: 'off', line: '',
-      body: rows.length ? rows.map((r, n) => `${medal[n] ?? `\`${n + 1}.\``} <@${r.user}> · **${r.n}** points`).join('\n') : 'Nobody has called anything yet. `tz predict` to start.' })] });
+    return ctx.reply(topPage(store, ctx.guildId, 'all'));
   },
 };
 
 export async function onPredict(store: Store, i: Interaction) {
   if (!(i.isButton() || i.isStringSelectMenu()) || !i.customId.startsWith('prd|') || !i.guildId) return false;
   const [, kind, id, slot] = i.customId.split('|');
+  if (kind === 'top') {
+    const p = topPage(store, i.guildId, id === 'fb' ? 'fb' : 'all');
+    const theirs = i.message.interactionMetadata?.user.id === i.user.id || i.message.mentions.repliedUser?.id === i.user.id || i.message.flags.has(MessageFlags.Ephemeral);
+    if (theirs) await i.update(p);
+    else await i.reply({ ...p, flags: MessageFlags.Ephemeral });
+    return true;
+  }
   if (kind === 'f1' && i.isStringSelectMenu()) {
     const r = await nextRound().catch(() => null);
     const start = r ? Date.parse(r.sessions.find((s) => s.type === 'R')?.start ?? '') : NaN;
@@ -163,8 +201,9 @@ export function scoreMatch(store: Store, guild: string, m: Match): string[] {
   for (const { key, value } of store.kvByPrefix(`pred:fb:${m.id}:${guild}:`)) {
     if (key.endsWith(':paid') || store.getKv(`${key}:paid`)) continue;
     store.setKv(`${key}:paid`, '1');
-    if (value !== result) continue;
     const user = key.split(':').at(-1)!;
+    fbTally(store, guild, user, value === result, fbSeason(new Date(m.date)));
+    if (value !== result) continue;
     if (store.rules(guild, 'economy').enabled) store.pay(guild, user, MATCH_PAY);
     addPoints(store, guild, user, MATCH_PAY);
     track(store, guild, user, 'predictWin');
@@ -254,4 +293,24 @@ export function startDesk(client: import('discord.js').Client, store: Store) {
   };
   setTimeout(() => void tick(), 90_000);
   setInterval(() => void tick(), 10 * 60_000);
+  setTimeout(() => void backfillTable(store).catch((e) => console.error('football table', e)), 120_000);
+}
+
+// calls settled before the season table existed, rebuilt once from the desk's own match lists
+async function backfillTable(store: Store) {
+  if (!store.firstTime('global', 'predfb:backfill')) return;
+  const season = fbSeason();
+  for (const { key, value } of store.kvByPrefix('desk:list:')) {
+    const [, , day, guild] = key.split(':');
+    if (fbSeason(new Date(`${day}T12:00:00Z`)) !== season) continue;
+    for (const x of JSON.parse(value) as { id: string; league: string; date: number }[]) {
+      const m = (await matches(x.league, new Date(x.date), 0).catch(() => [] as Match[])).find((y) => y.id === x.id);
+      if (!m || m.state !== 'post') continue;
+      const result = m.home.winner ? 'home' : m.away.winner ? 'away' : 'draw';
+      for (const c of store.kvByPrefix(`pred:fb:${m.id}:${guild}:`)) {
+        if (c.key.endsWith(':paid') || !store.getKv(`${c.key}:paid`)) continue;
+        fbTally(store, guild, c.key.split(':').at(-1)!, c.value === result, season);
+      }
+    }
+  }
 }
