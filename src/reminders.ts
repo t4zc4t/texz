@@ -18,6 +18,10 @@ function text(store: Store, r: Reminder): EmbedBuilder | null {
   switch (r.kind) {
     case 'custom':
       return card({ kind: 'custom', title: 'A promise kept', emoji: '📝', body: `**${r.note}**` });
+    case 'owo:hunt':
+      return card({ kind: 'custom', title: 'Hunt and battle are ready', emoji: '🏹', gif: 'off', body: '`wh` · `wb`' });
+    case 'owo:pray':
+      return card({ kind: 'custom', title: 'Pray and curse are ready', emoji: '🙏', gif: 'off', body: '`w pray` · `w curse`' });
     case 'owo:hb':
       return card({ kind: 'custom', title: 'Your HuntBot is back', emoji: '🤖', gif: 'off', body: '`w hb`' });
     case 'owo:day':
@@ -39,6 +43,8 @@ function line(store: Store, r: Reminder): string | null {
   if (r.kind.startsWith('owo:shop')) return `🛒 ${r.note}`;
   switch (r.kind) {
     case 'custom': return `📝 ${say('customShort')} **${r.note}**`;
+    case 'owo:hunt': return '🏹 Hunt and battle are ready.';
+    case 'owo:pray': return '🙏 Pray and curse are ready.';
     case 'owo:hb': return '🤖 Your HuntBot is back, `w hb` to collect and send it again.';
     case 'owo:day': return `🌅 New OwO day: \`w daily\` · \`w cookie\` · \`w quest\` · \`w checklist\`${r.note ? ` · ${r.note}` : ''}`;
     default: return r.note ? `📝 ${r.note}` : null;
@@ -111,6 +117,15 @@ export function startScheduler(client: Client, store: Store) {
   setInterval(() => void sweep(), 5_000);
   void tick();
   void sweep();
+}
+
+// right now, outside the queue: the short OwO cooldowns
+export async function sendNow(client: Client, store: Store, r: Reminder) {
+  if (isOffline() || !client.isReady()) return;
+  const s = store.settings(r.user_id);
+  if (afterQuiet(new Date(), s.timezone, s.quiet) > new Date()) return;
+  const body = text(store, r);
+  if (body) await deliver(client, store, r, body);
 }
 
 export async function urgent(client: Client, store: Store, userId: string, channelId: string, body: EmbedBuilder) {

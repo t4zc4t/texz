@@ -7,7 +7,7 @@ import { OwoState } from './state.js';
 import { rangesFrom, verdict } from './advice.js';
 import { card } from '../theme.js';
 import { startOrders } from './orders.js';
-import { captchaAlarm, gemWarning, rearmDays, shopAlert, syncPings } from './pings.js';
+import { COOLDOWN, captchaAlarm, carryOldSwitches, cooldownPing, gemWarning, rearmDays, shopAlert, syncPings } from './pings.js';
 import { useOf } from './gems.js';
 import { RARE_RANKS, rankOfAnimal } from './catalog.js';
 
@@ -236,6 +236,25 @@ async function rerollHelp(store: Store, m: Message | PartialMessage, userId: str
   }
 }
 
+// when hunt or pray come off cooldown: a normal reply starts the clock, a "slow down" says when exactly
+export function cooldownOf(cmd: string | null, s: read.Said, now = Date.now()): { kind: 'hunt' | 'pray'; at: number } | null {
+  const t = read.allText(s);
+  // slash commands and name matches come without the command, the reply itself tells which it was
+  const kind = cmd === 'hunt' || cmd === 'battle' ? 'hunt' : cmd === 'pray' || cmd === 'curse' ? 'pray'
+    : cmd ? null : read.hunt(s)?.found.length || read.battle(s) ? 'hunt' : /\bprays\b|puts a curse/i.test(t) ? 'pray' : null;
+  if (!kind) return null;
+  const n = read.note(s);
+  if (n?.kind === 'waitUntil') return { kind, at: n.at };
+  if (n?.kind === 'wait') return { kind, at: now + n.ms };
+  const done = kind === 'hunt' ? !!read.hunt(s)?.found.length || !!read.battle(s) : /\bprays\b|\bcurse[sd]?\b/i.test(t) && !/🚫|invalid|can't|cannot/i.test(t);
+  return done ? { kind, at: now + COOLDOWN[kind] } : null;
+}
+
+function cooldowns(store: Store, m: Message | PartialMessage, userId: string, cmd: string | null, s: read.Said) {
+  const c = cooldownOf(cmd, s);
+  if (c) cooldownPing(m.client, store, userId, c.kind, c.at, m.channelId);
+}
+
 async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean) {
   if (m.partial) m = await m.fetch().catch(() => m);
   const s = read.said({ content: m.content, embeds: m.embeds.map((e) => e.toJSON()), components: m.components.map((c) => c.toJSON()) });
@@ -266,6 +285,7 @@ async function onOwo(store: Store, m: Message | PartialMessage, edited: boolean)
   if (!edited) {
     const hu = read.hunt(s);
     if (hu?.gems.length) await gemWarning(store, m, who.userId, hu.gems, (g) => useOf(hu.gems, g));
+    cooldowns(store, m, who.userId, who.cmd, s);
   }
   const cap = read.captcha(s);
   if (cap && !edited) await captchaAlarm(m.client, store, m, who.userId, cap.strike);
@@ -356,6 +376,7 @@ export function listenToOwo(client: Client, store: Store) {
   if (!store.getKv('owo:huntsLive')) store.setKv('owo:huntsLive', String(Date.now()));
   setTimeout(() => { try { backfill(store); } catch (e) { report('owo backfill', e); } }, 20_000);
   startOrders(client, store);
+  try { carryOldSwitches(store); } catch (e) { report('owo pings', e); }
   setInterval(() => { try { rearmDays(store); backfillHistory(store); } catch (e) { report('owo pings', e); } }, 10 * 60_000);
   client.on(Events.MessageCreate, (m) => {
     if (!m.guildId) return;

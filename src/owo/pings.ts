@@ -1,14 +1,16 @@
 import type { Client, Message, PartialMessage } from 'discord.js';
 import type { Store } from '../db.js';
-import { urgent } from '../reminders.js';
+import { sendNow, urgent } from '../reminders.js';
 import { card } from '../theme.js';
 import { OwoState } from './state.js';
 
 // The OwO nudges: HuntBot is home, a new OwO day has started, and the captcha alarm.
 // Each person picks what they want. Texz only ever tells you, it never runs anything for you.
 
-export type PingKind = 'hb' | 'day' | 'shop' | 'gems' | 'captcha';
+export type PingKind = 'hunt' | 'pray' | 'hb' | 'day' | 'shop' | 'gems' | 'captcha';
 export const PINGS: Record<PingKind, { label: string; emoji: string; about: string; on: boolean }> = {
+  hunt: { label: 'Hunt ready', emoji: '🏹', about: 'hunt and battle are off cooldown, 15 seconds after your last one', on: false },
+  pray: { label: 'Pray ready', emoji: '🙏', about: 'pray and curse are off cooldown, 5 minutes after the last one', on: false },
   hb: { label: 'HuntBot is back', emoji: '🤖', about: 'the moment your HuntBot run finishes', on: false },
   day: { label: 'New OwO day', emoji: '🌅', about: 'when daily, cookie and quests reset', on: false },
   shop: { label: 'Shop upgrade', emoji: '🛒', about: 'the weapon shop has a better copy of a weapon you use', on: false },
@@ -27,6 +29,32 @@ export function setPing(store: Store, userId: string, kind: PingKind, on: boolea
   st.setBit(userId, 'pings', { ...pingsOf(st, userId), [kind]: on });
   if (!on) store.db.prepare('DELETE FROM reminders WHERE user_id = ? AND kind = ?').run(userId, `owo:${kind}`);
   else syncPings(store, userId, null);
+}
+
+// hunt, battle, pray and curse: cooldowns too short for the reminder queue, so a timer each,
+// pushed back every time the command is used again so the ping only comes once you've stopped
+const timers = new Map<string, NodeJS.Timeout>();
+export const COOLDOWN = { hunt: 15_000, pray: 300_000 } as const;
+export function cooldownPing(client: Client, store: Store, userId: string, kind: 'hunt' | 'pray', at: number, channelId: string) {
+  if (!pingsOf(new OwoState(store.db), userId)[kind]) return;
+  const key = `${userId}:${kind}`;
+  clearTimeout(timers.get(key));
+  timers.set(key, setTimeout(() => {
+    timers.delete(key);
+    void sendNow(client, store, { id: 0, user_id: userId, kind: `owo:${kind}`, note: '', due_at: at, channel_id: channelId }).catch(() => {});
+  }, Math.max(1000, at - Date.now())));
+}
+
+// the old reminder switches carry over once: whoever had hunt or pray reminders before keeps them
+export function carryOldSwitches(store: Store) {
+  if (store.getKv('owo:pings:carried')) return;
+  const st = new OwoState(store.db);
+  for (const r of store.db.prepare('SELECT id, settings FROM users').all() as { id: string; settings: string }[]) {
+    const old = JSON.parse(r.settings || '{}') as { huntbattle?: boolean; pray?: boolean };
+    if (!old.huntbattle && !old.pray) continue;
+    st.setBit(r.id, 'pings', { ...pingsOf(st, r.id), hunt: !!old.huntbattle, pray: !!old.pray });
+  }
+  store.setKv('owo:pings:carried', String(Date.now()));
 }
 
 // OwO's day turns over at midnight in Los Angeles, whatever the season

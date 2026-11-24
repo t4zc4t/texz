@@ -140,3 +140,20 @@ test('the right click helper opens the page that fits the OwO message', () => {
   assert.equal(pageFor(s('alastor')).cmd, 'owocollect');
   assert.equal(pageFor(s('cash')).cmd, 'owosync');
 });
+
+test('OwO cooldown pings: hunt, battle and pray start the clock, a slow down says when', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { said } = await import('../src/owo/read.ts');
+  const { cooldownOf } = await import('../src/owo/listen.ts');
+  const r = JSON.parse(readFileSync('test/samples/owo/replies.json', 'utf8')) as Record<string, { content: string; embeds: unknown[]; components: unknown[] }>;
+  const s = (k: string) => said({ content: r[k].content, embeds: r[k].embeds as never, components: r[k].components as never });
+  const now = 1_000_000;
+  assert.deepEqual(cooldownOf('hunt', s('hunt_gems'), now), { kind: 'hunt', at: now + 15_000 });
+  assert.deepEqual(cooldownOf('battle', s('battle_won'), now), { kind: 'hunt', at: now + 15_000 });
+  assert.deepEqual(cooldownOf(null, s('hunt_one'), now), { kind: 'hunt', at: now + 15_000 });
+  assert.deepEqual(cooldownOf('pray', s('pray'), now), { kind: 'pray', at: now + 300_000 });
+  assert.deepEqual(cooldownOf(null, s('pray'), now), { kind: 'pray', at: now + 300_000 });
+  assert.deepEqual(cooldownOf('hunt', s('slowdown'), now), { kind: 'hunt', at: 1793606421 * 1000 });
+  assert.equal(cooldownOf('zoo', s('hunt_one'), now), null);
+  assert.equal(cooldownOf('pray', said({ content: '**🚫 | Kunikida**, Invalid arguments!!', embeds: [], components: [] }), now), null);
+});

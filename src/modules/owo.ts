@@ -409,7 +409,7 @@ const pingsCmd: Command = {
       .setLabel(PINGS[k].label).setEmoji(PINGS[k].emoji).setStyle(on[k] ? ButtonStyle.Success : ButtonStyle.Secondary));
     return ctx.reply({
       embeds: [card({ kind: 'help', title: 'Your OwO pings', emoji: '🔔', gif: 'off', line: '', body: `${lines.join('\n')}\n-# Sent ${where}` })],
-      components: [row(...buttons)],
+      components: Array.from({ length: Math.ceil(buttons.length / 4) }, (_, n) => row(...buttons.slice(n * 4, n * 4 + 4))),
     });
   },
 };

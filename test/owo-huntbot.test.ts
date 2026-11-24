@@ -86,7 +86,7 @@ test('pings: captcha on by default, HuntBot back queued only when asked for', ()
   const store = new Store(':memory:');
   const st = new OwoState(store.db);
   const t = Date.now();
-  assert.deepEqual(pingsOf(st, 'u'), { hb: false, day: false, shop: false, gems: false, captcha: true });
+  assert.deepEqual(pingsOf(st, 'u'), { hunt: false, pray: false, hb: false, day: false, shop: false, gems: false, captcha: true });
   st.setHuntbotBack('u', t + 3 * H);
   syncPings(store, 'u', 'c1', t);
   assert.equal(store.reminderOf('u', 'owo:hb'), undefined);
