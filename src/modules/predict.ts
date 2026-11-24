@@ -50,7 +50,8 @@ async function todaysBig(store: Store, guild: string): Promise<Match[]> {
   return out.sort((a, b) => a.date - b.date).slice(0, 4);
 }
 
-async function page(store: Store, guild: string, user: string) {
+// Discord allows five rows: the podium takes three, so the race and the matches sit on their own tabs
+async function page(store: Store, guild: string, user: string, want?: string) {
   const r = await nextRound().catch(() => null);
   const h = await home().catch(() => null);
   const drivers = (h?.standings ?? []).slice(0, 25).map((d) => d.driver);
@@ -71,19 +72,40 @@ async function page(store: Store, guild: string, user: string) {
     body: `${lines.join('\n\n')}\n\n-# ¥${PODIUM.exact} exact · ¥${PODIUM.onPodium} podium · ¥${MATCH_PAY} result · **${points(store, guild, user)}** points this season`,
   });
   const rows = [];
-  if (open && drivers.length) {
+  const f1Open = !!(open && drivers.length);
+  const both = f1Open && big.length > 0;
+  const [tab, at] = (want ?? (f1Open && !mine.filter(Boolean).length ? 'f1' : big.length ? 'fb:0' : 'f1')).split(':');
+  const showF1 = f1Open && (tab === 'f1' || !big.length);
+  if (showF1) {
     for (let n = 0; n < 3; n++) {
       rows.push(row(new StringSelectMenuBuilder().setCustomId(`prd|f1|${r!.round}|${n}`).setPlaceholder(`${['🥇 Winner', '🥈 Second', '🥉 Third'][n]}${mine[n] ? `: ${mine[n]}` : ''}`)
         .addOptions(drivers.map((d) => ({ label: d, value: d, default: mine[n] === d, emoji: asEmoji(teamOf.has(d) ? teamDot(teamOf.get(d)!) : null) })))));
     }
   }
-  for (const m of big.slice(0, 5 - rows.length)) {
-    rows.push(row(
-      new ButtonBuilder().setCustomId(`prd|fb|${m.id}|home`).setLabel(m.home.name.slice(0, 40)).setEmoji(asEmoji(clubDot(m.home))!).setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`prd|fb|${m.id}|draw`).setLabel('Draw').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`prd|fb|${m.id}|away`).setLabel(m.away.name.slice(0, 40)).setEmoji(asEmoji(clubDot(m.away))!).setStyle(ButtonStyle.Secondary),
-    ));
+  // matches four at a time when there's a tab row under them, five when there isn't
+  const per = both || big.length > 5 ? 4 : 5;
+  const from = showF1 ? 0 : Math.floor(Math.min(Number(at) || 0, Math.max(0, big.length - 1)) / per) * per;
+  if (!showF1) {
+    for (const m of big.slice(from, from + per)) {
+      const said = store.getKv(fbKey(m.id, guild, user));
+      const style = (x: string) => (said === x ? ButtonStyle.Primary : ButtonStyle.Secondary);
+      rows.push(row(
+        new ButtonBuilder().setCustomId(`prd|fb|${m.id}|home`).setLabel(m.home.name.slice(0, 40)).setEmoji(asEmoji(clubDot(m.home))!).setStyle(style('home')),
+        new ButtonBuilder().setCustomId(`prd|fb|${m.id}|draw`).setLabel('Draw').setStyle(style('draw')),
+        new ButtonBuilder().setCustomId(`prd|fb|${m.id}|away`).setLabel(m.away.name.slice(0, 40)).setEmoji(asEmoji(clubDot(m.away))!).setStyle(style('away')),
+      ));
+    }
   }
+  const tabs: ButtonBuilder[] = [];
+  if (both) {
+    tabs.push(new ButtonBuilder().setCustomId('prd|tab|f1').setLabel(r!.name.replace(/ Grand Prix$/, ' GP').slice(0, 40)).setEmoji('🏎️').setStyle(showF1 ? ButtonStyle.Primary : ButtonStyle.Secondary));
+    tabs.push(new ButtonBuilder().setCustomId('prd|tab|fb:0').setLabel(`Matches · ${big.length}`).setEmoji('⚽').setStyle(showF1 ? ButtonStyle.Secondary : ButtonStyle.Primary));
+  }
+  if (!showF1 && big.length > per) {
+    tabs.push(new ButtonBuilder().setCustomId(`prd|tab|fb:${Math.max(0, from - per)}`).setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(from === 0));
+    tabs.push(new ButtonBuilder().setCustomId(`prd|tab|fb:${from + per}`).setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(from + per >= big.length));
+  }
+  if (tabs.length) rows.push(row(...tabs));
   return { embeds: [e], components: rows.slice(0, 5) };
 }
 
@@ -139,6 +161,17 @@ export async function onPredict(store: Store, i: Interaction) {
     else await i.reply({ ...p, flags: MessageFlags.Ephemeral });
     return true;
   }
+  // the page looks up the race and matches, which can be slower than Discord waits, so answer first
+  const answer = async (make: () => Promise<Awaited<ReturnType<typeof page>>>) => {
+    const theirs = i.message.interactionMetadata?.user.id === i.user.id || i.message.mentions.repliedUser?.id === i.user.id || i.message.flags.has(MessageFlags.Ephemeral);
+    if (theirs) await i.deferUpdate();
+    else await i.deferReply({ flags: MessageFlags.Ephemeral });
+    await i.editReply(await make());
+  };
+  if (kind === 'tab') {
+    await answer(() => page(store, i.guildId!, i.user.id, id));
+    return true;
+  }
   if (kind === 'f1' && i.isStringSelectMenu()) {
     const r = await nextRound().catch(() => null);
     const start = r ? Date.parse(r.sessions.find((s) => s.type === 'R')?.start ?? '') : NaN;
@@ -163,10 +196,11 @@ export async function onPredict(store: Store, i: Interaction) {
     return true;
   }
   track(store, i.guildId, i.user.id, 'predict');
-  const p = await page(store, i.guildId, i.user.id);
-  const theirs = i.message.interactionMetadata?.user.id === i.user.id || i.message.mentions.repliedUser?.id === i.user.id || i.message.flags.has(MessageFlags.Ephemeral);
-  if (theirs) await i.update(p);
-  else await i.reply({ ...p, flags: MessageFlags.Ephemeral });
+  // stay on the tab and match page the pick was made from
+  await answer(async () => {
+    const idx = kind === 'fb' ? (await todaysBig(store, i.guildId!)).findIndex((m) => m.id === id) : 0;
+    return page(store, i.guildId!, i.user.id, kind === 'f1' ? 'f1' : `fb:${Math.max(0, idx)}`);
+  });
   return true;
 }
 
