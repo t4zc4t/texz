@@ -8,7 +8,7 @@ import { rangesFrom, verdict } from './advice.js';
 import { card } from '../theme.js';
 import { startOrders } from './orders.js';
 import { COOLDOWN, captchaAlarm, carryOldSwitches, cooldownPing, gemWarning, rearmDays, shopAlert, syncPings } from './pings.js';
-import { useOf } from './gems.js';
+import { newlyUsed, useOf, type Active } from './gems.js';
 import { RARE_RANKS, rankOfAnimal } from './catalog.js';
 
 // Texz only ever reads here. It never sends OwO commands, presses OwO's buttons or touches captchas.
@@ -175,6 +175,16 @@ export function apply(state: OwoState, userId: string, s: read.Said, now = Date.
   const hu = !edited ? read.hunt(s) : null;
   if (hu?.found.length) {
     tallyHunt(state, userId, hu, now);
+    // a gem put on since the last hunt comes off the inventory Texz last saw
+    const bits = state.bits(userId);
+    const before = bits.get('gems:active')?.value as Active[] | undefined;
+    const inv = bits.get('inventory');
+    if (before && inv) {
+      const left = { ...(inv.value as Record<string, number>) };
+      const used = newlyUsed(before, hu.gems);
+      for (const g of used) if (left[String(g.id)]) left[String(g.id)]--;
+      if (used.length) state.setBit(userId, 'inventory', left, inv.at);
+    }
     state.setBit(userId, 'gems:active', hu.gems, now);
     const nm = read.addressee(s).name;
     if (nm) state.setBit(userId, 'owoName', nm, now);

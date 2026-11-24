@@ -2,6 +2,7 @@ import type { Client, Message, PartialMessage } from 'discord.js';
 import type { Store } from '../db.js';
 import { sendNow, urgent } from '../reminders.js';
 import { card } from '../theme.js';
+import { gemByKey, gemName, gemPlan } from './gems.js';
 import { OwoState } from './state.js';
 
 // The OwO nudges: HuntBot is home, a new OwO day has started, and the captcha alarm.
@@ -121,12 +122,20 @@ export async function gemWarning(store: Store, m: Message | PartialMessage, user
   if (!pingsOf(st, userId).gems || !m.channel?.isSendable()) return;
   const low = gems.filter((g) => g.left > 0 && g.left / Math.max(1, perHuntOf(g.gem)) <= 3);
   const gone = gems.filter((g) => g.left === 0);
+  const inv = (st.bits(userId).get('inventory')?.value ?? {}) as Record<string, number>;
+  const lines: string[] = [];
   for (const g of [...low, ...gone]) {
     const key = `gemwarn:${userId}:${g.gem}:${new Date().toISOString().slice(0, 10)}:${g.left === 0 ? 'out' : 'low'}`;
     if (store.getKv(key)) continue;
     store.setKv(key, String(Date.now()));
-    await m.channel.send({ content: `💎 <@${userId}> **${g.gem}** ${g.left === 0 ? 'ran out' : `is almost out (${g.left}/${g.of})`} · \`tz o gems\``, allowedMentions: { users: [userId] } }).catch(() => {});
+    const gem = gemByKey.get(g.gem);
+    // the next one of the same type from what Texz last saw in the inventory
+    const next = gem ? gemPlan([], inv).lines.find((l) => l.type === gem.type)?.next : null;
+    const hunts = Math.ceil(g.left / Math.max(1, perHuntOf(g.gem)));
+    lines.push(`**${gem ? gemName(gem) : g.gem}** ${g.left === 0 ? 'ran out' : `· ${hunts} hunt${hunts === 1 ? '' : 's'} left`} · ${next ? `\`w use ${next.id}\`` : 'none in stock'}`);
   }
+  if (!lines.length) return;
+  await m.channel.send({ content: `💎 <@${userId}> ${lines.join('\n')}`, allowedMentions: { users: [userId] } }).catch(() => {});
 }
 
 const alarmed = new Map<string, number>();

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { gemPlan, useOf } from '../src/owo/gems.ts';
+import { gemPlan, newlyUsed, useOf } from '../src/owo/gems.ts';
 import { chainLine, dexPage, huntCard, shinyChance, shinyWithin, spanOf } from '../src/p2/track.ts';
 import { weekOf } from '../src/owo/state.ts';
 
@@ -18,6 +18,26 @@ test('gems: hunting + empowering last as OwO counts them, lucky alone burns fast
   assert.equal(p.lines.find((l) => l.type === 'Empowering')!.huntsLeft, Math.ceil(384 / 7));
   assert.equal(p.luckyAlone, false);
   assert.equal(gemPlan([{ gem: 'cgem4', left: 20, of: 50 }], {}).luckyAlone, true);
+});
+
+test('gems: animals a hunt, what to put on now, which type runs out first', () => {
+  // mythic hunting (+6), epic empowering, mythic lucky running; no special running but some in stock
+  const active = [{ gem: 'mgem1', left: 2, of: 75 }, { gem: 'egem3', left: 233, of: 450 }, { gem: 'mgem4', left: 308, of: 525 }];
+  const p = gemPlan(active, { '51': 19, '53': 16, '55': 3, '65': 4, '74': 2, '76': 1, '79': 2 });
+  assert.equal(p.animals, 14);
+  // hunting is nearly out (strongest in stock first) and special is off
+  assert.deepEqual(p.start.map((g) => g.id), [55, 79]);
+  // lucky, the strongest first
+  assert.equal(p.lines.find((l) => l.type === 'Lucky')!.next?.id, 76);
+  assert.ok(p.bottleneck);
+  assert.equal(p.bottleneck!.total, Math.min(...p.lines.filter((l) => l.type !== 'Patreon').map((l) => l.total)));
+});
+
+test('gems: a newly put on gem is spotted from one hunt to the next', () => {
+  const before = [{ gem: 'mgem1', left: 1, of: 75 }, { gem: 'egem3', left: 233, of: 450 }];
+  assert.deepEqual(newlyUsed(before, [{ gem: 'mgem1', left: 74, of: 75 }, { gem: 'egem3', left: 226, of: 450 }]).map((g) => g.id), [55]);
+  assert.deepEqual(newlyUsed(before, [{ gem: 'lgem1', left: 99, of: 100 }, { gem: 'egem3', left: 226, of: 450 }, { gem: 'cgem4', left: 49, of: 50 }]).map((g) => g.id), [56, 72]);
+  assert.deepEqual(newlyUsed(before, [{ gem: 'mgem1', left: 0, of: 75 }, { gem: 'egem3', left: 226, of: 450 }]), []);
 });
 
 test('Pokétwo shiny hunt: chain lines, the hunt card and the odds', () => {

@@ -20,37 +20,59 @@ export const gemByKey = new Map(GEMS.map((g) => [g.key, g]));
 export const tierOf = (g: Gem) => TIER_NAME[g.key[0]];
 
 export interface Active { gem: string; left: number; of: number }
-export interface GemLine { type: GemType; active: { gem: Gem; left: number } | null; huntsLeft: number; stock: { gem: Gem; count: number }[]; stockHunts: number; next: Gem | null }
+export interface GemLine { type: GemType; active: { gem: Gem; left: number; of: number } | null; huntsLeft: number; stock: { gem: Gem; count: number }[]; stockHunts: number; next: Gem | null; total: number }
+
+const ORDER: GemType[] = ['Hunting', 'Empowering', 'Lucky', 'Special', 'Patreon'];
+export const gemName = (g: Gem) => `${tierOf(g)} ${g.type}`;
+
+// animals one hunt brings back with this set running
+export function animalsOf(running: Set<GemType>, huntingAmount: number) {
+  return (1 + huntingAmount + (running.has('Patreon') ? 1 : 0)) * (running.has('Empowering') ? 2 : 1);
+}
 
 // how much of a gem one hunt uses, given what else is running
 function perHunt(type: GemType, running: Set<GemType>, huntingAmount: number) {
-  const animals = (1 + huntingAmount + (running.has('Patreon') ? 1 : 0)) * (running.has('Empowering') ? 2 : 1);
+  const animals = animalsOf(running, huntingAmount);
   if (type === 'Hunting' || type === 'Patreon') return 1;
   if (type === 'Empowering') return Math.max(1, Math.trunc(animals / 2));
   return running.has('Hunting') && running.has('Empowering') ? Math.max(1, Math.trunc(animals / 2)) : animals;
 }
 
 export function gemPlan(active: Active[], inventory: Record<string, number>) {
-  const act = active.map((a) => ({ gem: gemByKey.get(a.gem), left: a.left })).filter((a) => a.gem && a.left > 0) as { gem: Gem; left: number }[];
+  const act = active.map((a) => ({ gem: gemByKey.get(a.gem), left: a.left, of: a.of })).filter((a) => a.gem && a.left > 0) as { gem: Gem; left: number; of: number }[];
   const running = new Set(act.map((a) => a.gem.type));
   const huntingAmount = act.find((a) => a.gem.type === 'Hunting')?.gem.amount ?? 0;
+  // stock is planned with every type it has kept going, the way it should be played
+  const kept = new Set<GemType>([...running, ...GEMS.filter((g) => (inventory[String(g.id)] ?? 0) > 0).map((g) => g.type)]);
+  const keptHunting = Math.max(huntingAmount, ...GEMS.filter((g) => g.type === 'Hunting' && (inventory[String(g.id)] ?? 0) > 0).map((g) => g.amount));
   const lines: GemLine[] = [];
-  for (const type of ['Hunting', 'Empowering', 'Lucky', 'Special', 'Patreon'] as GemType[]) {
+  for (const type of ORDER) {
     const a = act.find((x) => x.gem.type === type) ?? null;
     const stock = GEMS.filter((g) => g.type === type && (inventory[String(g.id)] ?? 0) > 0).map((gem) => ({ gem, count: inventory[String(gem.id)] }));
     if (!a && !stock.length) continue;
-    // with every gem type kept running, as the plan assumes
-    const all = new Set<GemType>([...running, type, ...(stock.length ? [type] : [])]);
-    const use = perHunt(type, all, huntingAmount);
     const huntsLeft = a ? Math.ceil(a.left / perHunt(type, running, huntingAmount)) : 0;
-    const stockHunts = stock.reduce((n, s) => n + Math.floor((s.gem.length * s.count) / use), 0);
-    // biggest hunting gem first for more animals now, the rest in any order since nothing is wasted
-    const next = [...stock].sort((x, y) => (type === 'Hunting' ? y.gem.amount - x.gem.amount : x.gem.id - y.gem.id))[0]?.gem ?? null;
-    lines.push({ type, active: a, huntsLeft, stock, stockHunts, next });
+    const use = perHunt(type, kept, keptHunting);
+    const stockHunts = stock.reduce((n, x) => n + Math.floor((x.gem.length * x.count) / use), 0);
+    // the strongest first where tiers differ in strength (more animals, better luck), oldest id otherwise
+    const next = [...stock].sort((x, y) => (type === 'Hunting' || type === 'Lucky' ? y.gem.amount - x.gem.amount || y.gem.id - x.gem.id : x.gem.id - y.gem.id))[0]?.gem ?? null;
+    lines.push({ type, active: a, huntsLeft, stock, stockHunts, next, total: huntsLeft + stockHunts });
   }
+  // gems to put on now: a type with stock that's off, or about to run out
+  const start = lines.filter((l) => l.next && (!l.active || l.huntsLeft <= 3)).map((l) => l.next!);
+  // the full set only lasts as long as its shortest type, Patreon aside since it's a bonus
+  const core = lines.filter((l) => l.type !== 'Patreon');
+  const bottleneck = core.length > 1 ? core.reduce((a, b) => (b.total < a.total ? b : a)) : null;
   // Lucky and Special last twice as long with both Hunting and Empowering on
-  const luckyAlone = running.has('Lucky') && !(running.has('Hunting') && running.has('Empowering'));
-  return { lines, luckyAlone };
+  const luckyAlone = (running.has('Lucky') || running.has('Special')) && !(running.has('Hunting') && running.has('Empowering'));
+  return { lines, luckyAlone, animals: animalsOf(running, huntingAmount), start, bottleneck };
+}
+
+// what a fresh hunt shows against the last one: gems that were just put on, so they come off the stock count
+export function newlyUsed(before: Active[], after: Active[]) {
+  return after.filter((a) => {
+    const b = before.find((x) => gemByKey.get(x.gem)?.type === gemByKey.get(a.gem)?.type);
+    return !b || b.gem !== a.gem || a.left > b.left;
+  }).map((a) => gemByKey.get(a.gem)).filter((g): g is Gem => !!g);
 }
 
 // how much one hunt takes from a gem, with whatever else is running in that hunt

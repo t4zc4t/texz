@@ -4,10 +4,10 @@ import type { Command, Module } from '../core/module.js';
 import type { Store } from '../db.js';
 import { card } from '../theme.js';
 import { passiveOf, weaponOf } from '../owo/catalog.js';
-import { OwoState } from '../owo/state.js';
+import { OwoState, weekOf } from '../owo/state.js';
 import { dismantleList, rangesFrom, report, SHARDS } from '../owo/advice.js';
 import { baseOf, planFor, type Arm, type Candidate } from '../owo/team.js';
-import { gemPlan, tierOf, type Active } from '../owo/gems.js';
+import { gemName, gemPlan, tierOf, type Active } from '../owo/gems.js';
 import { boardFor } from '../owo/board.js';
 import { WALL_IDS, wallPrice, wallUrl } from '../owo/catalog.js';
 import { battleStats, catchStats, collectibles, forecast, paceOf, teamNow } from '../owo/stats.js';
@@ -558,21 +558,31 @@ const gemsCmd: Command = {
     const act = bits.get('gems:active');
     if (!inv && !act) return ctx.reply('Run `w inv` and hunt once.');
     const p = gemPlan((act?.value ?? []) as Active[], (inv?.value ?? {}) as Record<string, number>);
-    if (!p.lines.length) return ctx.reply('No gems.');
+    if (!p.lines.length) return ctx.reply('No gems. Run `w inv` if you have some.');
+    // hunts a day from the last two weeks, to turn hunts left into days
+    const weeks = store.db.prepare('SELECT week, hunts FROM owo_week WHERE user_id = ? AND week >= ?').all(ctx.userId, weekOf(Date.now() - 7 * 864e5)) as { week: string; hunts: number }[];
+    const since = weeks.length ? Math.min(...weeks.map((w) => Date.parse(`${w.week}T00:00:00Z`))) : Date.now();
+    const perDay = weeks.reduce((n, w) => n + w.hunts, 0) / Math.max(1, (Date.now() - since) / 864e5);
+    const days = (hunts: number) => (perDay >= 5 ? ` · ~${hunts / perDay < 1 ? '<1' : Math.round(hunts / perDay)}d` : '');
     const fields = p.lines.map((l) => ({
       name: `${gemMark[l.type]} ${l.type}`,
       value: [
-        l.active ? `Running: **${tierOf(l.active.gem)}** · ~${l.huntsLeft} hunts left` : '⚠️ Not running',
-        l.stock.length ? `Stock: ${l.stock.map((x) => `${tierOf(x.gem)} ×${x.count}`).join(', ')} · ~${l.stockHunts.toLocaleString()} hunts` : 'No stock',
-        l.next && (!l.active || l.huntsLeft <= 3) ? `Next: \`w use ${l.next.id}\`` : null,
-      ].filter(Boolean).join('\n'),
+        l.active ? `**${tierOf(l.active.gem)}** · ${l.active.left}/${l.active.of} · ${l.huntsLeft} hunts${l.huntsLeft <= 3 ? ' ⚠️' : ''}` : '⚠️ off',
+        l.stock.length ? `Stock: ${l.stock.map((x) => `${tierOf(x.gem)} ×${x.count}`).join(', ')}` : 'No stock',
+        `Total: ~${l.total.toLocaleString()} hunts${days(l.total)}`,
+      ].join('\n'),
       inline: true,
     }));
+    const off = p.lines.filter((l) => !l.active && l.stock.length).map((l) => l.type);
     return ctx.reply({ embeds: [card({
       kind: 'help', title: 'Your gems', emoji: '💎', gif: 'off', line: '',
       body: [
-        p.luckyAlone ? '⚠️ Lucky burns twice as fast without Hunting and Empowering both on.' : null,
-        `-# Inventory ${inv ? at(inv.at) : 'not seen'} · last hunt ${act ? at(act.at) : 'not seen'}`,
+        `🐾 **${p.animals}** animals a hunt`,
+        p.start.length ? `Use now: \`w use ${p.start.map((g) => g.id).join(' ')}\` (${p.start.map((g) => gemName(g)).join(', ')})` : null,
+        off.length ? `⚠️ ${off.join(', ')} off with stock left` : null,
+        p.luckyAlone ? '⚠️ Lucky/Special burn twice as fast without Hunting and Empowering both on' : null,
+        p.bottleneck ? `Runs out first: **${p.bottleneck.type}** · ~${p.bottleneck.total.toLocaleString()} hunts${days(p.bottleneck.total)}` : null,
+        `-# Inventory ${inv ? at(inv.at) : 'not seen'} · last hunt ${act ? at(act.at) : 'not seen'}${perDay >= 5 ? ` · ~${Math.round(perDay)} hunts a day` : ''}`,
       ].filter(Boolean).join('\n'),
       fields,
     })] });
