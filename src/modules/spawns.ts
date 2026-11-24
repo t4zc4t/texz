@@ -767,6 +767,11 @@ export async function onSpawnButton(store: Store, i: Interaction) {
     else await i.reply({ ...page, flags: MessageFlags.Ephemeral });
     return true;
   }
+  // role changes can take a few seconds, longer than Discord waits for an answer
+  const theirs = i.message.interactionMetadata?.user.id === i.user.id || i.message.mentions.repliedUser?.id === i.user.id || i.message.flags.has(MessageFlags.Ephemeral);
+  if (theirs) await i.deferUpdate();
+  else await i.deferReply({ flags: MessageFlags.Ephemeral });
+  const say = (content: string) => (theirs ? i.followUp({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } }) : i.editReply({ content, allowedMentions: { parse: [] } }));
   const member = await i.guild.members.fetch(i.user.id).catch(() => null);
   if (!member) return true;
   let ok = true;
@@ -774,7 +779,7 @@ export async function onSpawnButton(store: Store, i: Interaction) {
     store.setKv(`p2:qping:${i.user.id}`, store.getKv(`p2:qping:${i.user.id}`) === '0' ? '1' : '0');
   } else if (i.customId === 'spw|helper') {
     // a server switch, so only people who manage the server can flip it
-    if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) { await i.reply({ content: 'Only people with Manage Server can switch the Pokétwo helper.', flags: MessageFlags.Ephemeral }); return true; }
+    if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) { await say('Only people with Manage Server can switch the Pokétwo helper.'); return true; }
     setP2Helper(store, i.guild.id, !p2HelperOn(store, i.guild.id));
   } else if (i.customId === 'spw|p2') {
     const role = await rareRole(i.guild, store, true);
@@ -794,13 +799,10 @@ export async function onSpawnButton(store: Store, i: Interaction) {
   if (!ok) {
     const spawnRoles = store.kvByPrefix(`spawnrole:${i.guild.id}:`).map((x) => x.value);
     const fix = fixText(i.guild, { perms: ['ManageRoles'], roles: spawnRoles, doing: 'hand out spawn roles' }) ?? 'I couldn\'t change that role, Discord said no. Try again in a moment.';
-    await i.reply({ content: fix, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+    await say(fix);
     return true;
   }
-  const page = await spawnsPage(store, i.guild, i.user.id);
-  const theirs = i.message.interactionMetadata?.user.id === i.user.id || i.message.mentions.repliedUser?.id === i.user.id || i.message.flags.has(MessageFlags.Ephemeral);
-  if (theirs) await i.update(page);
-  else await i.reply({ ...page, flags: MessageFlags.Ephemeral });
+  await i.editReply(await spawnsPage(store, i.guild, i.user.id));
   return true;
 }
 
@@ -880,6 +882,10 @@ const pings: Command = {
 export async function onPingsButton(store: Store, i: Interaction) {
   if (!i.isButton() || !i.customId.startsWith('pg|') || !i.guild) return false;
   const what = i.customId.split('|')[1];
+  // a panel someone else opened gets a fresh copy instead of changing theirs
+  const theirs = i.message.interactionMetadata?.user.id === i.user.id || i.message.mentions.repliedUser?.id === i.user.id || i.message.flags.has(MessageFlags.Ephemeral);
+  if (theirs) await i.deferUpdate();
+  else await i.deferReply({ flags: MessageFlags.Ephemeral });
   const member = await i.guild.members.fetch(i.user.id).catch(() => null);
   let problem = '';
   if (what === 'quest') store.setKv(`p2:qping:${i.user.id}`, store.getKv(`p2:qping:${i.user.id}`) === '0' ? '1' : '0');
@@ -893,12 +899,11 @@ export async function onPingsButton(store: Store, i: Interaction) {
       if (!ok) problem = fixText(i.guild, { perms: ['ManageRoles'], roles: [role], doing: `give you ${role.name}` }) ?? 'Discord wouldn\'t let me change that role, try again in a moment.';
     }
   }
-  if (problem) { await i.reply({ content: problem, flags: MessageFlags.Ephemeral }); return true; }
-  // a panel someone else opened gets a fresh copy instead of changing theirs
-  const page = await pingsPanel(store, i.guild, i.user.id);
-  const theirs = i.message.interactionMetadata?.user.id === i.user.id || i.message.mentions.repliedUser?.id === i.user.id || i.message.flags.has(MessageFlags.Ephemeral);
-  if (theirs) await i.update(page);
-  else await i.reply({ ...page, flags: MessageFlags.Ephemeral });
+  if (problem) {
+    await (theirs ? i.followUp({ content: problem, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } }) : i.editReply({ content: problem, allowedMentions: { parse: [] } }));
+    return true;
+  }
+  await i.editReply(await pingsPanel(store, i.guild, i.user.id));
   return true;
 }
 
